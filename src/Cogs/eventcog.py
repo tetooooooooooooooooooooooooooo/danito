@@ -83,6 +83,7 @@ class eventcog(commands.Cog):
             }
         )
         if not server_data:
+            print("No server data found...")
             return
 
         await interaction.response.send_message(
