@@ -65,8 +65,6 @@ class eventcog(commands.Cog):
     @commands.Cog.listener()
     async def on_interaction(self, interaction):
         # Check if its a button
-        print("Interaction!")
-
         if not (interaction.type == discord.InteractionType.component):
             return
 
@@ -85,11 +83,10 @@ class eventcog(commands.Cog):
             }
         )
         if not server_data:
-            print("No server data found...")
             return
 
         await interaction.response.send_message(
-            content=f"Thank you for participating in this survey! Enjoy your stay at {interaction.guild.name}!",
+            content=f"Thank you for participating in this survey! Enjoy your stay!",
             ephemeral=True,
         )
 
