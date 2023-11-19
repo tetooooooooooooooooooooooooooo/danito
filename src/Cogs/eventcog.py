@@ -65,6 +65,8 @@ class eventcog(commands.Cog):
     @commands.Cog.listener()
     async def on_interaction(self, interaction):
         # Check if its a button
+        print("Interaction!")
+
         if not (interaction.type == discord.InteractionType.component):
             return
 
