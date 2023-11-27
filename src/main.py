@@ -67,9 +67,12 @@ async def UpdateTask(bot):
             role.delete(reason="The date became old and was ultimately cleaned up")
 
         # Delete all the data for the old date
-        roles.delete_many({"date": str(oldDate)})
+        try:
+            roles.delete_many({"date": str(oldDate)})
+        except:
+            print("Failed to delete roles?")
 
-        await asyncio.sleep(1 * 60 * 60)
+        await asyncio.sleep(1 * 10 * 60)
 
 
 class Bot(commands.Bot):
