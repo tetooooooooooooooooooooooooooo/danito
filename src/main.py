@@ -34,18 +34,18 @@ async def UpdateTask(bot):
 
                 guild = await bot.fetch_guild(object["guild_id"])
                 if not guild:
-                    return
+                    continue
 
                 # Get discovery channel in server and mention role in that channel
                 server = servers.find_one({"guild_id": object["guild_id"]})
                 if not server:
                     print(f'Could not find server data for guild {object["guild_id"]}')
-                    return
+                    continue
 
                 channel = await guild.fetch_channel(server["discovery_channel"])
                 if not channel:
                     print("Could not find discovery channel. It was probably deleted?")
-                    return
+                    continue
 
                 message = await channel.send(content=f'<@&{object["role_id"]}>')
                 await message.delete(delay=5.0)
@@ -57,7 +57,7 @@ async def UpdateTask(bot):
             guild = await bot.fetch_guild(object["guild_id"])
             role = guild.get_role(object["role_id"])
             if not role:
-                return
+                continue
 
             role.delete(reason="The date became old and was ultimately cleaned up")
 
