@@ -27,10 +27,6 @@ async def UpdateTask(bot):
             if not "mentioned" in object:
                 print("found!")
                 # The date has not been mentioned in this guild
-                roles.find_one_and_update(
-                    {"_id": object["_id"]},
-                    {"$set": {"mentioned": True}},
-                )
 
                 guild = await bot.fetch_guild(object["guild_id"])
                 if not guild:
@@ -49,6 +45,15 @@ async def UpdateTask(bot):
 
                 message = await channel.send(content=f'<@&{object["role_id"]}>')
                 await message.delete(delay=5.0)
+                print("Message sent!")
+                
+                try:
+                    roles.find_one_and_update(
+                    {"_id": object["_id"]},
+                    {"$set": {"mentioned": True}},
+                )
+                except:
+                    print("failed for some reason!:(")
 
         # Delete old data
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()
