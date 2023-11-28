@@ -70,7 +70,7 @@ async def UpdateTask(bot):
 
         # Delete all the data for the old date
         try:
-            await roles.delete_many({"date": str(oldDate), "mentioned": True})
+            roles.delete_many({"date": str(oldDate), "mentioned": True})
         except Exception as e:
             print(f"Failed to delete roles? Got error {e}")
 
