@@ -53,7 +53,7 @@ async def UpdateTask(bot):
                     {"$set": {"mentioned": True}},
                 )
                 except:
-                    print("failed for some reason!:(")
+                    pass
 
         # Delete old data
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()
@@ -72,7 +72,7 @@ async def UpdateTask(bot):
         try:
             roles.delete_many({"date": str(oldDate), "mentioned": True})
         except Exception as e:
-            print(f"Failed to delete roles? Got error {e}")
+            pass
 
         await asyncio.sleep(1 * 10 * 60)
 
