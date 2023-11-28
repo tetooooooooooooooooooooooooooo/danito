@@ -57,20 +57,22 @@ async def UpdateTask(bot):
 
         # Delete old data
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()
-        objects = roles.find({"date": str(oldDate)})
+        objects = roles.find({"date": str(oldDate), "mentioned": True})
+        print(f"Getting old date {str(oldDate)}")
         for object in objects:
             guild = await bot.fetch_guild(object["guild_id"])
             role = guild.get_role(object["role_id"])
             if not role:
+                print(f"Could not find role with date {str(oldDate)}")
                 continue
 
             role.delete(reason="The date became old and was ultimately cleaned up")
 
         # Delete all the data for the old date
         try:
-            roles.delete_many({"date": str(oldDate)})
-        except:
-            print("Failed to delete roles?")
+            roles.delete_many({"date": str(oldDate), "mentioned": True})
+        except Exception as e:
+            print(f"Failed to delete roles? Got error {e}")
 
         await asyncio.sleep(1 * 10 * 60)
 
