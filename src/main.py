@@ -48,7 +48,7 @@ async def UpdateTask(bot):
                 print("Message sent!")
                 
                 try:
-                    roles.find_one_and_update(
+                    await roles.find_one_and_update(
                     {"_id": object["_id"]},
                     {"$set": {"mentioned": True}},
                 )
@@ -66,11 +66,11 @@ async def UpdateTask(bot):
                 print(f"Could not find role with date {str(oldDate)}")
                 continue
 
-            role.delete(reason="The date became old and was ultimately cleaned up")
+            await role.delete(reason="The date became old and was ultimately cleaned up")
 
         # Delete all the data for the old date
         try:
-            roles.delete_many({"date": str(oldDate), "mentioned": True})
+            await roles.delete_many({"date": str(oldDate), "mentioned": True})
         except Exception as e:
             print(f"Failed to delete roles? Got error {e}")
 
