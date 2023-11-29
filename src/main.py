@@ -13,7 +13,7 @@ async def UpdateTask(bot):
     while True:
         now = datetime.datetime.now()
         if not (12 < now.hour < 18):
-            return
+            continue
 
         bot.mention_players()
 
