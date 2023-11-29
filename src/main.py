@@ -15,7 +15,23 @@ async def UpdateTask(bot):
         if not (12 < now.hour < 18):
             return
 
-        database = Database.get_bot_database(bot.MongoClient)
+        bot.mention_players()
+
+        await asyncio.sleep(1 * 10 * 60)
+
+
+class Bot(commands.Bot):
+    def __init__(self):
+        intents = discord.Intents.all()
+        super().__init__(command_prefix="!", intents=intents)
+
+        self.cogslist = ["Cogs.commandcog", "Cogs.eventcog"]
+        self.MongoClient = MongoClient(
+            os.environ.get("Database_Connection_String"), tlsCAFile=certifi.where()
+        )
+
+    async def mention_players(self):
+        database = Database.get_bot_database(self.MongoClient)
         roles = database["roles"]
         servers = database["servers"]
 
@@ -28,7 +44,7 @@ async def UpdateTask(bot):
                 print("found!")
                 # The date has not been mentioned in this guild
 
-                guild = await bot.fetch_guild(object["guild_id"])
+                guild = await self.fetch_guild(object["guild_id"])
                 if not guild:
                     continue
 
@@ -46,12 +62,12 @@ async def UpdateTask(bot):
                 message = await channel.send(content=f'<@&{object["role_id"]}>')
                 await message.delete(delay=5.0)
                 print("Message sent!")
-                
+
                 try:
                     await roles.find_one_and_update(
-                    {"_id": object["_id"]},
-                    {"$set": {"mentioned": True}},
-                )
+                        {"_id": object["_id"]},
+                        {"$set": {"mentioned": True}},
+                    )
                 except:
                     pass
 
@@ -60,32 +76,24 @@ async def UpdateTask(bot):
         objects = roles.find({"date": str(oldDate), "mentioned": True})
         print(f"Getting old date {str(oldDate)}")
         for object in objects:
-            guild = await bot.fetch_guild(object["guild_id"])
+            guild = await self.fetch_guild(object["guild_id"])
+            if not guild:
+                continue
+
             role = guild.get_role(object["role_id"])
             if not role:
                 print(f"Could not find role with date {str(oldDate)}")
                 continue
 
-            await role.delete(reason="The date became old and was ultimately cleaned up")
+            await role.delete(
+                reason="The date became old and was ultimately cleaned up"
+            )
 
         # Delete all the data for the old date
         try:
             roles.delete_many({"date": str(oldDate), "mentioned": True})
         except Exception as e:
             pass
-
-        await asyncio.sleep(1 * 10 * 60)
-
-
-class Bot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.all()
-        super().__init__(command_prefix="!", intents=intents)
-
-        self.cogslist = ["Cogs.commandcog", "Cogs.eventcog"]
-        self.MongoClient = MongoClient(
-            os.environ.get("Database_Connection_String"), tlsCAFile=certifi.where()
-        )
 
     async def setup_hook(self):
         for ext in self.cogslist:

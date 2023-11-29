@@ -74,6 +74,29 @@ class commandcog(commands.Cog):
             )
             return
 
+    @app_commands.command(
+        name="forcesurvey", description="Force survey"
+    )
+    @app_commands.check(is_admin)
+    async def force_survey(self, interaction: discord.Interaction):
+        self.mention_players()
+
+    @force_survey.error
+    async def get_key_error(self, interaction, error):
+        if isinstance(error, commands.MissingRequiredArgument):
+            await interaction.response.send_message(
+                content=f"Missing required argument {error.param.name}",
+                ephemeral=True,
+            )
+            return
+
+        if isinstance(error, commands.MissingPermissions):
+            await interaction.response.send_message(
+                content=f"Missing required permission",
+                ephemeral=True,
+            )
+            return
+
 
 async def setup(client: commands.Bot):
     await client.add_cog(commandcog(client))
