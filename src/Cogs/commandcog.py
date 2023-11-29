@@ -74,12 +74,15 @@ class commandcog(commands.Cog):
             )
             return
 
-    @app_commands.command(
-        name="forcesurvey", description="Force survey"
-    )
+    @app_commands.command(name="forcesurvey", description="Force survey")
     @app_commands.check(is_admin)
     async def force_survey(self, interaction: discord.Interaction):
         self.mention_players()
+
+        await interaction.response.send_message(
+            content=f"Ok I'll try to mention the players for today! I may already have mentioned them, and I will not mention them again :)",
+            ephemeral=True,
+        )
 
     @force_survey.error
     async def get_key_error(self, interaction, error):
