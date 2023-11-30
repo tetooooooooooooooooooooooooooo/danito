@@ -78,7 +78,7 @@ class commandcog(commands.Cog):
     @app_commands.check(is_admin)
     async def force_survey(self, interaction: discord.Interaction):
         print("Ran command!")
-        await self.mention_players()
+        await self.Client.mention_players()
 
         await interaction.response.send_message(
             content=f"Ok I'll try to mention the players for today! I may already have mentioned them, and I will not mention them again :)",
@@ -101,7 +101,10 @@ class commandcog(commands.Cog):
             )
             return
         
-        print(error)
+        await interaction.response.send_message(
+                content=f"{error}",
+                ephemeral=True,
+            )
 
 
 async def setup(client: commands.Bot):
