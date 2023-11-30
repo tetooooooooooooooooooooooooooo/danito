@@ -5,19 +5,7 @@ from dotenv import load_dotenv
 import Database
 from pymongo import MongoClient
 import certifi
-import asyncio
 import datetime
-
-
-async def UpdateTask(bot):
-    while True:
-        now = datetime.datetime.now()
-        if not (12 < now.hour < 18):
-            continue
-
-        bot.mention_players()
-
-        await asyncio.sleep(1 * 10 * 60)
 
 
 class Bot(commands.Bot):
@@ -104,8 +92,15 @@ class Bot(commands.Bot):
 
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
+        
+    @tasks.loop(minutes = 10)
+    async def task_loop(self):
+        now = datetime.datetime.now()
+        if not (12 < now.hour < 18):
+            return
 
-        self.loop.create_task(UpdateTask(self))
+        self.mention_players()
+
 
 
 load_dotenv()
