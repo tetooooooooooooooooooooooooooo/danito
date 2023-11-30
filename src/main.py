@@ -19,6 +19,8 @@ class Bot(commands.Bot):
         )
 
     async def mention_players(self):
+        print("Mentioning players!")
+        
         database = Database.get_bot_database(self.MongoClient)
         roles = database["roles"]
         servers = database["servers"]

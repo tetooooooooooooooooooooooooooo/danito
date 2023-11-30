@@ -77,6 +77,7 @@ class commandcog(commands.Cog):
     @app_commands.command(name="forcesurvey", description="Force survey")
     @app_commands.check(is_admin)
     async def force_survey(self, interaction: discord.Interaction):
+        print("Ran command!")
         await self.mention_players()
 
         await interaction.response.send_message(
