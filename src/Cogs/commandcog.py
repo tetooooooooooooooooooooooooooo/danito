@@ -100,6 +100,8 @@ class commandcog(commands.Cog):
                 ephemeral=True,
             )
             return
+        
+        print(error)
 
 
 async def setup(client: commands.Bot):
