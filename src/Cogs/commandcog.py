@@ -73,6 +73,11 @@ class commandcog(commands.Cog):
                 ephemeral=True,
             )
             return
+        
+        await interaction.response.send_message(
+                content=f"{error}",
+                ephemeral=True,
+            )
 
     @app_commands.command(name="forcesurvey", description="Force survey")
     @app_commands.check(is_admin)
