@@ -6,6 +6,20 @@ import Database
 from pymongo import MongoClient
 import certifi
 import datetime
+import asyncio
+
+
+async def loop(bot):
+    t = 10 * 60
+
+    while True:
+        now = datetime.datetime.now()
+        if not (12 < now.hour < 14):
+            await asyncio.sleep(t)
+            continue
+
+        await bot.mention_players()
+        await asyncio.sleep(t)
 
 
 class Bot(commands.Bot):
@@ -20,7 +34,7 @@ class Bot(commands.Bot):
 
     async def mention_players(self):
         print("Mentioning players!")
-        
+
         database = Database.get_bot_database(self.MongoClient)
         roles = database["roles"]
         servers = database["servers"]
@@ -50,7 +64,7 @@ class Bot(commands.Bot):
                     continue
 
                 message = await channel.send(content=f'<@&{object["role_id"]}>')
-                await message.delete(delay=5.0)
+                await message.delete(delay=2.0)
                 print("Message sent!")
 
                 try:
@@ -91,18 +105,10 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print("Bot is ready!")
+        self.loop.create_task(loop(self))
 
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
-        
-    @tasks.loop(minutes = 10)
-    async def task_loop(self):
-        now = datetime.datetime.now()
-        if not (12 < now.hour < 18):
-            return
-
-        self.mention_players()
-
 
 
 load_dotenv()
