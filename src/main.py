@@ -77,7 +77,7 @@ class Bot(commands.Bot):
 
         # Delete old data
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()
-        objects = roles.find({"date": str(oldDate), "mentioned": True})
+        objects = roles.find({"date": str(oldDate)})
         print(f"Getting old date {str(oldDate)}")
         for object in objects:
             guild = await self.fetch_guild(object["guild_id"])
@@ -95,7 +95,7 @@ class Bot(commands.Bot):
 
         # Delete all the data for the old date
         try:
-            roles.delete_many({"date": str(oldDate), "mentioned": True})
+            roles.delete_many({"date": str(oldDate)})
         except Exception as e:
             pass
 
