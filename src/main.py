@@ -134,17 +134,11 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print("Bot is ready!")
-        # Use ensure_future instead of create_task,
-        # or use self.loop.create_task which is equivalent.
-        # This is the line that needs to successfully run the loop.
         asyncio.ensure_future(loop(self))
 
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
 
-    ---
-
-    ### New Member Join/Leave Logic
 
     async def on_member_join(self, member):
         """Sends a direct message to a new member or a welcome back message."""
@@ -155,7 +149,6 @@ class Bot(commands.Bot):
         departures = database["departures"]
 
         # Check if the user is in the 'departures' collection for this guild
-        # find_one_and_delete removes the record as soon as it finds it
         departed_record = departures.find_one_and_delete(
             {"user_id": member.id, "guild_id": member.guild.id}
         )
@@ -195,15 +188,11 @@ class Bot(commands.Bot):
         except Exception as e:
             print(f"Error recording departure for {member.name}: {e}")
 
-    ---
-
-    ### Daily Departure Cleanup Task
 
     @tasks.loop(hours=24) # Run this task every 24 hours
     async def cleanup_departures(self):
         """Cleans up old departure records from the database."""
-        # Wait until bot is fully ready before running the loop for the first time
-        await self.wait_until_ready()
+        await self.wait_until_ready() # Wait until bot is fully ready
 
         database = Database.get_bot_database(self.MongoClient)
         departures = database["departures"]
