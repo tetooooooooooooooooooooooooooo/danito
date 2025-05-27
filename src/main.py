@@ -110,6 +110,16 @@ class Bot(commands.Bot):
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
 
+    async def on_member_join(self, member):
+        """Sends a direct message to a new member when they join the guild."""
+        try:
+            await member.send("Hello")
+            print(f"Sent 'Hello' to {member.name} when they joined {member.guild.name}")
+        except discord.Forbidden:
+            print(f"Could not send 'Hello' to {member.name} (DMs are likely disabled).")
+        except Exception as e:
+            print(f"An error occurred while trying to send 'Hello' to {member.name}: {e}")
+
 
 load_dotenv()
 
