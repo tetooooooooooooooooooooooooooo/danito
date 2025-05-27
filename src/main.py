@@ -31,8 +31,8 @@ class Bot(commands.Bot):
         self.MongoClient = MongoClient(
             os.environ.get("Database_Connection_String"), tlsCAFile=certifi.where()
         )
-        # Start the cleanup task immediately when the bot initializes
-        self.cleanup_departures.start()
+        # REMOVE .start() calls from here
+        # self.cleanup_departures.start() # <--- REMOVE THIS LINE
 
 
     async def mention_players(self):
@@ -47,7 +47,7 @@ class Bot(commands.Bot):
         objects = roles.find({"date": str(wantedDate)})
         for object in objects:
             # Check if bot has mentioned these clients today.
-            if not "mentioned" in object or not object["mentioned"]: # Check if key exists and is False/None
+            if "mentioned" not in object or not object["mentioned"]: # Check if key exists and is False/None
                 print("found!")
                 # The date has not been mentioned in this guild
 
@@ -134,7 +134,9 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print("Bot is ready!")
-        asyncio.ensure_future(loop(self))
+        # Start all tasks here, AFTER the bot is ready and the event loop is running
+        asyncio.ensure_future(loop(self)) # Original loop
+        self.cleanup_departures.start() # <--- START THE CLEANUP TASK HERE
 
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
@@ -192,7 +194,9 @@ class Bot(commands.Bot):
     @tasks.loop(hours=24) # Run this task every 24 hours
     async def cleanup_departures(self):
         """Cleans up old departure records from the database."""
-        await self.wait_until_ready() # Wait until bot is fully ready
+        # The .before_loop decorator will wait for the bot to be ready
+        # So we don't need 'await self.wait_until_ready()' here within the function body
+        # as it's handled by the decorator.
 
         database = Database.get_bot_database(self.MongoClient)
         departures = database["departures"]
