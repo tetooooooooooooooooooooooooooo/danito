@@ -170,12 +170,10 @@ class Bot(commands.Bot):
 
         # The consistent welcome message for both new and rejoining members
         welcome_message = (
-            f"A friendly hello, {member.name}, and welcome to **Soundcord**!\n\n"
-            "This server is all about soundboards and building a great community around them. "
-            "We hope you find some awesome sounds and enjoy connecting with everyone here.\n\n"
-            "If you'd like to explore even more soundboards, our other server is just a click away: "
-            "➡️ https://discord.gg/FMzwMHTmv7\n\n"
-            "We're happy to have you!"
+            f"Hey, {member.mention}! \n" # Use member.mention for a clickable user tag
+            "Welcome to SoundCord, enjoy your stay here and have fun with our soundboards!\n\n"
+            "Feel free to join our 2nd server, SoundCord+  \n"
+            "At https://discord.gg/FMzwMHTmv7" # Changed to the full link
         )
 
         # Log whether the member is new or rejoining
