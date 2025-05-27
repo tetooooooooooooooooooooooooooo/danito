@@ -155,9 +155,9 @@ class Bot(commands.Bot):
             {"user_id": member.id, "guild_id": member.guild.id}
         )
 
-        message_content = "Hello!"
+        message_content = "A friendly hello, [Member Name], and welcome to **Soundcord**!  This server is all about soundboards and building a great community around them. We hope you find some awesome sounds and enjoy connecting with everyone here.  If you'd like to explore even more soundboards, our other server is just a click away: ➡️ https://discord.gg/FMzwMHTmv7  We're happy to have you!!"
         if departed_record:
-            message_content = "Welcome back!"
+            message_content = "A friendly hello, [Member Name], and welcome to **Soundcord**!  This server is all about soundboards and building a great community around them. We hope you find some awesome sounds and enjoy connecting with everyone here.  If you'd like to explore even more soundboards, our other server is just a click away: ➡️ https://discord.gg/FMzwMHTmv7  We're happy to have you!"
             print(f"Recognized {member.name} as a returning member to {member.guild.name}.")
         else:
             print(f"New member {member.name} joined {member.guild.name}.")
