@@ -14,7 +14,8 @@ async def loop(bot):
 
     while True:
         now = datetime.datetime.now()
-        if not (12 <= now.hour < 14): # Using <= and < for clearer time range (12:00 to 13:59)
+        # Check if current time is within 12 PM (noon) to 1:59 PM
+        if not (12 <= now.hour < 14):
             await asyncio.sleep(t)
             continue
 
@@ -24,107 +25,115 @@ async def loop(bot):
 
 class Bot(commands.Bot):
     def __init__(self):
+        # Initialize intents to allow the bot to receive specific events from Discord.
+        # Intents.all() requires enabling privileged intents in the Discord Developer Portal.
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
+        # List of cogs (extensions) to load
         self.cogslist = ["Cogs.commandcog", "Cogs.eventcog"]
+
+        # Initialize MongoDB client connection using environment variable
         self.MongoClient = MongoClient(
             os.environ.get("Database_Connection_String"), tlsCAFile=certifi.where()
         )
-        # REMOVE .start() calls from here
-        # self.cleanup_departures.start() # <--- REMOVE THIS LINE
 
 
     async def mention_players(self):
         print("Mentioning players!")
 
         database = Database.get_bot_database(self.MongoClient)
-        roles = database["roles"]
-        servers = database["servers"]
+        roles_collection = database["roles"]
+        servers_collection = database["servers"]
 
+        # Calculate the date for roles that need to be mentioned (8 days ago)
         wantedDate = (datetime.datetime.now() - datetime.timedelta(days=8)).date()
 
-        objects = roles.find({"date": str(wantedDate)})
-        for object in objects:
-            # Check if bot has mentioned these clients today.
-            if "mentioned" not in object or not object["mentioned"]: # Check if key exists and is False/None
-                print("found!")
-                # The date has not been mentioned in this guild
+        objects_to_mention = roles_collection.find({"date": str(wantedDate)})
+        for obj in objects_to_mention:
+            # Check if this role for this date has already been mentioned
+            if "mentioned" not in obj or not obj["mentioned"]:
+                print(f"Found unmentioned role for date {obj['date']} in guild {obj['guild_id']}!")
 
-                guild = await self.fetch_guild(object["guild_id"])
+                guild = await self.fetch_guild(obj["guild_id"])
                 if not guild:
-                    print(f"Guild {object['guild_id']} not found or bot isn't in it.")
+                    print(f"Guild {obj['guild_id']} not found or bot isn't in it.")
                     continue
 
-                # Get discovery channel in server and mention role in that channel
-                server = servers.find_one({"guild_id": object["guild_id"]})
-                if not server or "discovery_channel" not in server:
-                    print(f'Could not find server data or discovery channel for guild {object["guild_id"]}')
+                # Get the discovery channel for this guild
+                server_data = servers_collection.find_one({"guild_id": obj["guild_id"]})
+                if not server_data or "discovery_channel" not in server_data:
+                    print(f'Could not find server data or discovery channel for guild {obj["guild_id"]}')
                     continue
 
                 try:
-                    channel = await guild.fetch_channel(server["discovery_channel"])
+                    channel = await guild.fetch_channel(server_data["discovery_channel"])
                 except discord.NotFound:
-                    print(f"Discovery channel {server['discovery_channel']} not found in guild {object['guild_id']}. Was it deleted?")
+                    print(f"Discovery channel {server_data['discovery_channel']} not found in guild {obj['guild_id']}. Was it deleted?")
                     continue
                 except discord.Forbidden:
-                    print(f"Bot does not have permission to access channel {server['discovery_channel']} in guild {object['guild_id']}.")
+                    print(f"Bot does not have permission to access channel {server_data['discovery_channel']} in guild {obj['guild_id']}.")
                     continue
                 except Exception as e:
-                    print(f"An error occurred fetching channel {server['discovery_channel']}: {e}")
+                    print(f"An error occurred fetching channel {server_data['discovery_channel']}: {e}")
                     continue
 
                 if not channel:
-                    print(f"Could not find discovery channel in guild {object['guild_id']}.")
+                    print(f"Could not find discovery channel in guild {obj['guild_id']}.")
                     continue
 
                 try:
-                    message = await channel.send(content=f'<@&{object["role_id"]}>')
+                    # Send message mentioning the role and delete it after a short delay
+                    message = await channel.send(content=f'<@&{obj["role_id"]}>')
                     await message.delete(delay=2.0)
-                    print("Message sent!")
+                    print(f"Message sent for role {obj['role_id']} in guild {obj['guild_id']}!")
 
-                    await roles.update_one(
-                        {"_id": object["_id"]},
+                    # Mark the role as mentioned in the database
+                    await roles_collection.update_one(
+                        {"_id": obj["_id"]},
                         {"$set": {"mentioned": True}},
                     )
                 except discord.Forbidden:
                     print(f"Bot lacks permissions to send messages in channel {channel.id} or delete messages.")
                 except Exception as e:
-                    print(f"An error occurred sending/deleting message for role {object['role_id']}: {e}")
+                    print(f"An error occurred sending/deleting message for role {obj['role_id']}: {e}")
 
-        # Delete old data
+        # Delete old data (roles that are 9 days old)
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()
-        print(f"Getting old date {str(oldDate)}")
-        objects_to_delete = list(roles.find({"date": str(oldDate)}))
+        print(f"Attempting to clean up old roles for date {str(oldDate)}")
+        objects_to_delete = list(roles_collection.find({"date": str(oldDate)}))
 
-        for object in objects_to_delete:
-            guild = await self.fetch_guild(object["guild_id"])
+        for obj in objects_to_delete:
+            guild = await self.fetch_guild(obj["guild_id"])
             if not guild:
-                print(f"Guild {object['guild_id']} not found for old role cleanup.")
+                print(f"Guild {obj['guild_id']} not found for old role cleanup.")
                 continue
 
-            role = guild.get_role(object["role_id"])
+            role = guild.get_role(obj["role_id"])
             if not role:
-                print(f"Could not find role with date {str(oldDate)}")
+                print(f"Could not find role with ID {obj['role_id']} for date {str(oldDate)} in guild {obj['guild_id']}.")
                 continue
 
             try:
                 await role.delete(
                     reason="The date became old and was ultimately cleaned up"
                 )
+                print(f"Deleted role {obj['role_id']} in guild {obj['guild_id']}.")
             except discord.Forbidden:
-                print(f"Bot lacks permissions to delete role {object['role_id']} in guild {object['guild_id']}.")
+                print(f"Bot lacks permissions to delete role {obj['role_id']} in guild {obj['guild_id']}.")
             except Exception as e:
-                print(f"Error deleting role {object['role_id']}: {e}")
+                print(f"Error deleting role {obj['role_id']}: {e}")
 
-        # Delete all the data for the old date
+        # Delete all database records for the old date
         try:
-            roles.delete_many({"date": str(oldDate)})
+            delete_result = roles_collection.delete_many({"date": str(oldDate)})
+            print(f"Deleted {delete_result.deleted_count} database records for date {str(oldDate)}.")
         except Exception as e:
-            pass
+            print(f"Error deleting database records for old date {str(oldDate)}: {e}")
 
 
     async def setup_hook(self):
+        # Load all specified cogs (extensions)
         for ext in self.cogslist:
             try:
                 await self.load_extension(ext)
@@ -133,80 +142,91 @@ class Bot(commands.Bot):
 
 
     async def on_ready(self):
+        # This event fires once the bot has successfully connected to Discord.
         print("Bot is ready!")
-        # Start all tasks here, AFTER the bot is ready and the event loop is running
-        asyncio.ensure_future(loop(self)) # Original loop
-        self.cleanup_departures.start() # <--- START THE CLEANUP TASK HERE
+        # Start the custom looping task for mentioning players
+        asyncio.ensure_future(loop(self))
+        # Start the background task for cleaning up departure records
+        self.cleanup_departures.start()
 
+        # Synchronize slash commands with Discord
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
 
 
     async def on_member_join(self, member):
-        """Sends a direct message to a new member or a welcome back message."""
-        if member.bot: # Ignore bots joining
+        """Sends a direct message welcome message to a new or rejoining member."""
+        if member.bot: # Ignore bots joining the server
             return
 
         database = Database.get_bot_database(self.MongoClient)
-        departures = database["departures"]
+        departures_collection = database["departures"]
 
-        # Check if the user is in the 'departures' collection for this guild
-        departed_record = departures.find_one_and_delete(
+        # Attempt to find and delete a departure record for this user in this guild.
+        # If found, it means they are rejoining.
+        departed_record = departures_collection.find_one_and_delete(
             {"user_id": member.id, "guild_id": member.guild.id}
         )
 
-        message_content = "A friendly hello, [Member Name], and welcome to **Soundcord**!  This server is all about soundboards and building a great community around them. We hope you find some awesome sounds and enjoy connecting with everyone here.  If you'd like to explore even more soundboards, our other server is just a click away: ➡️ https://discord.gg/FMzwMHTmv7  We're happy to have you!!"
+        # The consistent welcome message for both new and rejoining members
+        welcome_message = (
+            f"A friendly hello, {member.name}, and welcome to **Soundcord**!\n\n"
+            "This server is all about soundboards and building a great community around them. "
+            "We hope you find some awesome sounds and enjoy connecting with everyone here.\n\n"
+            "If you'd like to explore even more soundboards, our other server is just a click away: "
+            "➡️ https://discord.gg/FMzwMHTmv7\n\n"
+            "We're happy to have you!"
+        )
+
+        # Log whether the member is new or rejoining
         if departed_record:
-            message_content = "A friendly hello, [Member Name], and welcome to **Soundcord**!  This server is all about soundboards and building a great community around them. We hope you find some awesome sounds and enjoy connecting with everyone here.  If you'd like to explore even more soundboards, our other server is just a click away: ➡️ https://discord.gg/FMzwMHTmv7  We're happy to have you!"
             print(f"Recognized {member.name} as a returning member to {member.guild.name}.")
         else:
             print(f"New member {member.name} joined {member.guild.name}.")
 
         try:
-            await member.send(message_content)
-            print(f"Sent '{message_content}' to {member.name}.")
+            await member.send(welcome_message)
+            print(f"Sent welcome message to {member.name}.")
         except discord.Forbidden:
-            print(f"Could not send '{message_content}' to {member.name} (DMs are likely disabled).")
+            print(f"Could not send welcome message to {member.name} (DMs are likely disabled).")
         except Exception as e:
-            print(f"An error occurred while trying to send '{message_content}' to {member.name}: {e}")
+            print(f"An error occurred while trying to send welcome message to {member.name}: {e}")
 
 
     async def on_member_remove(self, member):
         """Records a member's departure for potential 'rejoin' detection."""
-        if member.bot: # Ignore bots leaving
+        if member.bot: # Ignore bots leaving the server
             return
 
         database = Database.get_bot_database(self.MongoClient)
-        departures = database["departures"]
+        departures_collection = database["departures"]
 
-        # Store the departure. Add a timestamp for cleanup.
+        # Store the departure record with a timestamp
         try:
-            departures.insert_one({
+            departures_collection.insert_one({
                 "user_id": member.id,
                 "guild_id": member.guild.id,
-                "departure_time": datetime.datetime.now() # Store datetime object
+                "departure_time": datetime.datetime.now()
             })
             print(f"Recorded departure for {member.name} from {member.guild.name}.")
         except Exception as e:
             print(f"Error recording departure for {member.name}: {e}")
 
 
-    @tasks.loop(hours=24) # Run this task every 24 hours
+    @tasks.loop(hours=24) # This task runs every 24 hours
     async def cleanup_departures(self):
-        """Cleans up old departure records from the database."""
-        # The .before_loop decorator will wait for the bot to be ready
-        # So we don't need 'await self.wait_until_ready()' here within the function body
-        # as it's handled by the decorator.
+        """Cleans up old departure records from the database to prevent it from growing too large."""
+        # The @before_loop decorator handles waiting for the bot to be ready
 
         database = Database.get_bot_database(self.MongoClient)
-        departures = database["departures"]
+        departures_collection = database["departures"]
 
-        # Define what constitutes "old" (e.g., departed more than 30 days ago)
+        # Calculate the threshold for "old" records (e.g., older than 30 days)
         thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
 
         try:
-            delete_result = departures.delete_many(
-                {"departure_time": {"$lt": thirty_days_ago}}
+            delete_result = departures_collection.delete_many(
+                {"departure_time": {"$lt": thirty_days_ago}} # Delete records older than 30 days
             )
             print(f"Cleaned up {delete_result.deleted_count} old departure records.")
         except Exception as e:
@@ -215,10 +235,14 @@ class Bot(commands.Bot):
     @cleanup_departures.before_loop
     async def before_cleanup_departures(self):
         print("Waiting for bot to be ready before starting departure cleanup loop...")
-        await self.wait_until_ready()
+        await self.wait_until_ready() # Ensures the bot is fully online before the loop starts
 
 
+# Load environment variables from .env file (for local development)
 load_dotenv()
 
+# Create an instance of the Bot class
 bot = Bot()
+
+# Run the bot using the token from environment variables
 bot.run(os.environ.get("BOT_TOKEN"))
