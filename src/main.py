@@ -167,16 +167,17 @@ class Bot(commands.Bot):
         departed_record = departures_collection.find_one_and_delete(
             {"user_id": member.id, "guild_id": member.guild.id}
         )
-
-welcome_message = (
-    f"Hey, {member.mention}!\n"
-    "Welcome to SoundCord! We're glad to have you here. Enjoy your stay and have fun with our soundboards!\n\n"
-    "Feel free to join our 2nd server, SoundCord+, at https://discord.gg/FMzwMHTmv7\n\n"
-    "---**CHECK OUT OUR MINECRAFT SKYBLOCK SERVER!**---\n"
-    "Our IP is **playcalypso.net**\n\n"
-    "We're a Skyblock server with dungeons, bosses, jobs, quests, and factories! "
-    "We're in a **beta testing phase** right now, and players who provide great feedback will be rewarded with a high-value rank!"
-)
+        
+        # The welcome message needs to be defined within the function's scope
+        welcome_message = (
+            f"Hey, {member.mention}!\n"
+            "Welcome to SoundCord! We're glad to have you here. Enjoy your stay and have fun with our soundboards!\n\n"
+            "Feel free to join our Minecraft server, Calypso MC, at https://discord.com/invite/kNdPFZnvKM\n\n"
+            "---**CHECK OUT OUR MINECRAFT SKYBLOCK SERVER!**---\n"
+            "Our IP is **playcalypso.net**\n\n"
+            "We're a Skyblock server with dungeons, bosses, jobs, quests, and factories! "
+            "We're in a **beta testing phase** right now, and players who provide great feedback will be rewarded with a high-value rank!"
+        )
 
         # Log whether the member is new or rejoining
         if departed_record:
