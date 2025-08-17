@@ -171,12 +171,11 @@ class Bot(commands.Bot):
         # The welcome message needs to be defined within the function's scope
         welcome_message = (
             f"Hey, {member.mention}!\n"
-            "Welcome to SoundCord! We're glad to have you here. Enjoy your stay and have fun with our soundboards!\n\n"
-            "Feel free to join our Minecraft server, Calypso MC, at https://discord.gg/vBGr7GHxQe\n\n"
-            "---**CHECK OUT OUR MINECRAFT SKYBLOCK SERVER!**---\n"
-            "Our IP is **playcalypso.net**\n\n"
-            "We're a Skyblock server with dungeons, bosses, jobs, quests, and factories! "
-            "We're in a **beta testing phase** right now, and players who provide great feedback will be rewarded with a high-value rank!"
+            "👋 Welcome to **SoundCord**! We're glad to have you here. Enjoy your stay and have fun with our soundboards!\n\n"
+            "🎮 Also feel free to join our **Minecraft Skyblock & Dungeons Server – Calypso MC**!!\n\n"
+            "🌍 **IP:** `playcalypso.net`\n"
+            "📌 **Version:** `1.21.4`\n"
+            "🔗 **Discord:** https://discord.gg/kqdDV8VC5A"
         )
 
         # Log whether the member is new or rejoining
