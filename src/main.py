@@ -172,7 +172,7 @@ class Bot(commands.Bot):
         welcome_message = (
             f"Hey!, {member.mention}!\n"
             "We'd love to interest you in checking out our partnered social mmo game, Meown!\n\n"
-            "playable at https://meown.net\n\n"
+            "🔗 **playable at** https://meown.net\n"
             "🔗 **Discord:** https://discord.gg/VPjxQgTgBh"
         )
 
