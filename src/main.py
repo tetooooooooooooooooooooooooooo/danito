@@ -32,7 +32,8 @@ class Bot(commands.Bot):
         self.cogslist = [
             "Cogs.commandcog",
             "Cogs.eventcog",
-            "Cogs.badges"
+            "Cogs.badges",
+            "Cogs.help"
         ]
 
 
