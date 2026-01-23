@@ -29,9 +29,32 @@ class Badges(commands.Cog):
             return False
         return getattr(member.public_flags, badge, False)
 
+    async def badge_autocomplete(
+        self,
+        interaction: discord.Interaction,
+        current: str,
+    ) -> list[app_commands.Choice[str]]:
+        # Add "all" option
+        choices = [app_commands.Choice(name="All Badges", value="all")]
+        
+        # Add all badge options
+        for key, name in badge_attrs.items():
+            choices.append(app_commands.Choice(name=name, value=key))
+        
+        # Filter based on what user is typing
+        if current:
+            filtered = [
+                choice for choice in choices
+                if current.lower() in choice.name.lower()
+            ]
+            return filtered[:25]  # Discord limits to 25 choices
+        
+        return choices[:25]
+
     # /cbc badge
     @app_commands.command(name="cbc", description="Count members with a badge")
     @app_commands.describe(badge="Badge name or 'all'")
+    @app_commands.autocomplete(badge=badge_autocomplete)
     async def cbc(self, interaction: discord.Interaction, badge: str):
         await interaction.response.defer()
         
@@ -68,6 +91,7 @@ class Badges(commands.Cog):
     # /cbu badge
     @app_commands.command(name="cbu", description="List users with a badge")
     @app_commands.describe(badge="Badge name")
+    @app_commands.autocomplete(badge=badge_autocomplete)
     async def cbu(self, interaction: discord.Interaction, badge: str):
         await interaction.response.defer()
         
