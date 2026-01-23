@@ -10,24 +10,28 @@ class Help(commands.Cog):
     async def help(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title="🤖 Bot Help",
-            description="Here are all available commands:",
+            description="Here are all available slash commands:",
             color=discord.Color.blurple()
         )
 
-        for cog in self.bot.cogs.values():
-            commands_list = []
-            for cmd in cog.get_app_commands():
-                commands_list.append(f"/{cmd.name} — {cmd.description}")
+        commands_by_cog = {}
 
-            if commands_list:
-                embed.add_field(
-                    name=cog.qualified_name,
-                    value="\n".join(commands_list),
-                    inline=False
-                )
+        for cmd in self.bot.tree.walk_commands():
+            cog = cmd.binding.__class__.__name__ if cmd.binding else "Other"
+            commands_by_cog.setdefault(cog, []).append(cmd)
+
+        for cog_name, cmds in commands_by_cog.items():
+            value = "\n".join(
+                f"/{cmd.name} — {cmd.description or 'No description'}"
+                for cmd in cmds
+            )
+            embed.add_field(
+                name=cog_name,
+                value=value,
+                inline=False
+            )
 
         embed.set_footer(text="Use /<command> to run a command")
-
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
 async def setup(bot):
