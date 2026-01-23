@@ -25,13 +25,16 @@ async def loop(bot):
 
 class Bot(commands.Bot):
     def __init__(self):
-        # Initialize intents to allow the bot to receive specific events from Discord.
-        # Intents.all() requires enabling privileged intents in the Discord Developer Portal.
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
 
         # List of cogs (extensions) to load
-        self.cogslist = ["Cogs.commandcog", "Cogs.eventcog"]
+        self.cogslist = [
+            "Cogs.commandcog",
+            "Cogs.eventcog",
+            "Cogs.badges"
+        ]
+
 
         # Initialize MongoDB client connection using environment variable
         self.MongoClient = MongoClient(
