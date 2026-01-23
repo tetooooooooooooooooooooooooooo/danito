@@ -8,13 +8,15 @@ badge_attrs = {
     "hypesquad": "HypeSquad Events",
     "bug_hunter": "Bug Hunter L1",
     "bug_hunter_level_2": "Bug Hunter L2",
-    "hypesquad_house_bravery": "Bravery",
-    "hypesquad_house_brilliance": "Brilliance",
-    "hypesquad_house_balance": "Balance",
+    "hypesquad_bravery": "House Bravery",
+    "hypesquad_brilliance": "House Brilliance",
+    "hypesquad_balance": "House Balance",
     "early_supporter": "Early Supporter",
+    "team_user": "Team User",
     "verified_bot": "Verified Bot",
-    "verified_bot_developer": "Early Bot Developer",
-    "certified_moderator": "Certified Moderator",
+    "verified_bot_developer": "Early Verified Bot Developer",
+    "discord_certified_moderator": "Moderator Programs Alumni",
+    "bot_http_interactions": "HTTP Interactions Bot",
     "active_developer": "Active Developer",
 }
 
@@ -32,7 +34,7 @@ class Badges(commands.Cog):
     @app_commands.describe(badge="Badge name or 'all'")
     async def cbc(self, interaction: discord.Interaction, badge: str):
         await interaction.response.defer()
-
+        
         guild = interaction.guild
         if not guild:
             return
@@ -45,12 +47,12 @@ class Badges(commands.Cog):
                 count = sum(self.has_badge(m, b) for m in members)
                 if count > 0:
                     result[b] = count
-
+            
             text = "\n".join(
                 f"{badge_attrs[b]}: {c}"
                 for b, c in result.items()
             ) or "No detectable badges."
-
+            
             await interaction.followup.send(f"**Badge counts:**\n{text}")
             return
 
@@ -68,7 +70,7 @@ class Badges(commands.Cog):
     @app_commands.describe(badge="Badge name")
     async def cbu(self, interaction: discord.Interaction, badge: str):
         await interaction.response.defer()
-
+        
         if badge not in badge_attrs:
             await interaction.followup.send("Unknown badge.")
             return
