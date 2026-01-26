@@ -37,7 +37,8 @@ class Bot(commands.Bot):
             "Cogs.stats",
             "Cogs.utility",
             "Cogs.taginfo",
-            "Cogs.playing"
+            "Cogs.playing",
+            "Cogs.ImageSpamFilter"
         ]
 
 
