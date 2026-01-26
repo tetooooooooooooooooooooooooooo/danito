@@ -2,7 +2,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 from collections import Counter
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 class Stats(commands.Cog):
     def __init__(self, bot):
@@ -69,7 +69,7 @@ class Stats(commands.Cog):
         if hours > 168:  # 1 week max
             hours = 168
         
-        time_threshold = datetime.now(datetime.timezone.utc) - timedelta(hours=hours)
+        time_threshold = datetime.now(timezone.utc) - timedelta(hours=hours)
         
         try:
             # Collect messages
@@ -104,7 +104,7 @@ class Stats(commands.Cog):
             embed = discord.Embed(
                 title=f"📊 Activity Stats for {target_channel.name}",
                 color=discord.Color.green(),
-                timestamp=datetime.now(datetime.timezone.utc)
+                timestamp=datetime.now(timezone.utc)
             )
             
             embed.add_field(
