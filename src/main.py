@@ -1,4 +1,5 @@
 import discord
+from discord import app_commands
 from discord.ext import commands, tasks
 import os
 from dotenv import load_dotenv
@@ -41,26 +42,49 @@ class Bot(commands.Bot):
             "Cogs.ImageSpamFilter"
         ]
 
-
-        # Initialize MongoDB client connection using environment variable
+        # MongoDB connection
         self.MongoClient = MongoClient(
-            os.environ.get("Database_Connection_String"), tlsCAFile=certifi.where()
+            os.environ.get("Database_Connection_String"),
+            tlsCAFile=certifi.where()
         )
 
+        # Log channel ID
+        self.log_channel_id = 1465493782245146886
+
+    async def send_log(self, title: str, description: str = None, fields: dict = None, color=0x2b2d31):
+        """Send a formatted embed to the log channel"""
+        channel = self.get_channel(self.log_channel_id)
+        if not channel:
+            print(f"[LOG ERROR] Channel {self.log_channel_id} not found.")
+            return
+
+        embed = discord.Embed(
+            title=title,
+            description=description,
+            color=color,
+            timestamp=datetime.datetime.now(datetime.timezone.utc)
+        )
+        embed.set_footer(text=self.user.name, icon_url=self.user.display_avatar.url)
+
+        if fields:
+            for name, value in fields.items():
+                embed.add_field(name=name, value=str(value)[:1024], inline=False)
+
+        try:
+            await channel.send(embed=embed)
+        except Exception as e:
+            print(f"[LOG ERROR] Failed to send log: {e}")
 
     async def mention_players(self):
         print("Mentioning players!")
-
         database = Database.get_bot_database(self.MongoClient)
         roles_collection = database["roles"]
         servers_collection = database["servers"]
 
-        # Calculate the date for roles that need to be mentioned (8 days ago)
         wantedDate = (datetime.datetime.now() - datetime.timedelta(days=8)).date()
 
         objects_to_mention = roles_collection.find({"date": str(wantedDate)})
         for obj in objects_to_mention:
-            # Check if this role for this date has already been mentioned
             if "mentioned" not in obj or not obj["mentioned"]:
                 print(f"Found unmentioned role for date {obj['date']} in guild {obj['guild_id']}!")
 
@@ -69,7 +93,6 @@ class Bot(commands.Bot):
                     print(f"Guild {obj['guild_id']} not found or bot isn't in it.")
                     continue
 
-                # Get the discovery channel for this guild
                 server_data = servers_collection.find_one({"guild_id": obj["guild_id"]})
                 if not server_data or "discovery_channel" not in server_data:
                     print(f'Could not find server data or discovery channel for guild {obj["guild_id"]}')
@@ -78,106 +101,110 @@ class Bot(commands.Bot):
                 try:
                     channel = await guild.fetch_channel(server_data["discovery_channel"])
                 except discord.NotFound:
-                    print(f"Discovery channel {server_data['discovery_channel']} not found in guild {obj['guild_id']}. Was it deleted?")
+                    print(f"Discovery channel {server_data['discovery_channel']} not found.")
                     continue
                 except discord.Forbidden:
-                    print(f"Bot does not have permission to access channel {server_data['discovery_channel']} in guild {obj['guild_id']}.")
+                    print(f"No permission to access channel {server_data['discovery_channel']}.")
                     continue
                 except Exception as e:
-                    print(f"An error occurred fetching channel {server_data['discovery_channel']}: {e}")
+                    print(f"Error fetching channel: {e}")
                     continue
 
                 if not channel:
-                    print(f"Could not find discovery channel in guild {obj['guild_id']}.")
                     continue
 
                 try:
-                    # Send message mentioning the role and delete it after a short delay
                     message = await channel.send(content=f'<@&{obj["role_id"]}>')
                     await message.delete(delay=2.0)
                     print(f"Message sent for role {obj['role_id']} in guild {obj['guild_id']}!")
 
-                    # Mark the role as mentioned in the database
                     await roles_collection.update_one(
                         {"_id": obj["_id"]},
-                        {"$set": {"mentioned": True}},
+                        {"$set": {"mentioned": True}}
                     )
-                except discord.Forbidden:
-                    print(f"Bot lacks permissions to send messages in channel {channel.id} or delete messages.")
-                except Exception as e:
-                    print(f"An error occurred sending/deleting message for role {obj['role_id']}: {e}")
 
-        # Delete old data (roles that are 9 days old)
+                    # Log the action
+                    await self.send_log(
+                        title="Ghost-Ping Role Mention Sent",
+                        fields={
+                            "Role": f"<@&{obj['role_id']}>",
+                            "Guild": guild.name,
+                            "Channel": channel.mention,
+                            "Date": obj["date"]
+                        },
+                        color=0x9b59b6
+                    )
+                except Exception as e:
+                    print(f"Error sending/deleting message: {e}")
+
+        # Cleanup old roles (9 days)
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()
-        print(f"Attempting to clean up old roles for date {str(oldDate)}")
+        print(f"Cleaning up roles for date {str(oldDate)}")
         objects_to_delete = list(roles_collection.find({"date": str(oldDate)}))
 
         for obj in objects_to_delete:
             guild = await self.fetch_guild(obj["guild_id"])
             if not guild:
-                print(f"Guild {obj['guild_id']} not found for old role cleanup.")
                 continue
 
             role = guild.get_role(obj["role_id"])
             if not role:
-                print(f"Could not find role with ID {obj['role_id']} for date {str(oldDate)} in guild {obj['guild_id']}.")
                 continue
 
             try:
-                await role.delete(
-                    reason="The date became old and was ultimately cleaned up"
-                )
+                await role.delete(reason="Date became old and was cleaned up")
                 print(f"Deleted role {obj['role_id']} in guild {obj['guild_id']}.")
-            except discord.Forbidden:
-                print(f"Bot lacks permissions to delete role {obj['role_id']} in guild {obj['guild_id']}.")
-            except Exception as e:
-                print(f"Error deleting role {obj['role_id']}: {e}")
 
-        # Delete all database records for the old date
+                await self.send_log(
+                    title="Old Role Deleted (Cleanup)",
+                    fields={
+                        "Role ID": obj["role_id"],
+                        "Guild": guild.name,
+                        "Date": str(oldDate)
+                    },
+                    color=0xe67e22
+                )
+            except Exception as e:
+                print(f"Error deleting role: {e}")
+
         try:
             delete_result = roles_collection.delete_many({"date": str(oldDate)})
-            print(f"Deleted {delete_result.deleted_count} database records for date {str(oldDate)}.")
+            print(f"Deleted {delete_result.deleted_count} old database records.")
         except Exception as e:
-            print(f"Error deleting database records for old date {str(oldDate)}: {e}")
-
+            print(f"Error deleting old records: {e}")
 
     async def setup_hook(self):
-        # Load all specified cogs (extensions)
         for ext in self.cogslist:
             try:
                 await self.load_extension(ext)
             except Exception as e:
-                print(f"Failed to load extension {ext}: {e}")
-
+                print(f"Failed to load {ext}: {e}")
 
     async def on_ready(self):
-        # This event fires once the bot has successfully connected to Discord.
         print("Bot is ready!")
-        # Start the custom looping task for mentioning players
         asyncio.ensure_future(loop(self))
-        # Start the background task for cleaning up departure records
         self.cleanup_departures.start()
 
-        # Synchronize slash commands with Discord
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
 
+        await self.send_log(
+            title="Bot Started / Reconnected",
+            description=f"Logged in as {self.user}",
+            color=0x00ff00
+        )
 
     async def on_member_join(self, member):
-        """Sends a direct message welcome message to a new or rejoining member."""
-        if member.bot: # Ignore bots joining the server
+        if member.bot:
             return
 
         database = Database.get_bot_database(self.MongoClient)
         departures_collection = database["departures"]
 
-        # Attempt to find and delete a departure record for this user in this guild.
-        # If found, it means they are rejoining.
         departed_record = departures_collection.find_one_and_delete(
             {"user_id": member.id, "guild_id": member.guild.id}
         )
-        
-        # The welcome message needs to be defined within the function's scope
+
         welcome_message = (
             f"Hey!, {member.mention}!\n"
             "We'd love to interest you in checking out our partnered social mmo game, Meown!\n\n"
@@ -185,71 +212,99 @@ class Bot(commands.Bot):
             "🔗 **Discord:** https://discord.gg/VPjxQgTgBh"
         )
 
-        # Log whether the member is new or rejoining
-        if departed_record:
-            print(f"Recognized {member.name} as a returning member to {member.guild.name}.")
-        else:
-            print(f"New member {member.name} joined {member.guild.name}.")
-
         try:
             await member.send(welcome_message)
             print(f"Sent welcome message to {member.name}.")
-        except discord.Forbidden:
-            print(f"Could not send welcome message to {member.name} (DMs are likely disabled).")
-        except Exception as e:
-            print(f"An error occurred while trying to send welcome message to {member.name}: {e}")
+        except:
+            print(f"Could not DM {member.name} (DMs closed?).")
 
+        await self.send_log(
+            title="Member Joined",
+            fields={
+                "Member": f"{member} ({member.id})",
+                "Guild": member.guild.name,
+                "Account Created": discord.utils.format_dt(member.created_at, "R"),
+                "Rejoin": "Yes" if departed_record else "New"
+            },
+            color=0x2ecc71
+        )
 
     async def on_member_remove(self, member):
-        """Records a member's departure for potential 'rejoin' detection."""
-        if member.bot: # Ignore bots leaving the server
+        if member.bot:
             return
 
         database = Database.get_bot_database(self.MongoClient)
         departures_collection = database["departures"]
 
-        # Store the departure record with a timestamp
         try:
             departures_collection.insert_one({
                 "user_id": member.id,
                 "guild_id": member.guild.id,
                 "departure_time": datetime.datetime.now()
             })
-            print(f"Recorded departure for {member.name} from {member.guild.name}.")
+            print(f"Recorded departure for {member.name}.")
         except Exception as e:
-            print(f"Error recording departure for {member.name}: {e}")
+            print(f"Error recording departure: {e}")
 
+        await self.send_log(
+            title="Member Left",
+            fields={
+                "Member": f"{member} ({member.id})",
+                "Guild": member.guild.name,
+                "Joined At": discord.utils.format_dt(member.joined_at, "R") if member.joined_at else "Unknown"
+            },
+            color=0xe67e22
+        )
 
-    @tasks.loop(hours=24) # This task runs every 24 hours
+    @tasks.loop(hours=24)
     async def cleanup_departures(self):
-        """Cleans up old departure records from the database to prevent it from growing too large."""
-        # The @before_loop decorator handles waiting for the bot to be ready
-
         database = Database.get_bot_database(self.MongoClient)
         departures_collection = database["departures"]
 
-        # Calculate the threshold for "old" records (e.g., older than 30 days)
         thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
 
         try:
             delete_result = departures_collection.delete_many(
-                {"departure_time": {"$lt": thirty_days_ago}} # Delete records older than 30 days
+                {"departure_time": {"$lt": thirty_days_ago}}
             )
             print(f"Cleaned up {delete_result.deleted_count} old departure records.")
         except Exception as e:
-            print(f"Error during departure cleanup: {e}")
+            print(f"Error cleaning departures: {e}")
 
     @cleanup_departures.before_loop
     async def before_cleanup_departures(self):
         print("Waiting for bot to be ready before starting departure cleanup loop...")
-        await self.wait_until_ready() # Ensures the bot is fully online before the loop starts
+        await self.wait_until_ready()
+
+    async def on_app_command_completion(self, interaction: discord.Interaction, command):
+        await self.send_log(
+            title=f"Slash Command Used: /{command.name}",
+            fields={
+                "User": f"{interaction.user} ({interaction.user.id})",
+                "Guild": interaction.guild.name if interaction.guild else "DM",
+                "Channel": interaction.channel.mention if interaction.channel else "DM",
+                "Options": str(interaction.data.get("options", "None"))
+            },
+            color=0x00ff9d
+        )
+
+    async def on_app_command_error(self, interaction: discord.Interaction, error):
+        await self.send_log(
+            title=f"Command Error: /{interaction.command.name if interaction.command else 'Unknown'}",
+            description=f"```py\n{error}\n```",
+            fields={
+                "User": f"{interaction.user} ({interaction.user.id})",
+                "Channel": interaction.channel.mention if interaction.channel else "DM"
+            },
+            color=0xe74c3c
+        )
 
 
-# Load environment variables from .env file (for local development)
+# Load environment variables
 load_dotenv()
 
-# Create an instance of the Bot class
+# Create bot instance
 bot = Bot()
 
-# Run the bot using the token from environment variables
+# Run the bot
 bot.run(os.environ.get("BOT_TOKEN"))
