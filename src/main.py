@@ -148,16 +148,14 @@ class Bot(commands.Bot):
 
 
     async def on_ready(self):
-        # This event fires once the bot has successfully connected to Discord.
-        print("Bot is ready!")
-        # Start the custom looping task for mentioning players
-        asyncio.ensure_future(loop(self))
-        # Start the background task for cleaning up departure records
-        self.cleanup_departures.start()
+    print("Bot is ready!")
+    asyncio.ensure_future(loop(self))
+    self.cleanup_departures.start()
 
-        # Synchronize slash commands with Discord
-        synced = await self.tree.sync()
-        print(f"Loaded {len(synced)} slash commands.")
+    guild = discord.Object(id=YOUR_GUILD_ID)
+    synced = await self.tree.sync(guild=guild)
+    print(f"Loaded {len(synced)} slash commands (guild sync).")
+
 
 
     async def on_member_join(self, member):
