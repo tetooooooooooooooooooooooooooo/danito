@@ -45,7 +45,7 @@ class TagInfo(commands.Cog):
             await interaction.followup.send(f"❌ Failed to fetch user: {exc}", ephemeral=True)
             return
 
-        primary = user.primary_guild  # This is now a PrimaryGuild object (or None)
+        primary = user.primary_guild  # PrimaryGuild object or None
 
         embed = discord.Embed(
             title=f"{target.display_name}'s Server Tag",
@@ -66,8 +66,8 @@ class TagInfo(commands.Cog):
             )
         else:
             tag = primary.tag or "—"
-            enabled = primary.identity_enabled  # bool or None
-            guild_id = primary.identity_guild_id or "—"
+            enabled = primary.identity_enabled
+            guild_id = primary.guild_id or "—"          # <-- FIXED: guild_id, not identity_guild_id
             badge_hash = primary.badge or None
 
             if enabled is True:
@@ -82,7 +82,7 @@ class TagInfo(commands.Cog):
             embed.add_field(name="Guild ID", value=str(guild_id), inline=True)
 
             if badge_hash:
-                # Guessed CDN pattern (update if Discord changes it)
+                # Guessed CDN (may need real pattern from dev tools inspection)
                 badge_url = f"https://cdn.discordapp.com/guild-badges/{badge_hash}.png?size=64"
                 embed.set_image(url=badge_url)
                 embed.add_field(name="Badge", value="[Preview above]", inline=False)
@@ -104,7 +104,7 @@ class TagInfo(commands.Cog):
             )
             if primary:
                 debug_text += (
-                    f"identity_guild_id: {primary.identity_guild_id}\n"
+                    f"guild_id: {primary.guild_id}\n"              # <-- FIXED
                     f"identity_enabled: {primary.identity_enabled}\n"
                     f"tag: {primary.tag}\n"
                     f"badge: {primary.badge}"
