@@ -305,6 +305,6 @@ load_dotenv()
 
 # Create bot instance
 bot = Bot()
-
+bot.tree.default_permissions = discord.Permissions(manage_guild=True)
 # Run the bot
 bot.run(os.environ.get("BOT_TOKEN"))
