@@ -1,29 +1,3 @@
-
-What can I help you with today?
-
-
-
-import discord from discord import app_commands from discord.ext import commands import aiohttp import asyncio from datetime import datetime, timedelta from PIL import Image, ImageFilter, ImageEnhance, ImageOps, ImageDraw, ImageFont from io import BytesIO import urllib.parse class Utility
-
-pasted
-
-
-
-import discord from discord.ext import commands, tasks import os from dotenv import load_dotenv import Database from pymongo import MongoClient import certifi import datetime import asyncio async def loop(bot): t = 10 * 60 while True: now = datetime.datetime.now()
-
-pasted
-
-
-does thsi work with
-
-
-Claude is AI and can make mistakes. Please double-check responses.
-
-Pasted content
-10.38 KB •252 lines
-•
-Formatting may be inconsistent from source
-
 import discord
 from discord.ext import commands, tasks
 import os
