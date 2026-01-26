@@ -34,7 +34,8 @@ class Bot(commands.Bot):
             "Cogs.eventcog",
             "Cogs.badges",
             "Cogs.help",
-            "Cogs.stats"
+            "Cogs.stats",
+            "Cogs.utility"
         ]
 
 
