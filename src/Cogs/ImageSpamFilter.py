@@ -29,8 +29,8 @@ class ImageSpamFilter(commands.Cog):
                 await message.delete()
                 # Optional short warning (auto-deletes after 10 seconds)
                 await message.channel.send(
-                    f"{message.author.mention} Message removed — avoid posting multiple default-named screenshots.",
-                    delete_after=10
+                    f"{message.author.mention} Message removed — Do Not Spam!!.",
+                    delete_after=20
                 )
                 print(f"[ImageSpam] Deleted spam from {message.author} in {message.guild.name} ({message.jump_url})")
             except discord.Forbidden:
