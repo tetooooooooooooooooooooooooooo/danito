@@ -33,7 +33,8 @@ class Bot(commands.Bot):
             "Cogs.commandcog",
             "Cogs.eventcog",
             "Cogs.badges",
-            "Cogs.help"
+            "Cogs.help",
+            "stats.py"
         ]
 
 
