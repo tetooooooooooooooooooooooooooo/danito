@@ -5,24 +5,123 @@ from collections import Counter
 
 class TagInfo(commands.Cog):
     """
-    Commands for primary guild/server tag info:
-    - /taginfo @user
-    - /guildtags (summary in this server, optimized for large guilds)
+    Commands for primary guild / server tag information:
+    • /taginfo @user     → shows details for one user
+    • /guildtags         → shows summary of tags used in this server
     """
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # ── Your existing /taginfo command ──
+    # ────────────────────────────────────────────────
+    # /taginfo
+    # ────────────────────────────────────────────────
     @app_commands.command(name="taginfo", description="Show a user's primary guild / server tag details")
-    @app_commands.describe(member="The user to check (defaults to yourself)", debug="Show detailed debug info?")
-    @app_commands.choices(debug=[app_commands.Choice(name="Yes", value="yes"), app_commands.Choice(name="No", value="no")])
-    async def taginfo(self, interaction: discord.Interaction, member: discord.Member | discord.User | None = None, debug: app_commands.Choice[str] | None = None):
-        # ... (keep your working taginfo code here - paste your current version)
-        # I'm not repeating the full working code to save space, just add the new command below
+    @app_commands.describe(
+        member="The user to check (defaults to yourself)",
+        debug="Show detailed debug info?"
+    )
+    @app_commands.choices(
+        debug=[
+            app_commands.Choice(name="Yes", value="yes"),
+            app_commands.Choice(name="No", value="no")
+        ]
+    )
+    async def taginfo(
+        self,
+        interaction: discord.Interaction,
+        member: discord.Member | discord.User | None = None,
+        debug: str | None = None
+    ):
+        target = member or interaction.user
 
-        pass  # ← Replace this pass with your current taginfo implementation
+        await interaction.response.defer(ephemeral=False)
 
-    # ── New command: /guildtags ──
+        try:
+            user = await self.bot.fetch_user(target.id)
+        except discord.NotFound:
+            await interaction.followup.send("❌ User not found.", ephemeral=True)
+            return
+        except discord.HTTPException as exc:
+            await interaction.followup.send(f"❌ Fetch failed: {exc}", ephemeral=True)
+            return
+
+        primary = user.primary_guild
+
+        embed = discord.Embed(
+            title=f"{target.display_name}'s Server Tag",
+            color=discord.Color(0x5865F2),
+            timestamp=discord.utils.utcnow()
+        )
+        embed.set_thumbnail(url=target.display_avatar.url)
+        embed.set_footer(text=f"ID: {target.id} • Via Discord API")
+
+        if primary is None:
+            embed.color = discord.Color.greyple()
+            embed.description = (
+                "**No primary guild tag is currently set or visible.**\n\n"
+                "• No guild set as primary yet\n"
+                "• Tag manually hidden\n"
+                "• Guild no longer supports tags\n"
+                "• Feature not rolled out to this account"
+            )
+        else:
+            tag = primary.tag or "—"
+            enabled = primary.identity_enabled
+            guild_id = primary.identity_guild_id or "—"
+            badge_hash = primary.badge or None
+
+            if enabled is True:
+                status = "✅ **Enabled** – visible everywhere"
+            elif enabled is False:
+                status = "❌ **Disabled** – manually hidden"
+            else:
+                status = "⚠️ **Null** – cleared by system"
+
+            embed.add_field(name="Tag", value=f"**{tag}**", inline=True)
+            embed.add_field(name="Status", value=status, inline=True)
+            embed.add_field(name="Guild ID", value=str(guild_id), inline=True)
+
+            if badge_hash:
+                # This CDN pattern is a guess – test it
+                badge_url = f"https://cdn.discordapp.com/guild-badges/{badge_hash}.png?size=64"
+                embed.set_image(url=badge_url)
+                embed.add_field(name="Badge", value="[Preview above]", inline=False)
+            else:
+                embed.add_field(name="Badge", value="None / Not set", inline=False)
+
+            tag_upper = tag.upper()
+            if tag_upper in ("MEOW", "NYAA", "PURR", "MROW", "KITTY"):
+                embed.color = discord.Color(0xC47CFF)
+                embed.description = "🐱 **Meow squad represent!** 😼✨"
+
+        # Debug section
+        show_debug = debug == "yes"
+        if show_debug:
+            debug_lines = [
+                f"primary_guild exists? **{'Yes' if primary else 'No'}**",
+                f"Type: {type(primary).__name__ if primary else 'None'}",
+            ]
+            if primary:
+                attrs = dir(primary)
+                debug_lines.append("All attributes on PrimaryGuild:")
+                debug_lines.extend(f"  • {attr}" for attr in sorted(attrs) if not attr.startswith('_'))
+                debug_lines.append("\nKnown fields (direct access):")
+                debug_lines.append(f"  tag              : {primary.tag}")
+                debug_lines.append(f"  identity_enabled : {primary.identity_enabled}")
+                debug_lines.append(f"  identity_guild_id: {primary.identity_guild_id}")
+                debug_lines.append(f"  badge            : {primary.badge}")
+
+            embed.add_field(
+                name="Debug / Raw Data",
+                value="```py\n" + "\n".join(debug_lines) + "```",
+                inline=False
+            )
+
+        await interaction.followup.send(embed=embed)
+
+    # ────────────────────────────────────────────────
+    # /guildtags
+    # ────────────────────────────────────────────────
     @app_commands.command(
         name="guildtags",
         description="Show summary of primary guild/server tags in this server (online members by default)"
@@ -44,8 +143,8 @@ class TagInfo(commands.Cog):
     async def guildtags(
         self,
         interaction: discord.Interaction,
-        online_only: app_commands.Choice[str] = app_commands.Choice(name="Yes (fast)", value="yes"),
-        debug: app_commands.Choice[str] | None = None
+        online_only: str = "yes",
+        debug: str | None = None
     ):
         guild = interaction.guild
         if not guild:
@@ -54,8 +153,7 @@ class TagInfo(commands.Cog):
 
         await interaction.response.defer()
 
-        # Select members to scan
-        if online_only.value == "yes":
+        if online_only == "yes":
             members = [m for m in guild.members if m.status != discord.Status.offline]
             scan_note = " (online members only – faster for large servers)"
         else:
@@ -95,7 +193,6 @@ class TagInfo(commands.Cog):
             top_text = "\n".join(f"**{tag}**: {count}" for tag, count in top_tags)
             embed.add_field(name=f"Top Tags ({len(tag_counts)} unique)", value=top_text, inline=False)
 
-            # Cat tags highlight
             cat_tags = {t: c for t, c in tag_counts.items() if t.upper() in ("MEOW", "NYAA", "PURR", "MROW", "KITTY")}
             if cat_tags:
                 cat_text = "\n".join(f"**{t}**: {c}" for t, c in sorted(cat_tags.items(), key=lambda x: x[1], reverse=True))
@@ -104,10 +201,10 @@ class TagInfo(commands.Cog):
         else:
             embed.description += "\n\nNo primary guild tags detected in the scanned members."
 
-        if debug and debug.value == "yes":
+        if debug == "yes":
             debug_info = (
                 f"Processed members: {processed}/{guild.member_count}\n"
-                f"Online-only mode: {online_only.value == 'yes'}\n"
+                f"Online-only mode: {online_only == 'yes'}\n"
                 f"Fetch attempts: {fetch_attempts}\n"
                 f"Unique tags: {len(tag_counts)}"
             )
@@ -117,4 +214,4 @@ class TagInfo(commands.Cog):
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(TagInfo(bot))
-    print("TagInfo cog loaded (with /taginfo & /guildtags) ✓")
+    print("TagInfo cog loaded ✓")
