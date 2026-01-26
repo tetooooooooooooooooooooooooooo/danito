@@ -29,7 +29,8 @@ class Bot(commands.Bot):
             "Cogs.badges",
             "Cogs.help",
             "Cogs.stats",
-            "Cogs.utility"
+            "Cogs.utility",
+            "Cogs.sync"
         ]
 
         self.MongoClient = MongoClient(
