@@ -9,7 +9,7 @@ class Sync(commands.Cog):
         self.bot = bot
 
     @app_commands.command(name="sync", description="Sync slash commands")
-    async def sync(self, interaction: discord.Interation):
+    async def sync(self, interaction: discord.Interaction):
         role = interaction.guild.get_role(SYNC_ROLE_ID)
 
         if not role or role not in interaction.user.roles:
