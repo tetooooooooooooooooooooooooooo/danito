@@ -142,18 +142,6 @@ class Bot(commands.Bot):
                         {"_id": obj["_id"]},
                         {"$set": {"mentioned": True}}
                     )
-
-                    # Log the action
-                    await self.send_log(
-                        title="Ghost-Ping Role Mention Sent",
-                        fields={
-                            "Role": f"<@&{obj['role_id']}>",
-                            "Guild": guild.name,
-                            "Channel": channel.mention,
-                            "Date": obj["date"]
-                        },
-                        color=0x9b59b6
-                    )
                 except Exception as e:
                     print(f"Error sending/deleting message: {e}")
 
@@ -174,16 +162,6 @@ class Bot(commands.Bot):
             try:
                 await role.delete(reason="Date became old and was cleaned up")
                 print(f"Deleted role {obj['role_id']} in guild {obj['guild_id']}.")
-
-                await self.send_log(
-                    title="Old Role Deleted (Cleanup)",
-                    fields={
-                        "Role ID": obj["role_id"],
-                        "Guild": guild.name,
-                        "Date": str(oldDate)
-                    },
-                    color=0xe67e22
-                )
             except Exception as e:
                 print(f"Error deleting role: {e}")
 
@@ -207,12 +185,6 @@ class Bot(commands.Bot):
 
         synced = await self.tree.sync()
         print(f"Loaded {len(synced)} slash commands.")
-
-        await self.send_log(
-            title="Bot Started / Reconnected",
-            description=f"Logged in as {self.user}",
-            color=0x00ff00
-        )
 
     async def on_member_join(self, member):
         if member.bot:
@@ -238,17 +210,6 @@ class Bot(commands.Bot):
         except:
             print(f"Could not DM {member.name} (DMs closed?).")
 
-        await self.send_log(
-            title="Member Joined",
-            fields={
-                "Member": f"{member} ({member.id})",
-                "Guild": member.guild.name,
-                "Account Created": discord.utils.format_dt(member.created_at, "R"),
-                "Rejoin": "Yes" if departed_record else "New"
-            },
-            color=0x2ecc71
-        )
-
     async def on_member_remove(self, member):
         if member.bot:
             return
@@ -265,16 +226,6 @@ class Bot(commands.Bot):
             print(f"Recorded departure for {member.name}.")
         except Exception as e:
             print(f"Error recording departure: {e}")
-
-        await self.send_log(
-            title="Member Left",
-            fields={
-                "Member": f"{member} ({member.id})",
-                "Guild": member.guild.name,
-                "Joined At": discord.utils.format_dt(member.joined_at, "R") if member.joined_at else "Unknown"
-            },
-            color=0xe67e22
-        )
 
     @tasks.loop(hours=24)
     async def cleanup_departures(self):
@@ -295,18 +246,6 @@ class Bot(commands.Bot):
     async def before_cleanup_departures(self):
         print("Waiting for bot to be ready before starting departure cleanup loop...")
         await self.wait_until_ready()
-
-    async def on_app_command_completion(self, interaction: discord.Interaction, command):
-        await self.send_log(
-            title=f"Slash Command Used: /{command.name}",
-            fields={
-                "User": f"{interaction.user} ({interaction.user.id})",
-                "Guild": interaction.guild.name if interaction.guild else "DM",
-                "Channel": interaction.channel.mention if interaction.channel else "DM",
-                "Options": str(interaction.data.get("options", "None"))
-            },
-            color=0x00ff9d
-        )
 
     async def on_app_command_error(self, interaction: discord.Interaction, error):
         await self.send_log(
