@@ -30,6 +30,10 @@ class Bot(commands.Bot):
         super().__init__(command_prefix="!", intents=intents)
         # Only members with "Manage Server" permission can use bot commands
         self.tree.default_permissions = discord.Permissions(manage_guild=True)
+        
+        # Set up the interaction check for the command tree
+        self.tree.interaction_check = self.global_interaction_check
+        
         # List of cogs (extensions) to load
         self.cogslist = [
             "Cogs.commandcog",
@@ -52,7 +56,7 @@ class Bot(commands.Bot):
         # Log channel ID
         self.log_channel_id = 1465493782245146886
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+    async def global_interaction_check(self, interaction: discord.Interaction) -> bool:
         """Global check for all app commands - enforces Manage Server permission"""
         if interaction.guild is None:
             # Allow DM commands
