@@ -28,6 +28,7 @@ class Bot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
+        # Only members with "Manage Server" permission can use bot commands
         self.tree.default_permissions = discord.Permissions(manage_guild=True)
         # List of cogs (extensions) to load
         self.cogslist = [
@@ -50,6 +51,21 @@ class Bot(commands.Bot):
 
         # Log channel ID
         self.log_channel_id = 1465493782245146886
+
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        """Global check for all app commands - enforces Manage Server permission"""
+        if interaction.guild is None:
+            # Allow DM commands
+            return True
+        
+        # Check if user has manage_guild permission
+        if not interaction.user.guild_permissions.manage_guild:
+            await interaction.response.send_message(
+                "❌ You need the 'Manage Server' permission to use this bot.",
+                ephemeral=True
+            )
+            return False
+        return True
 
     async def send_log(self, title: str, description: str = None, fields: dict = None, color=0x2b2d31):
         """Send a formatted embed to the log channel"""
