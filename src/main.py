@@ -28,7 +28,7 @@ class Bot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
         super().__init__(command_prefix="!", intents=intents)
-
+        self.tree.default_permissions = discord.Permissions(manage_guild=True)
         # List of cogs (extensions) to load
         self.cogslist = [
             "Cogs.commandcog",
@@ -305,6 +305,5 @@ load_dotenv()
 
 # Create bot instance
 bot = Bot()
-bot.tree.default_permissions = discord.Permissions(manage_guild=True)
 # Run the bot
 bot.run(os.environ.get("BOT_TOKEN"))
