@@ -1,15 +1,16 @@
 import discord
+import re
 from discord import app_commands
 from discord.ext import commands
 
 class ImageSpamFilter(commands.Cog):
-    """Auto-deletes messages with 2+ attachments all named 'image.png' (spam pattern)"""
+    """Auto-deletes messages with 2+ attachments all named 'image.<ext>' (spam pattern)"""
     
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.enabled = True                     # default: active
-        self.min_attachments = 2                # minimum number of image.png to trigger
-        self.target_filename = "image.png"      # case-insensitive check
+        self.min_attachments = 2                # minimum number of image.<ext> to trigger
+        self.spam_pattern = re.compile(r'^image\.(png|jpe?g|webp|gif)$', re.IGNORECASE)
     
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -20,16 +21,16 @@ class ImageSpamFilter(commands.Cog):
         if message.guild is None or message.author.bot or not message.attachments:
             return
         
-        # Count how many are exactly "image.png" (case-insensitive)
+        # Count how many match the image.<ext> pattern
         spam_count = sum(1 for att in message.attachments 
-                        if att.filename.lower() == self.target_filename.lower())
+                        if self.spam_pattern.match(att.filename))
         
         # Trigger only if ALL attachments match AND count >= min
         if spam_count >= self.min_attachments and spam_count == len(message.attachments):
             try:
                 await message.delete()
                 
-                # Optional short warning (auto-deletes after 10 seconds)
+                # Optional short warning (auto-deletes after 20 seconds)
                 await message.channel.send(
                     f"{message.author.mention} Message removed — Do Not Spam!!.",
                     delete_after=20
@@ -44,7 +45,7 @@ class ImageSpamFilter(commands.Cog):
                         "User": f"{message.author} ({message.author.id})",
                         "Guild": message.guild.name,
                         "Channel": message.channel.mention,
-                        "Attachments": f"{spam_count} x {self.target_filename}",
+                        "Attachments": f"{spam_count} files matching image.<ext>",
                         "Message Content": message.content[:200] if message.content else "(no text)"
                     },
                     color=0xe74c3c  # Red color
@@ -57,9 +58,9 @@ class ImageSpamFilter(commands.Cog):
     
     @app_commands.command(
         name="toggleimagespam",
-        description="Enable / disable the image.png spam filter"
+        description="Enable / disable the image spam filter"
     )
-    @app_commands.default_permissions(manage_guild=True)  # Only Manage Server users can run this
+    @app_commands.default_permissions(manage_guild=True)
     async def toggleimagespam(self, interaction: discord.Interaction):
         self.enabled = not self.enabled
         status = "**enabled**" if self.enabled else "**disabled**"
@@ -70,7 +71,7 @@ class ImageSpamFilter(commands.Cog):
     
     @app_commands.command(
         name="imagespamstatus",
-        description="Check if the image.png spam filter is currently active"
+        description="Check if the image spam filter is currently active"
     )
     async def imagespamstatus(self, interaction: discord.Interaction):
         status = "active" if self.enabled else "disabled"
