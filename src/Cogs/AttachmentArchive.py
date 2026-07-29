@@ -757,8 +757,15 @@ class AttachmentArchive(commands.Cog):
             embed.add_field(name="Archive",
                             value="⚠️ part of the mirror could not be reached", inline=False)
 
-        if len(previews) == 1:
+        # An embed can only render one image, so show the first and let the rest be links —
+        # better than showing nothing at all when several images go at once.
+        if previews:
             embed.set_image(url=previews[0])
+            if len(previews) > 1:
+                embed.add_field(
+                    name="​",
+                    value=f"*Showing 1 of {len(previews)} images — the rest are linked above.*",
+                    inline=False)
         embed.set_footer(text=f"message {record.get('_id')} • {self.bot.user.name}")
         return embed
 
