@@ -1,3 +1,4 @@
+import asyncio
 import discord
 import re
 from discord import app_commands
@@ -60,9 +61,22 @@ class ImageSpamFilter(commands.Cog):
         if not self.is_spam_batch(images):
             return
 
+        # Discord kills an attachment's CDN URL the instant its message is deleted, and cog
+        # listeners run concurrently with no ordering guarantee — so the archive has to be
+        # given its chance before we delete, not after.
+        archive = self.bot.get_cog("AttachmentArchive")
+        if archive is not None:
+            try:
+                await asyncio.wait_for(
+                    archive.capture_now(message, reason="ImageSpamFilter (spam auto-delete)"),
+                    timeout=15,
+                )
+            except Exception as e:
+                print(f"[ImageSpam] archive capture skipped: {e}")
+
         try:
             await message.delete()
-            
+
             await message.channel.send(
                 f"{message.author.mention} Message removed — Do Not Spam!!.",
                 delete_after=20

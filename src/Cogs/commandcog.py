@@ -37,26 +37,20 @@ class commandcog(commands.Cog):
             content=f"How has your experience been with the server?", view=view
         )
 
-        # Set channel for discovery here
-        found = servers.find_one_and_replace(
+        # Set channel for discovery here. $set rather than a whole-document replace, so any
+        # other per-guild settings on this doc (archive config, etc.) survive.
+        servers.update_one(
             {
                 "guild_id": interaction.guild.id,
             },
             {
-                "guild_id": interaction.guild.id,
-                "discovery_channel": interaction.channel.id,
-                "discovery_message": message.id,
-            },
-        )
-
-        if not found:
-            servers.insert_one(
-                {
-                    "guild_id": interaction.guild.id,
+                "$set": {
                     "discovery_channel": interaction.channel.id,
                     "discovery_message": message.id,
-                },
-            )
+                }
+            },
+            upsert=True,
+        )
 
     @set_discovery_channel.error
     async def get_key_error(self, interaction, error):

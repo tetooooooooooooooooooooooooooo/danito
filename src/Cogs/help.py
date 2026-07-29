@@ -13,6 +13,8 @@ class Help(commands.Cog):
         "Help": "❓",
         "Commandcog": "⚙️",
         "Eventcog": "📅",
+        "AttachmentArchive": "🗄️",
+        "ImageSpamFilter": "🛡️",
     }
     
     @app_commands.command(name="help", description="Show all bot commands")
