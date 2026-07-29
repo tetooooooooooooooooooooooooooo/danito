@@ -60,6 +60,30 @@ def _media_attachments(message: discord.Message) -> list:
     return [a for a in message.attachments if _is_media(a)]
 
 
+def _kind(entry: dict) -> str:
+    if entry.get("duration"):
+        return "voice memo"
+    ctype = (entry.get("content_type") or "").lower()
+    if ctype.startswith("image/"):
+        return "image"
+    if ctype.startswith("video/"):
+        return "video"
+    if ctype.startswith("audio/"):
+        return "audio file"
+    return "file"
+
+
+def _summarise(entries: list) -> str:
+    """'2 images, 1 video' — what was actually deleted, at a glance."""
+    counts: dict[str, int] = {}
+    for e in entries:
+        k = _kind(e)
+        counts[k] = counts.get(k, 0) + 1
+    return ", ".join(
+        f"{n} {k}" if n == 1 else f"{n} {k}s" for k, n in counts.items()
+    ) or "nothing"
+
+
 def _fmt_size(n: int) -> str:
     if n < 1024:
         return f"{n} B"
@@ -639,39 +663,40 @@ class AttachmentArchive(commands.Cog):
 
         lines = []
         previews = []
+        bullet = "• " if len(atts) > 1 else ""
         for entry in atts:
             name = entry.get("filename", "unknown")
+            # No mime type here — the description already says what kind of media it was.
             meta = [_fmt_size(entry.get("size") or 0)]
             if entry.get("duration"):
-                meta.append(f"voice memo {_fmt_duration(entry['duration'])}")
-            elif entry.get("content_type"):
-                meta.append(entry["content_type"])
-            head = f"• `{name}` — {' · '.join(meta)}"
+                meta.append(_fmt_duration(entry["duration"]))
+            tail = " · ".join(meta)
 
             status = entry.get("status")
             if status == "mirrored":
                 url, jump = fresh(entry)
                 if jump:
-                    lines.append(f"{head} — [archived]({jump})")
-                    ctype = entry.get("content_type") or ""
+                    # The filename is the link — a trailing "[archived]" would just be a
+                    # second copy of the same url.
+                    lines.append(f"{bullet}[`{name}`]({jump}) — {tail}")
+                    ctype = (entry.get("content_type") or "").lower()
                     if url and ctype.startswith("image/") and not entry.get("is_spoiler"):
                         previews.append(url)
                 else:
-                    lines.append(f"{head} — ⚠️ mirror no longer available")
+                    lines.append(f"{bullet}`{name}` — {tail} · ⚠️ mirror no longer available")
             elif status == "oversized":
-                lines.append(f"{head} — ⚠️ not archived (over the upload limit)")
+                lines.append(f"{bullet}`{name}` — {tail} · ⚠️ too large to archive")
             elif status == "expired":
-                lines.append(f"{head} — ⚠️ deleted before it could be archived")
+                lines.append(f"{bullet}`{name}` — {tail} · ⚠️ deleted before it was archived")
             elif status == "pending":
-                lines.append(f"{head} — ⚠️ not archived yet")
+                lines.append(f"{bullet}`{name}` — {tail} · ⚠️ not archived yet")
             else:
-                lines.append(f"{head} — ⚠️ archive failed")
+                lines.append(f"{bullet}`{name}` — {tail} · ⚠️ archive failed")
 
-        count = len(atts)
         when = deleted_at or record.get("deleted_at")
         embed = discord.Embed(
             title="🗑️ Media Deleted",
-            description=f"**{count}** file(s) uploaded by <@{record.get('author_id')}>",
+            description=f"**{_summarise(atts)}**",
             color=COLOR_DELETE,
             timestamp=_aware(when) if isinstance(when, datetime.datetime)
             else discord.utils.utcnow(),
@@ -721,16 +746,16 @@ class AttachmentArchive(commands.Cog):
             current += line + "\n"
         if current:
             chunks.append(current)
+        base = "File" if len(atts) == 1 else "Files"
         for i, chunk in enumerate(chunks):
-            label = "Files" if len(chunks) == 1 else f"Files ({i + 1}/{len(chunks)})"
+            label = base if len(chunks) == 1 else f"{base} ({i + 1}/{len(chunks)})"
             embed.add_field(name=label, value=chunk, inline=False)
 
-        if mirror_msgs:
-            first = mirror_msgs[msg_ids[0]] if msg_ids[0] in mirror_msgs else \
-                next(iter(mirror_msgs.values()))
-            embed.add_field(name="Archive", value=f"[open mirror]({first.jump_url})", inline=False)
-        elif mirror_missing:
-            embed.add_field(name="Archive", value="⚠️ the mirror could not be reached", inline=False)
+        # No separate "Archive" link — each file line already links to its own mirror, so a
+        # second copy of the same jump url is pure noise. Only surface it when something broke.
+        if mirror_missing:
+            embed.add_field(name="Archive",
+                            value="⚠️ part of the mirror could not be reached", inline=False)
 
         if len(previews) == 1:
             embed.set_image(url=previews[0])
@@ -849,6 +874,10 @@ class AttachmentArchive(commands.Cog):
                 f"Log {log_channel.mention} — {mark(p.view_channel)} View "
                 f"{mark(p.send_messages)} Send {mark(p.embed_links)} Embed"
             )
+        if archive_channel is not None and log_channel is not None \
+                and archive_channel.id == log_channel.id:
+            lines.append("Channels — ❌ archive and log are the **same channel**, so every file "
+                         "shows twice. Re-run `/archivesetup` to split them.")
         if guild.me.guild_permissions.view_audit_log:
             lines.append("Audit log — ✅ deletions can be attributed")
         else:
@@ -877,10 +906,18 @@ class AttachmentArchive(commands.Cog):
         guild = interaction.guild
         created = False
 
+        # The mirror upload is a real message carrying the real file. If it lands in the log
+        # channel you see the file once as the upload and again in the embed, so the two must
+        # be different channels — the archive is storage, the log is the notification.
+        collided = archive_channel is not None and archive_channel.id == log_channel.id
+        if collided:
+            archive_channel = None
+
         if archive_channel is None:
             existing = await self._db(self.servers.find_one, {"guild_id": guild.id})
-            if existing and existing.get("archive_channel"):
-                archive_channel = guild.get_channel(existing["archive_channel"])
+            prior = (existing or {}).get("archive_channel")
+            if prior and prior != log_channel.id:
+                archive_channel = guild.get_channel(prior)
         if archive_channel is None:
             overwrites = {
                 guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -899,9 +936,12 @@ class AttachmentArchive(commands.Cog):
                 created = True
             except discord.Forbidden:
                 await interaction.followup.send(
-                    "❌ I need **Manage Channels** to create the archive channel. Either grant "
-                    "that, or create a private channel yourself and re-run this with "
-                    "`archive_channel:`.", ephemeral=True)
+                    "❌ I need **Manage Channels** to create the archive channel, which has to "
+                    "be separate from the log channel — otherwise every file shows up twice, "
+                    "once as the stored copy and once in the embed.\n\nEither grant me Manage "
+                    "Channels and re-run this, or make a private channel yourself and pass it "
+                    "as `archive_channel:`. Nobody needs to read it; it just holds the files "
+                    "so the links in the log keep working.", ephemeral=True)
                 return
 
         updates = {
@@ -921,11 +961,20 @@ class AttachmentArchive(commands.Cog):
                         + self._preflight(guild, archive_channel, log_channel),
             color=COLOR_INFO,
         )
+        if collided:
+            embed.add_field(
+                name="Archive moved out of your log channel",
+                value=f"The archive can't be the same channel as the log — the stored copy is a "
+                      f"real upload, so you'd see every file twice. Files now go to "
+                      f"{archive_channel.mention} and {log_channel.mention} shows only the "
+                      f"embed.",
+                inline=False)
         if created:
             embed.add_field(
                 name="Archive channel created",
-                value=f"I created {archive_channel.mention} — private, hidden from @everyone. "
-                      f"Add whoever should see it.",
+                value=f"I created {archive_channel.mention} — private, hidden from @everyone, so "
+                      f"it won't clutter anything. It only exists to hold the files so the links "
+                      f"in your log keep working. You never need to open it.",
                 inline=False)
         embed.add_field(
             name="Please note",
