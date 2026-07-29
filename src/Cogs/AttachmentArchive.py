@@ -1,4 +1,7 @@
-"""Mirrors every uploaded attachment into a private archive channel and logs deletions.
+"""Mirrors uploaded media into a private archive channel and logs deletions.
+
+Scope is images, videos and voice memos only — documents, archives and other file types are
+ignored entirely and never recorded.
 
 Discord invalidates an attachment's CDN URL the moment its message is deleted, so the bytes
 have to be captured at upload time. And `on_message_delete` only fires for messages still in
@@ -9,6 +12,7 @@ two-year-old deletion log correctly.
 
 import asyncio
 import datetime
+import re
 import time
 from typing import Optional, Union
 
@@ -32,6 +36,29 @@ COLOR_DELETE = 0xE74C3C
 COLOR_INFO = 0x2B2D31
 COLOR_WARN = 0xE67E22
 
+# Scope: images, videos and voice memos. Discord reports voice memos as an audio attachment
+# with a duration, so audio/* is included; everything else (documents, archives, code) is not
+# tracked at all. content_type is authoritative when present, extension is the fallback for
+# the uploads Discord doesn't type.
+MEDIA_TYPES = ("image/", "video/", "audio/")
+MEDIA_EXT = re.compile(
+    r"\.(png|jpe?g|gif|webp|bmp|tiff?|heic|heif|avif"
+    r"|mp4|mov|webm|mkv|avi|m4v|wmv|flv|mpe?g|3gp"
+    r"|ogg|oga|opus|mp3|wav|m4a|aac|flac|weba)$",
+    re.IGNORECASE,
+)
+
+
+def _is_media(att: discord.Attachment) -> bool:
+    ctype = (att.content_type or "").lower()
+    if ctype.startswith(MEDIA_TYPES):
+        return True
+    return bool(MEDIA_EXT.search(att.filename))
+
+
+def _media_attachments(message: discord.Message) -> list:
+    return [a for a in message.attachments if _is_media(a)]
+
 
 def _fmt_size(n: int) -> str:
     if n < 1024:
@@ -46,12 +73,14 @@ def _fmt_duration(secs: float) -> str:
     return f"{secs // 60}:{secs % 60:02d}"
 
 
+def _aware(dt: datetime.datetime) -> datetime.datetime:
+    """pymongo hands back naive UTC datetimes, and treating a naive value as local time would
+    shift every rendered timestamp by the host's UTC offset."""
+    return dt.replace(tzinfo=datetime.timezone.utc) if dt.tzinfo is None else dt
+
+
 def _unix(dt: datetime.datetime) -> int:
-    """pymongo hands back naive UTC datetimes, and .timestamp() would read a naive value as
-    local time — shifting every rendered timestamp by the host's UTC offset."""
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=datetime.timezone.utc)
-    return int(dt.timestamp())
+    return int(_aware(dt).timestamp())
 
 
 class AttachmentArchive(commands.Cog):
@@ -226,7 +255,7 @@ class AttachmentArchive(commands.Cog):
                     "mirror_index": None,
                     "status": "pending",
                 }
-                for a in message.attachments
+                for a in _media_attachments(message)
             ],
             "status": "pending",
             "deleted": False,
@@ -284,7 +313,7 @@ class AttachmentArchive(commands.Cog):
         batch: list = []
         batch_bytes = 0
 
-        for att in message.attachments:
+        for att in _media_attachments(message):
             if att.size > cap:
                 # Never download something we already know we cannot re-upload.
                 per_att_status[att.id] = "oversized"
@@ -396,6 +425,8 @@ class AttachmentArchive(commands.Cog):
             return  # never re-mirror our own mirrors
         if message.channel.id in self._archive_channel_ids:
             return  # skip the archive channel wholesale
+        if not _media_attachments(message):
+            return  # images, videos and voice memos only
 
         cfg = await self._get_config(message.guild.id)
         if cfg is None or not cfg.get("archive_channel"):
@@ -476,7 +507,7 @@ class AttachmentArchive(commands.Cog):
         if record is None:
             # Covers the race where a message is deleted before it was ever indexed: the
             # in-memory cache still has the filenames, author and content.
-            if cached is None or not cached.attachments or cached.guild is None:
+            if cached is None or cached.guild is None or not _media_attachments(cached):
                 return
             record = self._build_doc(cached, None)
             record["_id"] = cached.id
@@ -491,9 +522,10 @@ class AttachmentArchive(commands.Cog):
                 discord.AuditLogAction.message_delete,
             )
 
+        now = discord.utils.utcnow()
         updates = {
             "deleted": True,
-            "deleted_at": discord.utils.utcnow(),
+            "deleted_at": now,
             "deleted_by": deleted_by,
             "detected_by": "gateway",
         }
@@ -508,7 +540,7 @@ class AttachmentArchive(commands.Cog):
         except Exception as e:
             print(f"[Archive] delete flag failed for {payload.message_id}: {e}")
 
-        embed = await self._build_delete_embed(guild, record, reason, deleted_by)
+        embed = await self._build_delete_embed(guild, record, reason, deleted_by, deleted_at=now)
         await self._send_log(guild, cfg, [embed])
 
     @commands.Cog.listener()
@@ -531,7 +563,7 @@ class AttachmentArchive(commands.Cog):
 
         known = {r["_id"]: r for r in records}
         for m in payload.cached_messages:
-            if m.id not in known and m.attachments and m.guild is not None:
+            if m.id not in known and m.guild is not None and _media_attachments(m):
                 doc = self._build_doc(m, None)
                 doc["_id"] = m.id
                 known[m.id] = doc
@@ -544,12 +576,13 @@ class AttachmentArchive(commands.Cog):
             guild, payload.channel_id, None, discord.AuditLogAction.message_bulk_delete
         )
 
+        now = discord.utils.utcnow()
         try:
             await self._db(
                 self.coll.update_many, {"_id": {"$in": ids}},
                 {"$set": {
                     "deleted": True,
-                    "deleted_at": discord.utils.utcnow(),
+                    "deleted_at": now,
                     "deleted_by": deleted_by,
                     "detected_by": "gateway",
                 }},
@@ -560,8 +593,8 @@ class AttachmentArchive(commands.Cog):
         total_files = sum(len(r.get("attachments") or []) for r in known.values())
         summary = discord.Embed(
             title="🗑️ Bulk Delete",
-            description=(f"**{len(known)}** archived message(s) carrying **{total_files}** file(s) "
-                         f"were bulk-deleted in <#{payload.channel_id}>."),
+            description=(f"**{len(known)}** archived message(s) carrying **{total_files}** media "
+                         f"file(s) were bulk-deleted in <#{payload.channel_id}>."),
             color=COLOR_DELETE,
             timestamp=discord.utils.utcnow(),
         )
@@ -570,13 +603,15 @@ class AttachmentArchive(commands.Cog):
         ordered = sorted(known.values(), key=lambda r: r["_id"])
         details = []
         for record in ordered[:9]:
-            details.append(await self._build_delete_embed(guild, record, None, deleted_by))
+            details.append(
+                await self._build_delete_embed(guild, record, None, deleted_by, deleted_at=now))
         if len(ordered) > 9:
             summary.set_footer(text=f"Showing 9 of {len(ordered)} — use /archivelookup for the rest")
 
         await self._send_log(guild, cfg, [summary] + details)
 
-    async def _build_delete_embed(self, guild, record, reason, deleted_by) -> discord.Embed:
+    async def _build_delete_embed(self, guild, record, reason, deleted_by,
+                                  deleted_at=None) -> discord.Embed:
         atts = record.get("attachments") or []
         mirror_missing = False
         mirror_msgs: dict[int, discord.Message] = {}
@@ -633,36 +668,47 @@ class AttachmentArchive(commands.Cog):
                 lines.append(f"{head} — ⚠️ archive failed")
 
         count = len(atts)
+        when = deleted_at or record.get("deleted_at")
         embed = discord.Embed(
-            title="🗑️ Attachment Deleted",
-            description=f"**{count}** file(s) from <@{record.get('author_id')}> "
-                        f"in <#{record.get('channel_id')}>",
+            title="🗑️ Media Deleted",
+            description=f"**{count}** file(s) uploaded by <@{record.get('author_id')}>",
             color=COLOR_DELETE,
-            timestamp=discord.utils.utcnow(),
+            timestamp=_aware(when) if isinstance(when, datetime.datetime)
+            else discord.utils.utcnow(),
         )
         embed.add_field(
-            name="Author",
-            value=f"{record.get('author_tag', 'Unknown')} (`{record.get('author_id')}`)",
-            inline=False,
+            name="Uploaded by",
+            value=f"{record.get('author_tag', 'Unknown')}\n`{record.get('author_id')}`",
+            inline=True,
         )
+        embed.add_field(name="Channel", value=f"<#{record.get('channel_id')}>", inline=True)
+
+        # Skipped entirely for a message that is still live, so /archivelookup doesn't claim
+        # an unknown deleter for something nobody deleted.
+        if when is not None or record.get("deleted"):
+            if reason or record.get("delete_reason"):
+                attribution = reason or record.get("delete_reason")
+            elif deleted_by:
+                attribution = deleted_by
+            else:
+                # A user deleting their own message leaves no audit entry at all — saying plain
+                # "Unknown" here reliably gets misread as "something suspicious happened".
+                attribution = "Unknown — likely the author"
+            embed.add_field(name="Deleted by", value=attribution, inline=True)
+
         created = record.get("created_at")
         if isinstance(created, datetime.datetime):
             ts = _unix(created)
-            embed.add_field(name="Posted", value=f"<t:{ts}:F> (<t:{ts}:R>)", inline=False)
-
-        if reason or record.get("delete_reason"):
-            attribution = reason or record.get("delete_reason")
-        elif deleted_by:
-            attribution = deleted_by
-        else:
-            # A user deleting their own message leaves no audit entry at all — saying plain
-            # "Unknown" here reliably gets misread as "something suspicious happened".
-            attribution = "Unknown — likely the author"
-        embed.add_field(name="Deleted by (best-effort)", value=attribution, inline=False)
+            embed.add_field(name="Posted", value=f"<t:{ts}:F>\n<t:{ts}:R>", inline=True)
+        if isinstance(when, datetime.datetime):
+            ts = _unix(when)
+            embed.add_field(name="Deleted", value=f"<t:{ts}:F>\n<t:{ts}:R>", inline=True)
 
         content = record.get("content")
         embed.add_field(
-            name="Message", value=(content[:1000] if content else "*(no text)*"), inline=False
+            name="Message sent with it",
+            value=(content[:1000] if content else "*(no text — file only)*"),
+            inline=False,
         )
 
         # A 10-attachment message overflows a single 1024-char field.
@@ -812,7 +858,7 @@ class AttachmentArchive(commands.Cog):
         return "\n".join(lines)
 
     @app_commands.command(name="archivesetup",
-                          description="Set up archiving and logging of deleted files")
+                          description="Set up logging of deleted images, videos and voice memos")
     @app_commands.describe(
         log_channel="Where deletion logs are posted",
         archive_channel="Private channel holding the mirrored files (created for you if omitted)",
@@ -869,8 +915,10 @@ class AttachmentArchive(commands.Cog):
         self._archive_channel_ids.add(archive_channel.id)
 
         embed = discord.Embed(
-            title="🗄️ Attachment archiving enabled",
-            description=self._preflight(guild, archive_channel, log_channel),
+            title="🗄️ Media archiving enabled",
+            description="Tracking **images, videos and voice memos**. Other file types "
+                        "(documents, archives, etc.) are ignored entirely.\n\n"
+                        + self._preflight(guild, archive_channel, log_channel),
             color=COLOR_INFO,
         )
         if created:
@@ -889,7 +937,7 @@ class AttachmentArchive(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="archivestatus",
-                          description="Show the deleted-file archive configuration and health")
+                          description="Show the media archive configuration and health")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def archivestatus(self, interaction: discord.Interaction):
@@ -916,7 +964,8 @@ class AttachmentArchive(commands.Cog):
         ignored = doc.get("archive_ignored_channels") or []
         embed.add_field(
             name="Settings",
-            value=(f"Max mirrored file: {_fmt_size(cap) if cap else 'server limit'}\n"
+            value=(f"Tracking: images, videos, voice memos\n"
+                   f"Max mirrored file: {_fmt_size(cap) if cap else 'server limit'}\n"
                    f"Mirror auto-moderated spam: "
                    f"{'yes' if doc.get('archive_mirror_automod') else 'no (metadata only)'}\n"
                    f"Retention: forever\n"
@@ -945,7 +994,7 @@ class AttachmentArchive(commands.Cog):
         await interaction.followup.send(embed=embed, ephemeral=True)
 
     @app_commands.command(name="archivedisable",
-                          description="Stop archiving and logging deleted files")
+                          description="Stop archiving and logging deleted media")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def archivedisable(self, interaction: discord.Interaction):
@@ -955,7 +1004,7 @@ class AttachmentArchive(commands.Cog):
             "untouched, and `/archivesetup` resumes where you left off.", ephemeral=True)
 
     @app_commands.command(name="archiveignore",
-                          description="Stop archiving files posted in a channel")
+                          description="Stop archiving media posted in a channel")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def archiveignore(
@@ -970,7 +1019,7 @@ class AttachmentArchive(commands.Cog):
             ephemeral=True)
 
     @app_commands.command(name="archiveunignore",
-                          description="Resume archiving files posted in a channel")
+                          description="Resume archiving media posted in a channel")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def archiveunignore(
@@ -984,7 +1033,7 @@ class AttachmentArchive(commands.Cog):
             f"✅ Archiving resumed for {channel.mention}.", ephemeral=True)
 
     @app_commands.command(name="archivelookup",
-                          description="Look up the archived files of a message by its ID")
+                          description="Look up the archived media of a message by its ID")
     @app_commands.describe(message_id="Right-click the message → Copy Message ID")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
@@ -1013,7 +1062,7 @@ class AttachmentArchive(commands.Cog):
 
     @app_commands.command(
         name="archivepurge",
-        description="Permanently delete archived files for one message or one user")
+        description="Permanently delete archived media for one message or one user")
     @app_commands.describe(
         confirm="Must be True — this permanently deletes mirrored files",
         message_id="Purge a single message's archive",
@@ -1071,7 +1120,7 @@ class AttachmentArchive(commands.Cog):
 
     @app_commands.command(
         name="archivebackfill",
-        description="Archive files already posted in a channel (slow)")
+        description="Archive media already posted in a channel (slow)")
     @app_commands.describe(
         channel="Channel to scan",
         limit="How many past messages to scan (newest first)",
@@ -1105,7 +1154,7 @@ class AttachmentArchive(commands.Cog):
         try:
             async for msg in channel.history(limit=limit, oldest_first=False):
                 scanned += 1
-                if not msg.attachments or msg.author.id == self.bot.user.id:
+                if msg.author.id == self.bot.user.id or not _media_attachments(msg):
                     continue
                 # Same queue as live capture — never a parallel fast path.
                 await self.queue.put(msg)
