@@ -48,6 +48,7 @@ class Bot(commands.Bot):
             "Cogs.playing",
             "Cogs.ImageSpamFilter",
             "Cogs.AttachmentArchive"
+            "Cogs.BOTvc",
         ]
 
         # MongoDB connection
