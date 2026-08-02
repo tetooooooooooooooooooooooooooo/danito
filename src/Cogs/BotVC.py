@@ -4,16 +4,16 @@ from discord.ext import commands
 
 
 class BotVC(commands.Cog):
-    """Troll cog — /botvc makes the bot join your VC and just sit there.
+    """Troll cog — /botvc makes the bot join a VC and just sit there.
     Run it again to make the bot leave.
     """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    @app_commands.command(name="botvc", description="Bot joins your VC and sits there (run again to kick it out)")
-    async def botvc(self, interaction: discord.Interaction):
-        # Must be used in a guild
+    @app_commands.command(name="botvc", description="Bot joins a VC and sits there (run again to kick it out)")
+    @app_commands.describe(channel="Which voice channel to join (optional — defaults to your current VC)")
+    async def botvc(self, interaction: discord.Interaction, channel: discord.VoiceChannel = None):
         if interaction.guild is None:
             await interaction.response.send_message("This only works in a server.", ephemeral=True)
             return
@@ -33,16 +33,17 @@ class BotVC(commands.Cog):
             return
 
         # Not connected yet — figure out where to join
-        author = interaction.user
-        member = interaction.guild.get_member(author.id) or author
+        target_channel = channel
 
-        target_channel = None
-        if isinstance(member, discord.Member) and member.voice and member.voice.channel:
-            target_channel = member.voice.channel
+        if target_channel is None:
+            author = interaction.user
+            member = interaction.guild.get_member(author.id) or author
+            if isinstance(member, discord.Member) and member.voice and member.voice.channel:
+                target_channel = member.voice.channel
 
         if target_channel is None:
             await interaction.response.send_message(
-                "You need to be in a voice channel first (or I don't know where to join).",
+                "Pick a voice channel with the `channel` option, or join one yourself first.",
                 ephemeral=True,
             )
             return
