@@ -47,7 +47,7 @@ class Bot(commands.Bot):
             "Cogs.taginfo",
             "Cogs.playing",
             "Cogs.ImageSpamFilter",
-            "Cogs.AttachmentArchive"
+            "Cogs.AttachmentArchive",
             "Cogs.BOTvc",
         ]
 
