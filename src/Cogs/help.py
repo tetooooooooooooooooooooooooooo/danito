@@ -58,6 +58,11 @@ class Help(commands.Cog):
         "Utility": "🔧",
     }
 
+    # Never advertised in /help. Guild-scoped commands are already absent from the global
+    # walk, but this also covers the case where OWNER_GUILD_ID is unset and they fall back
+    # to registering globally.
+    HIDDEN_COGS = {"Owner"}
+
     def _commands_by_category(self) -> dict:
         by_cat = {}
         for cmd in self.bot.tree.walk_commands():
@@ -68,6 +73,8 @@ class Help(commands.Cog):
                 continue
             binding = getattr(cmd, "binding", None)
             cog_name = binding.__class__.__name__ if binding else "Other"
+            if cog_name in self.HIDDEN_COGS:
+                continue
             by_cat.setdefault(cog_name, []).append(cmd)
         return by_cat
 

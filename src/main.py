@@ -58,6 +58,11 @@ class Bot(commands.Bot):
         self.log_channel_id = 1465493782245146886
 
         self._ready_once = False
+        self.start_time = datetime.datetime.now(datetime.timezone.utc)
+
+        # Optional: the guild that owner-only /admin commands are registered to, so they
+        # stay invisible everywhere else. Unset means they register globally instead.
+        self.owner_guild_id = os.environ.get("OWNER_GUILD_ID")
 
     async def global_interaction_check(self, interaction: discord.Interaction) -> bool:
         """Global check for all app commands - enforces Manage Server permission"""
@@ -194,6 +199,16 @@ class Bot(commands.Bot):
 
             synced = await self.tree.sync()
             print(f"Loaded {len(synced)} slash commands.")
+
+            # Guild-scoped commands live in a separate scope and need their own sync.
+            if self.owner_guild_id:
+                try:
+                    owner_guild = discord.Object(id=int(self.owner_guild_id))
+                    private = await self.tree.sync(guild=owner_guild)
+                    print(f"Loaded {len(private)} owner-only commands "
+                          f"in guild {self.owner_guild_id}.")
+                except Exception as e:
+                    print(f"Failed to sync owner commands: {e}")
 
     async def on_member_join(self, member):
         if member.bot:
