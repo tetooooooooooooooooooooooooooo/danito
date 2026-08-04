@@ -40,15 +40,11 @@ class Bot(commands.Bot):
         self.cogslist = [
             "Cogs.commandcog",
             "Cogs.eventcog",
-            "Cogs.badges",
             "Cogs.help",
             "Cogs.stats",
             "Cogs.utility",
-            "Cogs.taginfo",
-            "Cogs.playing",
             "Cogs.ImageSpamFilter",
             "Cogs.AttachmentArchive",
-            "Cogs.BotVC",
             "Cogs.owner",
         ]
 
@@ -60,6 +56,8 @@ class Bot(commands.Bot):
 
         # Log channel ID
         self.log_channel_id = 1465493782245146886
+
+        self._ready_once = False
 
     async def global_interaction_check(self, interaction: discord.Interaction) -> bool:
         """Global check for all app commands - enforces Manage Server permission"""
@@ -185,11 +183,17 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print("Bot is ready!")
-        asyncio.ensure_future(loop(self))
-        self.cleanup_departures.start()
 
-        synced = await self.tree.sync()
-        print(f"Loaded {len(synced)} slash commands.")
+        # on_ready can fire again after a gateway resume/reconnect, not just on first boot.
+        # Global command sync is unnecessary (and rate-limited) to repeat on every one of
+        # those — the command set hasn't changed since the last sync.
+        if not self._ready_once:
+            self._ready_once = True
+            asyncio.ensure_future(loop(self))
+            self.cleanup_departures.start()
+
+            synced = await self.tree.sync()
+            print(f"Loaded {len(synced)} slash commands.")
 
     async def on_member_join(self, member):
         if member.bot:

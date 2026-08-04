@@ -2,73 +2,125 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+
+class HelpView(discord.ui.View):
+    """Overview embed + a category dropdown, so /help isn't a single wall of text."""
+
+    def __init__(self, cog: "Help", by_category: dict, overview: discord.Embed):
+        super().__init__(timeout=180)
+        self.cog = cog
+        self.by_category = by_category
+        self.overview = overview
+        self.message: discord.Message | None = None
+
+        options = [discord.SelectOption(label="Overview", emoji="📚", value="__overview__", default=True)]
+        for name in sorted(by_category):
+            options.append(discord.SelectOption(
+                label=name, emoji=cog.COG_EMOJIS.get(name, "▫️"), value=name,
+            ))
+        self.select = discord.ui.Select(placeholder="Browse a category…", options=options[:25])
+        self.select.callback = self._on_select
+        self.add_item(self.select)
+
+    async def _on_select(self, interaction: discord.Interaction):
+        value = self.select.values[0]
+        for opt in self.select.options:
+            opt.default = opt.value == value
+
+        if value == "__overview__":
+            embed = self.overview
+        else:
+            embed = self.cog.build_category_embed(value, self.by_category[value])
+        await interaction.response.edit_message(embed=embed, view=self)
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message is not None:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+
 class Help(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-    
-    # Emoji mapping for cog categories
+
     COG_EMOJIS = {
-        "Badges": "🏅",
         "Stats": "📊",
         "Help": "❓",
         "Commandcog": "⚙️",
         "Eventcog": "📅",
         "AttachmentArchive": "🗄️",
         "ImageSpamFilter": "🛡️",
-        "BotVC": "🎙️",
         "Owner": "👑",
+        "Utility": "🔧",
     }
-    
-    @app_commands.command(name="help", description="Show all bot commands")
-    async def help(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title="📚 Bot Command List",
-            description="All available commands for this bot",
-            color=discord.Color.blue(),
-            timestamp=discord.utils.utcnow()
-        )
-        
-        # Group commands by cog
-        commands_by_cog = {}
+
+    def _commands_by_category(self) -> dict:
+        by_cat = {}
         for cmd in self.bot.tree.walk_commands():
-            if isinstance(cmd, app_commands.Group):
-                continue  # Skip command groups for now
-            
             cog_name = cmd.binding.__class__.__name__ if cmd.binding else "Other"
-            commands_by_cog.setdefault(cog_name, []).append(cmd)
-        
-        # Sort cogs alphabetically
-        for cog_name in sorted(commands_by_cog.keys()):
-            cmds = commands_by_cog[cog_name]
-            
-            # Get emoji for this cog or use default
-            emoji = self.COG_EMOJIS.get(cog_name, "▫️")
-            
-            # Build command list
-            cmd_list = []
-            for cmd in sorted(cmds, key=lambda x: x.name):
-                # Format: /command - description
-                cmd_list.append(f"`/{cmd.name}` • {cmd.description or 'No description'}")
-            
-            # Add field to embed
-            embed.add_field(
-                name=f"{emoji} {cog_name}",
-                value="\n".join(cmd_list) if cmd_list else "No commands",
-                inline=False
-            )
-        
-        # Add footer with bot info
-        embed.set_footer(
-            text=f"Total Commands: {len([cmd for cmds in commands_by_cog.values() for cmd in cmds])} | Requested by {interaction.user.name}",
-            icon_url=interaction.user.display_avatar.url
+            by_cat.setdefault(cog_name, []).append(cmd)
+        return by_cat
+
+    def build_overview_embed(self, by_cat: dict, requester: discord.abc.User) -> discord.Embed:
+        total = sum(len(v) for v in by_cat.values())
+        embed = discord.Embed(
+            title=f"📚 {self.bot.user.name} — Commands",
+            description=f"**{total}** commands across **{len(by_cat)}** categories.\n"
+                        f"Pick a category from the dropdown below to see details.",
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
         )
-        
-        # Set thumbnail (optional - use bot's avatar)
         if self.bot.user.avatar:
             embed.set_thumbnail(url=self.bot.user.avatar.url)
-        
-        # Send publicly (remove ephemeral=True)
-        await interaction.response.send_message(embed=embed)
+
+        for name in sorted(by_cat):
+            emoji = self.COG_EMOJIS.get(name, "▫️")
+            cmds = sorted(by_cat[name], key=lambda c: c.qualified_name)
+            preview = ", ".join(f"`/{c.qualified_name}`" for c in cmds[:4])
+            if len(cmds) > 4:
+                preview += f" *+{len(cmds) - 4} more*"
+            embed.add_field(name=f"{emoji} {name} ({len(cmds)})", value=preview, inline=False)
+
+        self._footer(embed, requester)
+        return embed
+
+    def build_category_embed(self, name: str, cmds: list) -> discord.Embed:
+        emoji = self.COG_EMOJIS.get(name, "▫️")
+        embed = discord.Embed(
+            title=f"{emoji} {name}",
+            color=discord.Color.blurple(),
+            timestamp=discord.utils.utcnow(),
+        )
+        if self.bot.user.avatar:
+            embed.set_thumbnail(url=self.bot.user.avatar.url)
+
+        for cmd in sorted(cmds, key=lambda c: c.qualified_name):
+            embed.add_field(
+                name=f"/{cmd.qualified_name}",
+                value=cmd.description or "No description",
+                inline=False,
+            )
+        return embed
+
+    def _footer(self, embed: discord.Embed, requester: discord.abc.User):
+        embed.set_footer(
+            text=f"Requested by {requester.name}",
+            icon_url=requester.display_avatar.url,
+        )
+
+    @app_commands.command(name="help", description="Show all bot commands")
+    async def help(self, interaction: discord.Interaction):
+        by_cat = self._commands_by_category()
+        overview = self.build_overview_embed(by_cat, interaction.user)
+        view = HelpView(self, by_cat, overview)
+
+        await interaction.response.send_message(embed=overview, view=view)
+        view.message = await interaction.original_response()
+
 
 async def setup(bot):
     await bot.add_cog(Help(bot))
