@@ -62,17 +62,14 @@ class ImageSpamFilter(commands.Cog):
             return
 
         # Discord kills an attachment's CDN URL the instant its message is deleted, and cog
-        # listeners run concurrently with no ordering guarantee — so the archive has to be
+        # listeners run concurrently with no ordering guarantee — so the media log has to be
         # given its chance before we delete, not after.
-        archive = self.bot.get_cog("AttachmentArchive")
-        if archive is not None:
+        medialog = self.bot.get_cog("MediaLog")
+        if medialog is not None:
             try:
-                await asyncio.wait_for(
-                    archive.capture_now(message, reason="ImageSpamFilter (spam auto-delete)"),
-                    timeout=15,
-                )
+                await asyncio.wait_for(medialog.capture_now(message), timeout=15)
             except Exception as e:
-                print(f"[ImageSpam] archive capture skipped: {e}")
+                print(f"[ImageSpam] media capture skipped: {e}")
 
         try:
             await message.delete()

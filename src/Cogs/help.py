@@ -52,7 +52,7 @@ class Help(commands.Cog):
         "Help": "❓",
         "Commandcog": "⚙️",
         "Eventcog": "📅",
-        "AttachmentArchive": "🗄️",
+        "MediaLog": "🗄️",
         "ImageSpamFilter": "🛡️",
         "Owner": "👑",
         "Utility": "🔧",

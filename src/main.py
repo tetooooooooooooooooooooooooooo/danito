@@ -27,8 +27,8 @@ async def loop(bot):
 class Bot(commands.Bot):
     def __init__(self):
         intents = discord.Intents.all()
-        # Larger message cache so recent deletes still carry the original message; the
-        # attachment archive falls back to its own Mongo index for anything older.
+        # Larger message cache so a deleted message still carries its author/content even
+        # when MediaLog no longer holds the file bytes.
         super().__init__(command_prefix="!", intents=intents, max_messages=5000)
         # Only members with "Manage Server" permission can use bot commands
         self.tree.default_permissions = discord.Permissions(manage_guild=True)
@@ -44,7 +44,7 @@ class Bot(commands.Bot):
             "Cogs.stats",
             "Cogs.utility",
             "Cogs.ImageSpamFilter",
-            "Cogs.AttachmentArchive",
+            "Cogs.MediaLog",
             "Cogs.owner",
         ]
 
