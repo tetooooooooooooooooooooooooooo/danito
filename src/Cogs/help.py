@@ -181,6 +181,7 @@ class Help(commands.Cog):
         return embed
 
     @app_commands.command(name="help", description="Show everything this bot can do")
+    @app_commands.checks.cooldown(2, 10.0)
     async def help(self, interaction: discord.Interaction):
         by_cat = self._commands_by_category()
         view = HelpView(self, by_cat, interaction.user.id)

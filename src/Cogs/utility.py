@@ -11,6 +11,9 @@ class Utility(commands.Cog):
 
     # ── Sync slash commands ────────────────────────────────────────
     @app_commands.command(name="sync", description="Force-refresh this server's slash commands")
+    # Keyed per guild, not per user: Discord's command-update budget is shared, so two admins
+    # taking turns would burn through it just as fast as one.
+    @app_commands.checks.cooldown(1, 300.0, key=lambda i: i.guild_id)
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
@@ -43,6 +46,7 @@ class Utility(commands.Cog):
     # ── Say ────────────────────────────────────────────────────────
     @app_commands.command(name="say", description="Make the bot send a message")
     @app_commands.describe(message="The message to send")
+    @app_commands.checks.cooldown(3, 30.0)
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.checks.has_permissions(manage_messages=True)
     @app_commands.guild_only()

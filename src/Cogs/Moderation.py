@@ -408,6 +408,7 @@ class Moderation(commands.Cog):
         member="Only delete messages from this member",
         contains="Only delete messages containing this text",
     )
+    @app_commands.checks.cooldown(1, 5.0)
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.checks.has_permissions(manage_messages=True)
     @app_commands.guild_only()

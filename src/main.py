@@ -27,7 +27,30 @@ async def loop(bot):
 
 class Bot(commands.Bot):
     def __init__(self):
-        intents = discord.Intents.all()
+        # Declared explicitly instead of Intents.all(). Everything switched on below is read
+        # by something; everything left off (typing, reactions, voice states, invites,
+        # webhooks, scheduled events, moderation events, DMs) was gateway traffic and memory
+        # we never looked at.
+        #
+        # Three of these are privileged and need Discord's written approval past 100 servers,
+        # so the list is kept as short as it can be:
+        #   members         - join/leave handling, role.members for nudge reach, /stats scans
+        #   message_content - without it Discord strips content *and attachments* from any
+        #                     message that doesn't mention the bot, which would break both
+        #                     MediaLog and the spam filter
+        #   presences       - only /stats playing and the online_only filters need it, and it
+        #                     is the most expensive of the three: Discord streams a presence
+        #                     update for every status change of every member of every server.
+        #                     Set PRESENCE_INTENT=0 to drop it and stay under the bar; the two
+        #                     commands that depend on it then say so rather than quietly
+        #                     returning nothing.
+        intents = discord.Intents.none()
+        intents.guilds = True
+        intents.members = True
+        intents.guild_messages = True
+        intents.message_content = True
+        intents.presences = os.environ.get("PRESENCE_INTENT", "1") != "0"
+
         # Larger message cache so a deleted message still carries its author/content even
         # when MediaLog no longer holds the file bytes.
         super().__init__(command_prefix="!", intents=intents, max_messages=5000)
@@ -273,6 +296,8 @@ class Bot(commands.Bot):
 
             synced = await self.tree.sync()
             print(f"Loaded {len(synced)} slash commands.")
+            print(f"Presence intent: {'on' if self.intents.presences else 'off'} "
+                  f"({len(self.guilds)} servers)")
 
             # Guild-scoped commands live in a separate scope and need their own sync.
             if self.owner_guild_id:

@@ -248,6 +248,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
 
     # ── /ratings ─────────────────────────────────────────────────────
     @app_commands.command(name="ratings", description="See how members have rated this server")
+    @app_commands.checks.cooldown(2, 20.0)
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
@@ -337,6 +338,8 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
     )
     @app_commands.describe(
         days="Nudge whoever joined this many days ago. Defaults to 8, the normal schedule.")
+    # Per guild: this pings real people, so two admins shouldn't be able to double it up.
+    @app_commands.checks.cooldown(1, 60.0, key=lambda i: i.guild_id)
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()

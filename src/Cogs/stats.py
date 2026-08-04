@@ -28,6 +28,9 @@ BADGE_ATTRS = {
 }
 
 MAX_ACTIVITY_SCAN = 5000       # ceiling on messages pulled by /stats activity
+# /stats tags falls back to an API call per member whose tag isn't cached. Uncapped that is
+# one request per member, which rate-limits hard and takes minutes on a large server.
+MAX_TAG_FETCHES = 50
 
 COLOR_ROLES = discord.Color.blue()
 COLOR_ACTIVITY = discord.Color.green()
@@ -66,6 +69,11 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    def _has_presence(self) -> bool:
+        """False when PRESENCE_INTENT=0. Discord then reports every member as offline with no
+        activity, so anything reading status or activity would silently return nothing."""
+        return self.bot.intents.presences
+
     def _base_embed(self, title: str, color: discord.Color, guild: discord.Guild) -> discord.Embed:
         embed = discord.Embed(title=title, color=color, timestamp=discord.utils.utcnow())
         if guild and guild.icon:
@@ -81,6 +89,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
     # ── /stats roles ──────────────────────────────────────────────
     @app_commands.command(name="roles", description="Show the most common roles in this server")
     @app_commands.describe(limit="How many roles to show (default 10, max 25)")
+    @app_commands.checks.cooldown(1, 20.0)
     async def roles(self, interaction: discord.Interaction, limit: app_commands.Range[int, 1, 25] = 10):
         guild = interaction.guild
         if not guild:
@@ -119,6 +128,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         channel="Channel to analyze (defaults to this channel)",
         hours="How many hours back to look (default 24, max 168 = 1 week)",
     )
+    @app_commands.checks.cooldown(1, 60.0)
     async def activity(
         self,
         interaction: discord.Interaction,
@@ -202,6 +212,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         online_only="Only check online members? Much faster on large servers (default: on)",
         show_examples="Show a few player names per game? (default: on)",
     )
+    @app_commands.checks.cooldown(1, 20.0)
     async def playing(
         self,
         interaction: discord.Interaction,
@@ -211,6 +222,12 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         guild = interaction.guild
         if not guild:
             await interaction.response.send_message("This only works in a server.", ephemeral=True)
+            return
+        if not self._has_presence():
+            await interaction.response.send_message(
+                "I can't see what anyone is playing. The presence intent is switched off for "
+                "this bot, so Discord doesn't send me activity at all. Whoever runs the bot "
+                "can turn it back on.", ephemeral=True)
             return
         await interaction.response.defer()
 
@@ -262,6 +279,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
     # ── /stats tags ──────────────────────────────────────────────
     @app_commands.command(name="tags", description="Show primary guild tags used by members")
     @app_commands.describe(online_only="Only check online members? Faster on large servers (default: on)")
+    @app_commands.checks.cooldown(1, 120.0)
     async def tags(self, interaction: discord.Interaction, online_only: bool = True):
         guild = interaction.guild
         if not guild:
@@ -269,7 +287,12 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
             return
         await interaction.response.defer()
 
-        if online_only:
+        if online_only and not self._has_presence():
+            # Without presence every member looks offline, so this filter would match nobody.
+            online_only = False
+            subtitle = "All members (presence is off, so I can't tell who's online)"
+            members = guild.members
+        elif online_only:
             members = [m for m in guild.members if m.status != discord.Status.offline]
             subtitle = "Online members only"
         else:
@@ -278,9 +301,16 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
 
         tag_counts = Counter()
         total_tagged = 0
+        fetched = skipped = 0
         for member in members:
             primary = member.primary_guild
             if primary is None:
+                # One API call each, so capped. Past the cap the rest are reported as unchecked
+                # rather than silently counted as untagged.
+                if fetched >= MAX_TAG_FETCHES:
+                    skipped += 1
+                    continue
+                fetched += 1
                 try:
                     user = await self.bot.fetch_user(member.id)
                     primary = user.primary_guild
@@ -303,6 +333,13 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         else:
             embed.add_field(name="Top tags", value="No tags found among scanned members.", inline=False)
 
+        if skipped:
+            embed.add_field(
+                name="Not checked",
+                value=f"{skipped} member(s) needed a lookup and were skipped, to stay within "
+                      f"{MAX_TAG_FETCHES} API calls. Try `online_only: True` for a fuller "
+                      f"picture of who's around.",
+                inline=False)
         embed.set_footer(text=f"Mode: {subtitle}")
         await interaction.followup.send(embed=embed)
 
@@ -312,6 +349,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         badge="Badge to check, or leave as 'All Badges' for a full breakdown",
         show_members="List member names instead of a count (requires picking a specific badge)",
     )
+    @app_commands.checks.cooldown(1, 20.0)
     @app_commands.autocomplete(badge=_badge_autocomplete)
     async def badges(self, interaction: discord.Interaction, badge: str = "all", show_members: bool = False):
         guild = interaction.guild
