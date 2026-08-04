@@ -83,22 +83,52 @@ def stats() -> dict:
     return {"cached_guilds": len(_cache)}
 
 
+# Mongo error codes for "an equivalent index is already there". 85 is raised when the same
+# keys exist under a different name, which is exactly what an index created by an earlier
+# version of the bot looks like. The index does its job either way.
+_INDEX_EXISTS = {85, 86}
+
+INDEXES = [
+    ("servers", [("guild_id", 1)], "guild_id"),
+    # mention_players queries by date alone (the scheduled pass) and by date plus guild
+    # (/forcesurvey); a compound index starting with date serves both.
+    ("roles", [("date", 1), ("guild_id", 1)], "date_guild"),
+    ("roles", [("guild_id", 1), ("mentioned", 1)], "guild_mentioned"),
+    ("departures", [("guild_id", 1), ("user_id", 1)], "guild_user"),
+    ("departures", [("departure_time", 1)], "departure_time"),
+]
+
+
 async def ensure_indexes(bot):
     """The three original collections never had any index, despite being the most-read ones:
     `servers` by four cogs, `roles` on every member join, `departures` on every join and leave.
-    Every lookup was a collection scan."""
+
+    Each index is created independently. Grouping them meant one conflict with an index left
+    behind by an older version aborted the whole batch, so the later collections silently got
+    nothing.
+    """
     db = Database.get_bot_database(bot.MongoClient)
 
     def build():
-        db["servers"].create_index([("guild_id", 1)], name="guild_id")
-        # mention_players queries by date alone (the scheduled pass) and by date plus guild
-        # (/forcesurvey); a compound index starting with date serves both.
-        db["roles"].create_index([("date", 1), ("guild_id", 1)], name="date_guild")
-        db["roles"].create_index([("guild_id", 1), ("mentioned", 1)], name="guild_mentioned")
-        db["departures"].create_index([("guild_id", 1), ("user_id", 1)], name="guild_user")
-        db["departures"].create_index([("departure_time", 1)], name="departure_time")
+        made, existing, failed = 0, 0, []
+        for coll, keys, name in INDEXES:
+            try:
+                db[coll].create_index(keys, name=name)
+                made += 1
+            except Exception as e:
+                if getattr(e, "code", None) in _INDEX_EXISTS:
+                    existing += 1          # already covered, under this name or an older one
+                else:
+                    failed.append(f"{coll}.{name}: {e}")
+        return made, existing, failed
 
     try:
-        await _run(build)
+        made, existing, failed = await _run(build)
     except Exception as e:
-        print(f"[GuildConfig] index setup failed: {e}")
+        print(f"[GuildConfig] index setup failed outright: {e}")
+        return
+
+    print(f"[GuildConfig] indexes: {made} ready, {existing} already covered, "
+          f"{len(failed)} failed")
+    for problem in failed:
+        print(f"[GuildConfig]   {problem}")
