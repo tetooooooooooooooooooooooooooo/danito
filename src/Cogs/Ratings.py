@@ -19,7 +19,7 @@ import re
 
 import discord
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 import Database
 
@@ -62,6 +62,94 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             await self._run(self._ensure_indexes)
         except Exception as e:
             print(f"[Ratings] index setup failed: {e}")
+        self.upgrade_old_surveys.start()
+
+    async def cog_unload(self):
+        self.upgrade_old_surveys.cancel()
+
+    # ── the survey itself ────────────────────────────────────────────
+    def _survey_view(self) -> discord.ui.View:
+        # timeout=None because these buttons must keep working after a restart. Clicks are
+        # handled by on_interaction below, not by this View object, which dies with the process.
+        view = discord.ui.View(timeout=None)
+        for i in range(1, SCALE + 1):
+            view.add_item(discord.ui.Button(
+                label=str(i), style=discord.ButtonStyle.blurple, custom_id=f"rating:{i}"))
+        return view
+
+    def _survey_embed(self) -> discord.Embed:
+        return discord.Embed(
+            title="How's your experience been so far?",
+            description=f"Tap a number from 1 to {SCALE}. It only takes a second, and only the "
+                        f"server staff can see the results.",
+            color=COLOR_INFO,
+        )
+
+    @staticmethod
+    def _buttons_are_readable(message: discord.Message) -> bool:
+        for row in message.components:
+            for item in getattr(row, "children", []):
+                cid = getattr(item, "custom_id", None)
+                if cid and RATING_ID.match(cid):
+                    return True
+        return False
+
+    async def _repair_survey(self, message: discord.Message) -> bool:
+        """Swap in buttons whose ids can be read back, editing the existing message so the
+        stored discovery_message id stays valid and nobody has to post a new survey."""
+        if message.author.id != self.bot.user.id:
+            return False          # can only edit our own messages
+        try:
+            await message.edit(content=None, embed=self._survey_embed(), view=self._survey_view())
+            return True
+        except discord.HTTPException as e:
+            print(f"[Ratings] couldn't repair survey {message.id}: {e}")
+            return False
+
+    @tasks.loop(count=1)
+    async def upgrade_old_surveys(self):
+        """Surveys posted before scores were saved have buttons carrying Discord's random ids,
+        so clicks on them can't be decoded. Rather than making admins post a fresh survey,
+        find the existing ones and edit better buttons into them."""
+        try:
+            docs = await self._run(lambda: list(self._db["servers"].find(
+                {"discovery_message": {"$ne": None}},
+                {"guild_id": 1, "discovery_channel": 1, "discovery_message": 1})))
+        except Exception as e:
+            print(f"[Ratings] couldn't list surveys to upgrade: {e}")
+            return
+
+        fixed = already = unreachable = 0
+        for doc in docs:
+            guild = self.bot.get_guild(doc.get("guild_id") or 0)
+            if guild is None:
+                continue
+            channel = guild.get_channel(doc.get("discovery_channel") or 0)
+            if channel is None:
+                unreachable += 1
+                continue
+            try:
+                message = await channel.fetch_message(doc["discovery_message"])
+            except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+                unreachable += 1
+                continue
+
+            if self._buttons_are_readable(message):
+                already += 1
+                continue
+            if await self._repair_survey(message):
+                fixed += 1
+            else:
+                unreachable += 1
+            await asyncio.sleep(1)     # one edit per second is plenty gentle
+
+        if fixed or unreachable:
+            print(f"[Ratings] survey upgrade: {fixed} repaired, {already} already fine, "
+                  f"{unreachable} unreachable")
+
+    @upgrade_old_surveys.before_loop
+    async def before_upgrade(self):
+        await self.bot.wait_until_ready()
 
     def _ensure_indexes(self):
         # One rating per member per server, so a rating can be updated but not duplicated.
@@ -92,12 +180,14 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
         custom_id = (interaction.data or {}).get("custom_id", "")
         match = RATING_ID.match(custom_id)
         if not match:
-            # A survey posted before ratings were saved. Its buttons carry Discord's random
-            # ids, so the score can't be read back.
+            # An old survey the startup repair didn't reach. Fix it now so this is the only
+            # click that ever gets lost, then ask them to tap again.
+            repaired = await self._repair_survey(interaction.message)
             await interaction.response.send_message(
-                "Thanks for rating! This survey was posted by an older version of the bot, "
-                "so your score can't be recorded. An admin can run `/setchannel` again to "
-                "post a fresh one.",
+                "Sorry, that button was from an older version and your score didn't save. "
+                + ("I've just updated the buttons, so tap your number once more and it'll "
+                   "stick." if repaired else
+                   "Ask an admin to run `/setchannel` so the survey works again."),
                 ephemeral=True)
             return
 
@@ -143,20 +233,8 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def set_discovery_channel(self, interaction: discord.Interaction):
-        # timeout=None because these buttons need to keep working after the bot restarts.
-        # The click is handled by on_interaction above, not by this View object.
-        view = discord.ui.View(timeout=None)
-        for i in range(1, SCALE + 1):
-            view.add_item(discord.ui.Button(
-                label=str(i), style=discord.ButtonStyle.blurple, custom_id=f"rating:{i}"))
-
-        embed = discord.Embed(
-            title="How's your experience been so far?",
-            description=f"Tap a number from 1 to {SCALE}. It only takes a second, and it's "
-                        f"only visible to the server staff.",
-            color=COLOR_INFO,
-        )
-        message = await interaction.channel.send(embed=embed, view=view)
+        message = await interaction.channel.send(
+            embed=self._survey_embed(), view=self._survey_view())
 
         # $set rather than replacing the document, so the media log and mod log settings on
         # this same doc survive.
