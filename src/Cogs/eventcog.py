@@ -62,33 +62,8 @@ class eventcog(commands.Cog):
         # Remove data for member if it excists
         return
 
-    @commands.Cog.listener()
-    async def on_interaction(self, interaction):
-        # Check if its a button
-        if not (interaction.type == discord.InteractionType.component):
-            return
-
-        if not (interaction.message):
-            return
-
-        # Check if the interactions message is the survey message
-        database = Database.get_bot_database(self.Client.MongoClient)
-        servers = database["servers"]
-
-        server_data = servers.find_one(
-            {
-                "guild_id": interaction.guild.id,
-                "discovery_channel": interaction.channel.id,
-                "discovery_message": interaction.message.id,
-            }
-        )
-        if not server_data:
-            return
-
-        await interaction.response.send_message(
-            content=f"Thank you for participating in this survey! Enjoy your stay!",
-            ephemeral=True,
-        )
+    # Rating button clicks are handled by ServerRatings.on_interaction in Ratings.py, which
+    # also stores the score. This used to acknowledge the click here and discard the number.
 
 
 async def setup(client: commands.Bot):

@@ -7,16 +7,15 @@ from discord.ext import commands
 # what they're for — a bare cog name tells a server admin nothing.
 CATEGORIES = {
     "Moderation": ("🔨", "Moderation",
-                   "Ban, kick, timeout and warn — every action recorded as a numbered case."),
+                   "Ban, kick, timeout and warn, with every action saved as a numbered case."),
     "MediaLog": ("🗄️", "Media Logging",
                  "Logs deleted images, videos and voice memos with the file attached."),
+    "Server Ratings": ("⭐", "Server Ratings",
+                       "Ask members to rate your server, and nudge newcomers to answer."),
     "Stats": ("📊", "Server Stats",
               "Roles, activity, badges, tags and what people are playing."),
     "ImageSpamFilter": ("🛡️", "Spam Filter",
-                        "Auto-removes batches of images posted with spam-pattern filenames."),
-    "Discovery Helper": ("🧭", "Discovery Helper",
-                         "Nudges new members back about a week after joining, to keep "
-                         "retention up."),
+                        "Removes batches of images posted with spam-looking filenames."),
     "Utility": ("🔧", "Utility", "Small tools for server admins."),
     "Help": ("❓", "Help", "This menu."),
 }
@@ -130,7 +129,7 @@ class Help(commands.Cog):
     def overview_embed(self, by_cat: dict, requester) -> discord.Embed:
         total = sum(len(v) for v in by_cat.values())
         embed = discord.Embed(
-            title=f"{self.bot.user.name} — Command Guide",
+            title=f"{self.bot.user.name} commands",
             description=f"**{total}** commands in **{len(by_cat)}** categories.\n"
                         f"Use the menu below to see a category in detail.",
             color=discord.Color.blurple(),

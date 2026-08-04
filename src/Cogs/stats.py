@@ -99,7 +99,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         total_members = len(guild.members)
         top_roles = role_counts.most_common(limit)
         lines = [
-            f"`{i}.` {role.mention} — **{count}** members ({count / total_members * 100:.1f}%)"
+            f"`{i}.` {role.mention} · **{count}** members ({count / total_members * 100:.1f}%)"
             for i, (role, count) in enumerate(top_roles, 1)
         ]
 
@@ -153,13 +153,13 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
             top_chatters = user_counts.most_common(5)
             hour_counts = Counter(m.created_at.hour for m in messages)
 
-            embed = self._base_embed(f"📊 Activity — #{target_channel.name}", COLOR_ACTIVITY, interaction.guild)
+            embed = self._base_embed(f"📊 Activity in #{target_channel.name}", COLOR_ACTIVITY, interaction.guild)
             embed.add_field(name="Messages", value=f"{total_messages:,}", inline=True)
             embed.add_field(name="Unique users", value=f"{unique_users:,}", inline=True)
             embed.add_field(name="Avg / hour", value=f"{total_messages / hours:.1f}", inline=True)
 
             chatter_lines = [
-                f"`{i}.` {user.mention} — {count} ({count / total_messages * 100:.1f}%)"
+                f"`{i}.` {user.mention} · {count} ({count / total_messages * 100:.1f}%)"
                 for i, (user, count) in enumerate(top_chatters, 1)
             ]
             embed.add_field(
@@ -239,7 +239,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
                 examples = ", ".join(players[:3])
                 if len(players) > 3:
                     examples += f" +{len(players) - 3} more"
-                line += f" — {examples}"
+                line += f" · {examples}"
             lines.append(line)
 
         for i, chunk in enumerate(_chunk_lines(lines)):
@@ -310,11 +310,11 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
             return
         if badge != "all" and badge not in BADGE_ATTRS:
             await interaction.response.send_message(
-                "❌ Unknown badge — pick one from the autocomplete list.", ephemeral=True)
+                "❌ Unknown badge. Pick one from the autocomplete list.", ephemeral=True)
             return
         if show_members and badge == "all":
             await interaction.response.send_message(
-                "❌ Pick a specific badge to list its members — \"All Badges\" only supports counts.",
+                "❌ Pick a specific badge to list its members. \"All Badges\" only gives counts.",
                 ephemeral=True)
             return
         await interaction.response.defer()
@@ -331,7 +331,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
             if counts:
                 ranked = sorted(counts.items(), key=lambda x: x[1], reverse=True)
                 embed.description = "\n".join(
-                    f"**{BADGE_ATTRS[b]}** — {c:,}" for b, c in ranked
+                    f"**{BADGE_ATTRS[b]}** · {c:,}" for b, c in ranked
                 )
             else:
                 embed.description = "No detectable badges among this server's members."
@@ -350,7 +350,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
             await interaction.followup.send(embed=embed)
             return
 
-        embed = self._base_embed(f"🏅 {label} — Members", COLOR_BADGES, guild)
+        embed = self._base_embed(f"🏅 {label}: members", COLOR_BADGES, guild)
         if not matches:
             embed.description = "No members have this badge."
         else:

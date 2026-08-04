@@ -214,7 +214,7 @@ class Moderation(commands.Cog):
                 f"**{target}** has a role at or above yours, so you can't action them.")
         if target.top_role >= guild.me.top_role:
             raise HierarchyError(
-                f"**{target}**'s highest role is above mine — move my role higher in "
+                f"**{target}**'s highest role is above mine. Move my role higher in "
                 f"Server Settings → Roles.")
 
     def _need(self, guild: discord.Guild, **perms):
@@ -457,7 +457,7 @@ class Moderation(commands.Cog):
 
         case_id = await self._record(
             interaction.guild.id, "purge", member.id if member else 0,
-            str(member) if member else "—", interaction.user.id, str(interaction.user),
+            str(member) if member else "n/a", interaction.user.id, str(interaction.user),
             f"{len(deleted)} message(s) in #{interaction.channel.name}{detail}")
         await self._post_case(
             interaction.guild, case_id, "purge", member, interaction.user,
@@ -467,7 +467,7 @@ class Moderation(commands.Cog):
 
     # ── /slowmode ────────────────────────────────────────────────────
     @app_commands.command(name="slowmode", description="Set this channel's slowmode")
-    @app_commands.describe(duration="e.g. 10s, 2m, 1h — or 0 to turn it off (max 6h)")
+    @app_commands.describe(duration="e.g. 10s, 2m, 1h, or 0 to turn it off (max 6h)")
     @app_commands.default_permissions(manage_channels=True)
     @app_commands.checks.has_permissions(manage_channels=True)
     @app_commands.guild_only()
@@ -555,7 +555,7 @@ class Moderation(commands.Cog):
                                      interaction.user.id, str(interaction.user), reason)
         if case_id is None:
             return await self._fail(
-                interaction, "Couldn't save the warning — the database didn't respond.")
+                interaction, "Couldn't save the warning, the database didn't respond.")
 
         try:
             count = await self._run(self.cases.count_documents, {
@@ -569,7 +569,7 @@ class Moderation(commands.Cog):
                               extra=f"That's warning **#{count}** for this member."
                               + ("" if dmed else "\nCouldn't DM them (DMs closed)."))
         await interaction.followup.send(
-            f"⚠️ Warned **{member}** — warning **#{count}** · Case #{case_id}")
+            f"⚠️ Warned **{member}**. That's warning **#{count}** · Case #{case_id}")
 
     # ── /warnings ────────────────────────────────────────────────────
     @app_commands.command(name="warnings", description="Show a member's warnings")
@@ -587,7 +587,7 @@ class Moderation(commands.Cog):
             return await self._fail(interaction, f"Couldn't read the database: {e}")
 
         embed = discord.Embed(
-            title=f"⚠️ Warnings — {member}",
+            title=f"⚠️ Warnings for {member}",
             description=f"**{len(rows)}** active warning(s)" if rows
             else "No active warnings. 🎉",
             color=COLOR_WARN if rows else COLOR_GOOD,
@@ -651,8 +651,8 @@ class Moderation(commands.Cog):
         summary = " · ".join(f"{v} {k}" for k, v in counts.items()) or "clean record"
 
         embed = discord.Embed(
-            title=f"📋 Mod history — {member}",
-            description=f"**{len(rows)}** case(s) — {summary}",
+            title=f"📋 Mod history for {member}",
+            description=f"**{len(rows)}** case(s) · {summary}",
             color=COLOR_INFO,
             timestamp=discord.utils.utcnow(),
         )
@@ -687,7 +687,7 @@ class Moderation(commands.Cog):
                             {"$unset": {"modlog_channel": ""}}, upsert=True)
             self._cfg.pop(guild.id, None)
             return await interaction.response.send_message(
-                "🔴 Mod logging is off. Actions still work and are still recorded — they just "
+                "🔴 Mod logging is off. Actions still work and are still recorded, they just "
                 "won't be posted anywhere.", ephemeral=True)
 
         perms = channel.permissions_for(guild.me)

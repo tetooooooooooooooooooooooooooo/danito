@@ -38,7 +38,7 @@ class Bot(commands.Bot):
 
         # List of cogs (extensions) to load
         self.cogslist = [
-            "Cogs.DiscoveryHelper",
+            "Cogs.Ratings",
             "Cogs.eventcog",
             "Cogs.help",
             "Cogs.stats",
@@ -80,7 +80,7 @@ class Bot(commands.Bot):
         elif isinstance(error, app_commands.NoPrivateMessage):
             message = "❌ This command only works inside a server."
         elif isinstance(error, app_commands.CommandOnCooldown):
-            message = f"⏳ Slow down — try again in {error.retry_after:.0f}s."
+            message = f"⏳ Slow down. Try again in {error.retry_after:.0f}s."
         elif isinstance(error, app_commands.CheckFailure):
             message = "❌ You can't use this command."
         else:

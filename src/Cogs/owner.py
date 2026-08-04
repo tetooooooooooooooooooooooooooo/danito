@@ -77,7 +77,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
             timestamp=discord.utils.utcnow(),
         )
         lines = [
-            f"**{g.name}** (`{g.id}`) — {g.member_count or '?'} members"
+            f"**{g.name}** (`{g.id}`) · {g.member_count or '?'} members"
             + (f" · owner {g.owner}" if g.owner else "")
             for g in guilds
         ]
@@ -86,7 +86,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
             label = "Servers" if len(chunks) == 1 else f"Servers ({i + 1}/{len(chunks)})"
             embed.add_field(name=label, value=chunk, inline=False)
         if len(chunks) > 25:
-            embed.set_footer(text=f"List truncated — {len(guilds)} servers total")
+            embed.set_footer(text=f"List truncated. {len(guilds)} servers total")
 
         await interaction.followup.send(embed=embed, ephemeral=True)
 
@@ -129,7 +129,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
 
     # ── /admin reload ────────────────────────────────────────────────
     @app_commands.command(name="reload", description="Hot-reload a cog without redeploying")
-    @app_commands.describe(cog="Extension name, e.g. Cogs.MediaLog — omit to reload everything")
+    @app_commands.describe(cog="Extension name, e.g. Cogs.MediaLog. Leave blank to reload everything")
     async def reload(self, interaction: discord.Interaction, cog: str = None):
         await interaction.response.defer(ephemeral=True)
 
@@ -140,7 +140,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
                 await self.bot.reload_extension(name)
                 results.append(f"✅ `{name}`")
             except Exception as e:
-                results.append(f"❌ `{name}` — {type(e).__name__}: {str(e)[:150]}")
+                results.append(f"❌ `{name}` {type(e).__name__}: {str(e)[:150]}")
 
         embed = discord.Embed(
             title="🔄 Reload",
@@ -160,14 +160,14 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
     @app_commands.command(name="leave", description="Make the bot leave a server")
     @app_commands.describe(
         server_id="ID of the server to leave (see /admin servers)",
-        confirm="Must be True — the bot loses access immediately",
+        confirm="Must be True. The bot loses access immediately",
     )
     async def leave(self, interaction: discord.Interaction, server_id: str, confirm: bool):
         await interaction.response.defer(ephemeral=True)
 
         if not confirm:
             await interaction.followup.send(
-                "Nothing happened — re-run with `confirm: True`.", ephemeral=True)
+                "Nothing happened. Re-run with `confirm: True`.", ephemeral=True)
             return
         try:
             gid = int(server_id.strip())

@@ -75,7 +75,7 @@ class ImageSpamFilter(commands.Cog):
             await message.delete()
 
             await message.channel.send(
-                f"{message.author.mention} Message removed — Do Not Spam!!.",
+                f"{message.author.mention} Message removed, please don't spam.",
                 delete_after=20
             )
 

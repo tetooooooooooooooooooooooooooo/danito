@@ -30,7 +30,7 @@ class Utility(commands.Cog):
                 f"✅ Synced **{len(synced)}** command{'s' if len(synced) != 1 else ''} "
                 f"to this server.\n"
                 f"-# If a command still looks missing or outdated in the picker, fully "
-                f"close and reopen Discord — the client caches the command list locally "
+                f"close and reopen Discord. The client caches the command list locally "
                 f"and doesn't always refresh it on its own.",
                 ephemeral=True
             )

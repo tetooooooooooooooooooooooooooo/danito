@@ -433,21 +433,21 @@ class MediaLog(commands.Cog):
         if entry.author_bot:
             uploader += "\n*(bot)*"
         embed.add_field(name="Uploaded by", value=uploader, inline=True)
-        embed.add_field(name="Deleted by", value=who or "Unknown — likely the author", inline=True)
+        embed.add_field(name="Deleted by", value=who or "Unknown, probably the author", inline=True)
 
         posted = int(entry.created_at.timestamp())
         embed.add_field(name="Posted", value=f"<t:{posted}:f>\n<t:{posted}:R>", inline=True)
 
         embed.add_field(
             name="Message text",
-            value=entry.content[:1000] if entry.content else "*(none — file only)*",
+            value=entry.content[:1000] if entry.content else "*(no text, just the file)*",
             inline=False,
         )
 
         lines = []
         for f in entry.files:
             mark = "" if f.data is not None else "  ⚠️ *not retained*"
-            lines.append(f"`{f.filename}` — {_fmt_size(f.size)}{mark}")
+            lines.append(f"`{f.filename}` · {_fmt_size(f.size)}{mark}")
         embed.add_field(name="Files", value="\n".join(lines)[:1024], inline=False)
 
         if inline_image:
@@ -507,7 +507,7 @@ class MediaLog(commands.Cog):
         embed = discord.Embed(
             title="✅ Media logging enabled",
             description=f"Deleted images, videos and audio will be posted to "
-                        f"{channel.mention} — from members and bots alike.",
+                        f"{channel.mention}, from members and bots alike.",
             color=COLOR_INFO,
         )
         if not guild.me.guild_permissions.view_audit_log:
@@ -516,7 +516,7 @@ class MediaLog(commands.Cog):
                 value="I don't have **View Audit Log**, so \"Deleted by\" will always say "
                       "unknown. Grant it if you want to see who removed something.",
                 inline=False)
-        embed.set_footer(text="Coverage starts now — files posted before this aren't kept.")
+        embed.set_footer(text="Coverage starts now. Files posted before this aren't kept.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
 
     @app_commands.command(name="logoff", description="Stop logging deleted media")
@@ -542,14 +542,14 @@ class MediaLog(commands.Cog):
 
         embed = discord.Embed(
             title="🗄️ Media Logging",
-            description="🟢 **Enabled**" if enabled else "🔴 **Disabled** — run `/logchannel`",
+            description="🟢 **Enabled**" if enabled else "🔴 **Disabled**. Run `/logchannel` to switch it on.",
             color=COLOR_INFO if enabled else COLOR_WARN,
         )
         embed.add_field(name="Log channel",
                         value=channel.mention if channel else "*not set*", inline=True)
         embed.add_field(name="Audit log",
                         value="✅ available" if guild.me.guild_permissions.view_audit_log
-                        else "⚠️ missing — deleters show as unknown", inline=True)
+                        else "⚠️ missing, so deleters show as unknown", inline=True)
         embed.add_field(
             name="What gets logged",
             value=f"Images, video and audio up to {_fmt_size(MAX_FILE_BYTES)}, "
