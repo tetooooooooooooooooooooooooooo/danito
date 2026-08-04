@@ -48,7 +48,8 @@ def _chunk(lines: list, limit: int = 1024) -> list:
     return chunks or [""]
 
 
-class Owner(commands.GroupCog, name="admin", description="Bot owner tools"):
+class Owner(commands.GroupCog, name="Owner", group_name="admin",
+            group_description="Bot owner tools"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 

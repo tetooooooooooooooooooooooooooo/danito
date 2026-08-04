@@ -38,7 +38,7 @@ class Bot(commands.Bot):
 
         # List of cogs (extensions) to load
         self.cogslist = [
-            "Cogs.commandcog",
+            "Cogs.DiscoveryHelper",
             "Cogs.eventcog",
             "Cogs.help",
             "Cogs.stats",
@@ -171,13 +171,21 @@ class Bot(commands.Bot):
                     message = await channel.send(content=f'<@&{obj["role_id"]}>')
                     await message.delete(delay=2.0)
                     print(f"Message sent for role {obj['role_id']} in guild {obj['guild_id']}!")
+                except Exception as e:
+                    print(f"Error sending/deleting message: {e}")
+                    continue
 
-                    await roles_collection.update_one(
+                # Not awaited: pymongo is synchronous and an UpdateResult isn't awaitable.
+                # This used to be `await`ed inside the try above, so it raised TypeError every
+                # time, "mentioned" was never set, and the cohort got re-pinged on every pass
+                # of the 10-minute loop for the whole midday window.
+                try:
+                    roles_collection.update_one(
                         {"_id": obj["_id"]},
                         {"$set": {"mentioned": True}}
                     )
                 except Exception as e:
-                    print(f"Error sending/deleting message: {e}")
+                    print(f"Error marking role as mentioned: {e}")
 
         # Cleanup old roles (9 days)
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()

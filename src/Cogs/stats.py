@@ -57,7 +57,10 @@ def _chunk_lines(lines: list[str], limit: int = 1024) -> list[str]:
     return chunks or [""]
 
 
-class Stats(commands.GroupCog, name="stats", description="Server statistics: roles, activity, badges, tags and more"):
+# name= is the cog's display name (used by /help); group_name= is the slash command itself.
+# Passing only name= would set both, making the category show up as a bare "stats".
+class Stats(commands.GroupCog, name="Stats", group_name="stats",
+            group_description="Server statistics: roles, activity, badges, tags and more"):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
