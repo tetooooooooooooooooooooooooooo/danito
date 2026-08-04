@@ -241,6 +241,16 @@ class Bot(commands.Bot):
             except Exception as e:
                 print(f"Error marking role as mentioned: {e}")
 
+            # Stamp the membership spells for this cohort, so /retention can show which
+            # joining groups were nudged and which weren't.
+            try:
+                await self._db(
+                    database["memberships"].update_many,
+                    {"guild_id": obj["guild_id"], "cohort": obj["date"]},
+                    {"$set": {"nudged": True}})
+            except Exception as e:
+                print(f"Error marking cohort as nudged: {e}")
+
         if not cleanup:
             return summary
 

@@ -94,14 +94,12 @@ INDEXES = [
     # (/forcesurvey); a compound index starting with date serves both.
     ("roles", [("date", 1), ("guild_id", 1)], "date_guild"),
     ("roles", [("guild_id", 1), ("mentioned", 1)], "guild_mentioned"),
-    ("departures", [("guild_id", 1), ("user_id", 1)], "guild_user"),
-    ("departures", [("departure_time", 1)], "departure_time"),
 ]
 
 
 async def ensure_indexes(bot):
     """The three original collections never had any index, despite being the most-read ones:
-    `servers` by four cogs, `roles` on every member join, `departures` on every join and leave.
+    `servers` by four cogs and `roles` on every member join.
 
     Each index is created independently. Grouping them meant one conflict with an index left
     behind by an older version aborted the whole batch, so the later collections silently got
