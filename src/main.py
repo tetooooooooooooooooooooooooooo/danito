@@ -4,6 +4,7 @@ from discord.ext import commands, tasks
 import os
 from dotenv import load_dotenv
 import Database
+import GuildConfig
 from pymongo import MongoClient
 import certifi
 import datetime
@@ -39,7 +40,7 @@ class Bot(commands.Bot):
         # List of cogs (extensions) to load
         self.cogslist = [
             "Cogs.Ratings",
-            "Cogs.eventcog",
+            "Cogs.Members",
             "Cogs.help",
             "Cogs.stats",
             "Cogs.utility",
@@ -65,6 +66,10 @@ class Bot(commands.Bot):
         # Optional: the guild that owner-only /admin commands are registered to, so they
         # stay invisible everywhere else. Unset means they register globally instead.
         self.owner_guild_id = os.environ.get("OWNER_GUILD_ID")
+
+    async def _db(self, fn, *args, **kwargs):
+        """pymongo is synchronous, so keep it off the event loop."""
+        return await asyncio.to_thread(lambda: fn(*args, **kwargs))
 
     async def on_tree_error(self, interaction: discord.Interaction, error):
         """Assigned to tree.on_error, which is where discord.py actually dispatches app
@@ -142,7 +147,6 @@ class Bot(commands.Bot):
         print(f"Mentioning players! (days={days}, guild={guild_id or 'all'})")
         database = Database.get_bot_database(self.MongoClient)
         roles_collection = database["roles"]
-        servers_collection = database["servers"]
 
         summary = {"date": None, "found": 0, "pinged": 0, "already": 0,
                    "no_channel": 0, "failed": 0, "cleaned": 0}
@@ -154,7 +158,7 @@ class Bot(commands.Bot):
         if guild_id is not None:
             query["guild_id"] = guild_id
 
-        objects_to_mention = list(roles_collection.find(query))
+        objects_to_mention = await self._db(lambda: list(roles_collection.find(query)))
         summary["found"] = len(objects_to_mention)
         for obj in objects_to_mention:
             if obj.get("mentioned"):
@@ -168,7 +172,7 @@ class Bot(commands.Bot):
                 summary["failed"] += 1
                 continue
 
-            server_data = servers_collection.find_one({"guild_id": obj["guild_id"]})
+            server_data = await GuildConfig.get(self, obj["guild_id"])
             if not server_data or "discovery_channel" not in server_data:
                 print(f'Could not find server data or discovery channel for guild {obj["guild_id"]}')
                 summary["no_channel"] += 1
@@ -208,10 +212,9 @@ class Bot(commands.Bot):
             # time, "mentioned" was never set, and the cohort got re-pinged on every pass
             # of the 10-minute loop for the whole midday window.
             try:
-                roles_collection.update_one(
-                    {"_id": obj["_id"]},
-                    {"$set": {"mentioned": True}}
-                )
+                await self._db(roles_collection.update_one,
+                               {"_id": obj["_id"]},
+                               {"$set": {"mentioned": True}})
             except Exception as e:
                 print(f"Error marking role as mentioned: {e}")
 
@@ -224,7 +227,7 @@ class Bot(commands.Bot):
         old_query = {"date": str(oldDate)}
         if guild_id is not None:
             old_query["guild_id"] = guild_id
-        objects_to_delete = list(roles_collection.find(old_query))
+        objects_to_delete = await self._db(lambda: list(roles_collection.find(old_query)))
 
         for obj in objects_to_delete:
             guild = await self.fetch_guild(obj["guild_id"])
@@ -242,7 +245,7 @@ class Bot(commands.Bot):
                 print(f"Error deleting role: {e}")
 
         try:
-            delete_result = roles_collection.delete_many(old_query)
+            delete_result = await self._db(roles_collection.delete_many, old_query)
             summary["cleaned"] = delete_result.deleted_count
             print(f"Deleted {delete_result.deleted_count} old database records.")
         except Exception as e:
@@ -251,6 +254,7 @@ class Bot(commands.Bot):
         return summary
 
     async def setup_hook(self):
+        await GuildConfig.ensure_indexes(self)
         for ext in self.cogslist:
             try:
                 await self.load_extension(ext)
@@ -266,7 +270,6 @@ class Bot(commands.Bot):
         if not self._ready_once:
             self._ready_once = True
             asyncio.ensure_future(loop(self))
-            self.cleanup_departures.start()
 
             synced = await self.tree.sync()
             print(f"Loaded {len(synced)} slash commands.")
@@ -280,69 +283,6 @@ class Bot(commands.Bot):
                           f"in guild {self.owner_guild_id}.")
                 except Exception as e:
                     print(f"Failed to sync owner commands: {e}")
-
-    async def on_member_join(self, member):
-        if member.bot:
-            return
-
-        database = Database.get_bot_database(self.MongoClient)
-        departures_collection = database["departures"]
-
-        departed_record = departures_collection.find_one_and_delete(
-            {"user_id": member.id, "guild_id": member.guild.id}
-        )
-
-        welcome_message = (
-            f"Hey!, {member.mention}!\n"
-            "We'd love to interest you in checking out our partnered social mmo game, Meown!\n\n"
-            "🔗 **playable at** https://meown.net\n"
-            "🔗 **Discord:** https://discord.gg/VPjxQgTgBh"
-        )
-
-        try:
-            await member.send(welcome_message)
-            print(f"Sent welcome message to {member.name}.")
-        except:
-            print(f"Could not DM {member.name} (DMs closed?).")
-
-    async def on_member_remove(self, member):
-        if member.bot:
-            return
-
-        database = Database.get_bot_database(self.MongoClient)
-        departures_collection = database["departures"]
-
-        try:
-            departures_collection.insert_one({
-                "user_id": member.id,
-                "guild_id": member.guild.id,
-                "departure_time": datetime.datetime.now()
-            })
-            print(f"Recorded departure for {member.name}.")
-        except Exception as e:
-            print(f"Error recording departure: {e}")
-
-    @tasks.loop(hours=24)
-    async def cleanup_departures(self):
-        database = Database.get_bot_database(self.MongoClient)
-        departures_collection = database["departures"]
-
-        thirty_days_ago = datetime.datetime.now() - datetime.timedelta(days=30)
-
-        try:
-            delete_result = departures_collection.delete_many(
-                {"departure_time": {"$lt": thirty_days_ago}}
-            )
-            print(f"Cleaned up {delete_result.deleted_count} old departure records.")
-        except Exception as e:
-            print(f"Error cleaning departures: {e}")
-
-    @cleanup_departures.before_loop
-    async def before_cleanup_departures(self):
-        print("Waiting for bot to be ready before starting departure cleanup loop...")
-        await self.wait_until_ready()
-
-
 
 # Load environment variables
 load_dotenv()

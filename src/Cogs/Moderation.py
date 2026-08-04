@@ -24,6 +24,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import Database
+import GuildConfig
 
 COLOR_BAN = 0xE74C3C
 COLOR_KICK = 0xE67E22
@@ -34,7 +35,6 @@ COLOR_INFO = 0x5865F2
 
 MAX_TIMEOUT_DAYS = 28          # Discord's hard ceiling
 MAX_PURGE = 200
-CFG_TTL = 300
 
 DURATION_RE = re.compile(r"(\d+)\s*([smhdw])", re.IGNORECASE)
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
@@ -87,7 +87,6 @@ class Moderation(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._cfg: dict[int, tuple[Optional[int], float]] = {}
 
     # ── storage ──────────────────────────────────────────────────────
     @property
@@ -155,17 +154,8 @@ class Moderation(commands.Cog):
 
     # ── mod-log channel ──────────────────────────────────────────────
     async def _log_channel_id(self, guild_id: int) -> Optional[int]:
-        now = time.monotonic()
-        hit = self._cfg.get(guild_id)
-        if hit is not None and now - hit[1] < CFG_TTL:
-            return hit[0]
-        try:
-            doc = await self._run(self.servers.find_one, {"guild_id": guild_id})
-        except Exception:
-            return hit[0] if hit else None
-        cid = (doc or {}).get("modlog_channel")
-        self._cfg[guild_id] = (cid, now)
-        return cid
+        doc = await GuildConfig.get(self.bot, guild_id)
+        return doc.get("modlog_channel")
 
     async def _post_case(self, guild: discord.Guild, case_id, action, target, moderator,
                          reason, duration=None, extra=None):
@@ -683,9 +673,7 @@ class Moderation(commands.Cog):
                             channel: discord.TextChannel = None):
         guild = interaction.guild
         if channel is None:
-            await self._run(self.servers.update_one, {"guild_id": guild.id},
-                            {"$unset": {"modlog_channel": ""}}, upsert=True)
-            self._cfg.pop(guild.id, None)
+            await GuildConfig.update(self.bot, guild.id, unset={"modlog_channel": ""})
             return await interaction.response.send_message(
                 "🔴 Mod logging is off. Actions still work and are still recorded, they just "
                 "won't be posted anywhere.", ephemeral=True)
@@ -698,9 +686,7 @@ class Moderation(commands.Cog):
             return await self._fail(
                 interaction, f"I'm missing **{', '.join(missing)}** in {channel.mention}.")
 
-        await self._run(self.servers.update_one, {"guild_id": guild.id},
-                        {"$set": {"modlog_channel": channel.id}}, upsert=True)
-        self._cfg.pop(guild.id, None)
+        await GuildConfig.update(self.bot, guild.id, {"modlog_channel": channel.id})
         await interaction.response.send_message(
             f"✅ Moderation cases will be posted to {channel.mention}.", ephemeral=True)
 

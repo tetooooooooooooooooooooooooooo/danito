@@ -26,6 +26,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 import Database
+import GuildConfig
 
 # Tuning. These bound memory: a public bot can't hold every upload from every server.
 MAX_FILE_BYTES = 8 * 1024 * 1024        # skip caching anything larger
@@ -34,7 +35,6 @@ MAX_CACHE_ENTRIES = 400
 CACHE_TTL = 12 * 3600                   # drop entries this old
 MAX_FILES_PER_LOG = 10                  # Discord's per-message attachment limit
 MAX_BULK_LOGS = 8                       # individual logs before collapsing to a summary
-CFG_TTL = 300
 AUDIT_DELAY = 1.5
 AUDIT_WINDOW = 20
 
@@ -121,7 +121,6 @@ class MediaLog(commands.Cog):
         self.bot = bot
         self._cache: "OrderedDict[int, CachedMessage]" = OrderedDict()
         self._bytes = 0
-        self._cfg: dict[int, tuple[Optional[dict], float]] = {}
         self._log_channels: set[int] = set()
         self._pending: dict[int, asyncio.Task] = {}
         self.stats = {"cached": 0, "logged": 0, "too_big": 0, "failed": 0}
@@ -154,22 +153,13 @@ class MediaLog(commands.Cog):
 
     # ── config ───────────────────────────────────────────────────────
     async def _get_config(self, guild_id: int) -> Optional[dict]:
-        """Cached, including negative results — an unconfigured server costs one DB read per
-        TTL rather than one per upload."""
-        now = time.monotonic()
-        hit = self._cfg.get(guild_id)
-        if hit is not None and now - hit[1] < CFG_TTL:
-            return hit[0]
-        try:
-            doc = await self._db(self.servers.find_one, {"guild_id": guild_id})
-        except Exception as e:
-            print(f"[MediaLog] config lookup failed for {guild_id}: {e}")
-            return hit[0] if hit else None
-        cfg = doc if (doc and doc.get("medialog_enabled") and doc.get("medialog_channel")) else None
-        self._cfg[guild_id] = (cfg, now)
-        if cfg:
-            self._log_channels.add(cfg["medialog_channel"])
-        return cfg
+        """None when logging is off here. Backed by the shared GuildConfig cache, so this
+        costs nothing when another cog has already read this guild's settings."""
+        doc = await GuildConfig.get(self.bot, guild_id)
+        if not (doc.get("medialog_enabled") and doc.get("medialog_channel")):
+            return None
+        self._log_channels.add(doc["medialog_channel"])
+        return doc
 
     # ── capture ──────────────────────────────────────────────────────
     @commands.Cog.listener()
@@ -269,8 +259,7 @@ class MediaLog(commands.Cog):
         cutoff = time.monotonic() - CACHE_TTL
         for mid in [k for k, v in self._cache.items() if v.cached_at < cutoff]:
             self._drop(mid)
-        now = time.monotonic()
-        self._cfg = {k: v for k, v in self._cfg.items() if now - v[1] < CFG_TTL * 4}
+        GuildConfig.prune()
 
     @prune.before_loop
     async def before_prune(self):
@@ -471,9 +460,8 @@ class MediaLog(commands.Cog):
     async def on_guild_channel_delete(self, channel):
         cfg = await self._get_config(channel.guild.id)
         if cfg and cfg.get("medialog_channel") == channel.id:
-            await self._db(self.servers.update_one, {"guild_id": channel.guild.id},
-                           {"$set": {"medialog_enabled": False}})
-            self._cfg.pop(channel.guild.id, None)
+            await GuildConfig.update(self.bot, channel.guild.id,
+                                     {"medialog_enabled": False})
             self._log_channels.discard(channel.id)
 
     # ── commands ─────────────────────────────────────────────────────
@@ -498,10 +486,8 @@ class MediaLog(commands.Cog):
                 f"Grant those and run this again.", ephemeral=True)
             return
 
-        await self._db(self.servers.update_one, {"guild_id": guild.id},
-                       {"$set": {"medialog_enabled": True, "medialog_channel": channel.id}},
-                       upsert=True)
-        self._cfg.pop(guild.id, None)
+        await GuildConfig.update(self.bot, guild.id,
+                                 {"medialog_enabled": True, "medialog_channel": channel.id})
         self._log_channels.add(channel.id)
 
         embed = discord.Embed(
@@ -524,9 +510,8 @@ class MediaLog(commands.Cog):
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def logoff(self, interaction: discord.Interaction):
-        await self._db(self.servers.update_one, {"guild_id": interaction.guild.id},
-                       {"$set": {"medialog_enabled": False}}, upsert=True)
-        self._cfg.pop(interaction.guild.id, None)
+        await GuildConfig.update(self.bot, interaction.guild.id,
+                                 {"medialog_enabled": False})
         await interaction.response.send_message(
             "🔴 Media logging is off. Run `/logchannel` to turn it back on.", ephemeral=True)
 
@@ -536,7 +521,7 @@ class MediaLog(commands.Cog):
     @app_commands.guild_only()
     async def logstatus(self, interaction: discord.Interaction):
         guild = interaction.guild
-        doc = await self._db(self.servers.find_one, {"guild_id": guild.id}) or {}
+        doc = await GuildConfig.get(self.bot, guild.id)
         enabled = bool(doc.get("medialog_enabled") and doc.get("medialog_channel"))
         channel = guild.get_channel(doc.get("medialog_channel") or 0)
 

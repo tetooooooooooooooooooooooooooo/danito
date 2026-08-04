@@ -27,6 +27,8 @@ BADGE_ATTRS = {
     "active_developer": "Active Developer",
 }
 
+MAX_ACTIVITY_SCAN = 5000       # ceiling on messages pulled by /stats activity
+
 COLOR_ROLES = discord.Color.blue()
 COLOR_ACTIVITY = discord.Color.green()
 COLOR_PLAYING = discord.Color.teal()
@@ -139,7 +141,11 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         time_threshold = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         try:
-            messages = [m async for m in target_channel.history(limit=None, after=time_threshold)]
+            # Capped: history() pages 100 at a time and holds every message in memory, so an
+            # unbounded week of a busy channel could pull tens of thousands before returning.
+            messages = [m async for m in target_channel.history(
+                limit=MAX_ACTIVITY_SCAN, after=time_threshold)]
+            truncated = len(messages) >= MAX_ACTIVITY_SCAN
 
             if not messages:
                 await interaction.followup.send(
@@ -176,6 +182,10 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
                     inline=True,
                 )
             embed.add_field(name="Window", value=f"Last {hours}h", inline=True)
+            if truncated:
+                embed.set_footer(
+                    text=f"Busy channel: only the most recent {MAX_ACTIVITY_SCAN:,} messages "
+                         f"were counted, so these numbers are a floor.")
             self._footer(embed, interaction)
             await interaction.followup.send(embed=embed)
 

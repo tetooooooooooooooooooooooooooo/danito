@@ -23,6 +23,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 import Database
+import GuildConfig
 
 PING_AFTER_DAYS = 8
 CLEANUP_AFTER_DAYS = 9
@@ -166,16 +167,12 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
         if not interaction.message or interaction.guild is None:
             return
 
-        try:
-            server_data = await self._run(self._db["servers"].find_one, {
-                "guild_id": interaction.guild.id,
-                "discovery_channel": interaction.channel.id,
-                "discovery_message": interaction.message.id,
-            })
-        except Exception as e:
-            print(f"[Ratings] lookup failed: {e}")
-            return
-        if not server_data:
+        # This fires for every component interaction in every server, including this bot's own
+        # menus, so it has to be cheap. Comparing against the cached settings costs nothing;
+        # querying Mongo with a compound filter here meant a round trip per button press.
+        cfg = await GuildConfig.get(self.bot, interaction.guild.id)
+        if (cfg.get("discovery_channel") != interaction.channel.id
+                or cfg.get("discovery_message") != interaction.message.id):
             return
 
         custom_id = (interaction.data or {}).get("custom_id", "")
@@ -239,13 +236,9 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
 
         # $set rather than replacing the document, so the media log and mod log settings on
         # this same doc survive.
-        await self._run(
-            self._db["servers"].update_one,
-            {"guild_id": interaction.guild.id},
-            {"$set": {"discovery_channel": interaction.channel.id,
-                      "discovery_message": message.id}},
-            upsert=True,
-        )
+        await GuildConfig.update(
+            self.bot, interaction.guild.id,
+            {"discovery_channel": interaction.channel.id, "discovery_message": message.id})
         await interaction.response.send_message(
             f"Survey posted in {interaction.channel.mention}. Members who joined "
             f"{PING_AFTER_DAYS} days ago will get a quiet nudge to come and rate the server.\n"
@@ -265,8 +258,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
         try:
             rows = await self._run(
                 lambda: list(self._db["ratings"].find({"guild_id": guild.id})))
-            server_data = await self._run(
-                self._db["servers"].find_one, {"guild_id": guild.id}) or {}
+            server_data = await GuildConfig.get(self.bot, guild.id)
         except Exception as e:
             await interaction.followup.send(
                 f"Couldn't read the ratings: {e}", ephemeral=True)
@@ -398,8 +390,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
         guild = interaction.guild
 
         try:
-            server_data = await self._run(
-                self._db["servers"].find_one, {"guild_id": guild.id}) or {}
+            server_data = await GuildConfig.get(self.bot, guild.id)
             cohorts = await self._run(
                 lambda: list(self._db["roles"].find({"guild_id": guild.id})))
             rating_count = await self._run(

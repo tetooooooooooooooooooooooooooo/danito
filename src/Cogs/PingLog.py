@@ -19,10 +19,10 @@ from discord import app_commands
 from discord.ext import commands
 
 import Database
+import GuildConfig
 
 DEFAULT_MINIMUM = 5
 EVENT_TTL_DAYS = 30
-CFG_TTL = 300
 SUMMARY_DAYS = 7
 
 COLOR_PING = 0xF39C12
@@ -38,7 +38,6 @@ class PingTracker(commands.Cog, name="Ping Tracking"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._cfg: dict[int, tuple[Optional[dict], float]] = {}
 
     async def _run(self, fn, *args, **kwargs):
         return await asyncio.to_thread(lambda: fn(*args, **kwargs))
@@ -64,18 +63,11 @@ class PingTracker(commands.Cog, name="Ping Tracking"):
 
     # ── config ───────────────────────────────────────────────────────
     async def _get_config(self, guild_id: int) -> Optional[dict]:
-        now = time.monotonic()
-        hit = self._cfg.get(guild_id)
-        if hit is not None and now - hit[1] < CFG_TTL:
-            return hit[0]
-        try:
-            doc = await self._run(self._db["servers"].find_one, {"guild_id": guild_id})
-        except Exception as e:
-            print(f"[PingLog] config lookup failed for {guild_id}: {e}")
-            return hit[0] if hit else None
-        cfg = doc if (doc and doc.get("pinglog_enabled") and doc.get("pinglog_channel")) else None
-        self._cfg[guild_id] = (cfg, now)
-        return cfg
+        """None when tracking is off here. Shares one cached read with the other cogs."""
+        doc = await GuildConfig.get(self.bot, guild_id)
+        if not (doc.get("pinglog_enabled") and doc.get("pinglog_channel")):
+            return None
+        return doc
 
     # ── working out the reach ────────────────────────────────────────
     @staticmethod
@@ -212,9 +204,7 @@ class PingTracker(commands.Cog, name="Ping Tracking"):
             updates = {"pinglog_enabled": True, "pinglog_channel": channel.id}
             if minimum is not None:
                 updates["pinglog_minimum"] = minimum
-            await self._run(self._db["servers"].update_one, {"guild_id": guild.id},
-                            {"$set": updates}, upsert=True)
-            self._cfg.pop(guild.id, None)
+            await GuildConfig.update(self.bot, guild.id, updates)
 
             threshold = minimum or DEFAULT_MINIMUM
             await interaction.followup.send(
@@ -227,7 +217,7 @@ class PingTracker(commands.Cog, name="Ping Tracking"):
 
         # No channel given, so show the current setup and a recent summary.
         try:
-            doc = await self._run(self._db["servers"].find_one, {"guild_id": guild.id}) or {}
+            doc = await GuildConfig.get(self.bot, guild.id)
             since = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
                 days=SUMMARY_DAYS)
             events = await self._run(lambda: list(self._db["ping_events"].find(
@@ -295,9 +285,7 @@ class PingTracker(commands.Cog, name="Ping Tracking"):
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def trackpingoff(self, interaction: discord.Interaction):
-        await self._run(self._db["servers"].update_one, {"guild_id": interaction.guild.id},
-                        {"$set": {"pinglog_enabled": False}}, upsert=True)
-        self._cfg.pop(interaction.guild.id, None)
+        await GuildConfig.update(self.bot, interaction.guild.id, {"pinglog_enabled": False})
         await interaction.response.send_message(
             "Ping tracking is off. The pings already logged are still there, and `/trackping` "
             "will still show the summary.", ephemeral=True)
@@ -306,9 +294,7 @@ class PingTracker(commands.Cog, name="Ping Tracking"):
     async def on_guild_channel_delete(self, channel):
         cfg = await self._get_config(channel.guild.id)
         if cfg and cfg.get("pinglog_channel") == channel.id:
-            await self._run(self._db["servers"].update_one, {"guild_id": channel.guild.id},
-                            {"$set": {"pinglog_enabled": False}})
-            self._cfg.pop(channel.guild.id, None)
+            await GuildConfig.update(self.bot, channel.guild.id, {"pinglog_enabled": False})
 
 
 async def setup(bot: commands.Bot):
