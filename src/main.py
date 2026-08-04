@@ -30,12 +30,12 @@ class Bot(commands.Bot):
         # Larger message cache so a deleted message still carries its author/content even
         # when MediaLog no longer holds the file bytes.
         super().__init__(command_prefix="!", intents=intents, max_messages=5000)
-        # Only members with "Manage Server" permission can use bot commands
-        self.tree.default_permissions = discord.Permissions(manage_guild=True)
-        
-        # Set up the interaction check for the command tree
-        self.tree.interaction_check = self.global_interaction_check
-        
+        # Permissions are declared per command rather than gated globally. A single
+        # manage_guild gate over everything meant moderators (who typically hold
+        # kick/ban/timeout but not Manage Server) couldn't run moderation commands, and
+        # read-only things like /help and /stats were locked away from ordinary members.
+        self.tree.on_error = self.on_tree_error
+
         # List of cogs (extensions) to load
         self.cogslist = [
             "Cogs.commandcog",
@@ -45,6 +45,7 @@ class Bot(commands.Bot):
             "Cogs.utility",
             "Cogs.ImageSpamFilter",
             "Cogs.MediaLog",
+            "Cogs.Moderation",
             "Cogs.owner",
         ]
 
@@ -64,20 +65,45 @@ class Bot(commands.Bot):
         # stay invisible everywhere else. Unset means they register globally instead.
         self.owner_guild_id = os.environ.get("OWNER_GUILD_ID")
 
-    async def global_interaction_check(self, interaction: discord.Interaction) -> bool:
-        """Global check for all app commands - enforces Manage Server permission"""
-        if interaction.guild is None:
-            # Allow DM commands
-            return True
-        
-        # Check if user has manage_guild permission
-        if not interaction.user.guild_permissions.manage_guild:
-            await interaction.response.send_message(
-                "❌ You need the 'Manage Server' permission to use this bot.",
-                ephemeral=True
+    async def on_tree_error(self, interaction: discord.Interaction, error):
+        """Assigned to tree.on_error, which is where discord.py actually dispatches app
+        command errors — a bot-level on_app_command_error method is never called."""
+        if isinstance(error, app_commands.CommandInvokeError):
+            error = error.original
+
+        if isinstance(error, app_commands.MissingPermissions):
+            perms = ", ".join(p.replace("_", " ").title() for p in error.missing_permissions)
+            message = f"❌ You need **{perms}** to use this command."
+        elif isinstance(error, app_commands.BotMissingPermissions):
+            perms = ", ".join(p.replace("_", " ").title() for p in error.missing_permissions)
+            message = f"❌ I'm missing **{perms}**. Grant it and try again."
+        elif isinstance(error, app_commands.NoPrivateMessage):
+            message = "❌ This command only works inside a server."
+        elif isinstance(error, app_commands.CommandOnCooldown):
+            message = f"⏳ Slow down — try again in {error.retry_after:.0f}s."
+        elif isinstance(error, app_commands.CheckFailure):
+            message = "❌ You can't use this command."
+        else:
+            message = "❌ Something went wrong running that command."
+            print(f"[COMMAND ERROR] {interaction.command and interaction.command.qualified_name}: "
+                  f"{type(error).__name__}: {error}")
+            await self.send_log(
+                title=f"Command Error: /{interaction.command.qualified_name if interaction.command else '?'}",
+                description=f"```py\n{type(error).__name__}: {str(error)[:500]}\n```",
+                fields={
+                    "User": f"{interaction.user} ({interaction.user.id})",
+                    "Guild": f"{interaction.guild} ({interaction.guild.id})" if interaction.guild else "DM",
+                },
+                color=0xe74c3c,
             )
-            return False
-        return True
+
+        try:
+            if interaction.response.is_done():
+                await interaction.followup.send(message, ephemeral=True)
+            else:
+                await interaction.response.send_message(message, ephemeral=True)
+        except discord.HTTPException:
+            pass
 
     async def send_log(self, title: str, description: str = None, fields: dict = None, color=0x2b2d31):
         """Send a formatted embed to the log channel"""
@@ -271,16 +297,6 @@ class Bot(commands.Bot):
         print("Waiting for bot to be ready before starting departure cleanup loop...")
         await self.wait_until_ready()
 
-    async def on_app_command_error(self, interaction: discord.Interaction, error):
-        await self.send_log(
-            title=f"Command Error: /{interaction.command.name if interaction.command else 'Unknown'}",
-            description=f"```py\n{error}\n```",
-            fields={
-                "User": f"{interaction.user} ({interaction.user.id})",
-                "Channel": interaction.channel.mention if interaction.channel else "DM"
-            },
-            color=0xe74c3c
-        )
 
 
 # Load environment variables

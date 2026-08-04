@@ -53,6 +53,7 @@ class Help(commands.Cog):
         "Commandcog": "⚙️",
         "Eventcog": "📅",
         "MediaLog": "🗄️",
+        "Moderation": "🔨",
         "ImageSpamFilter": "🛡️",
         "Owner": "👑",
         "Utility": "🔧",

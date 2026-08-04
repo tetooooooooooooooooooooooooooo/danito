@@ -123,9 +123,16 @@ class Stats(commands.GroupCog, name="stats", description="Server statistics: rol
         if not interaction.guild:
             await interaction.response.send_message("This only works in a server.", ephemeral=True)
             return
-        await interaction.response.defer()
 
         target_channel = channel or interaction.channel
+        # This command is open to everyone, so it must not become a way to read activity in
+        # channels the caller can't otherwise see.
+        if not target_channel.permissions_for(interaction.user).read_message_history:
+            await interaction.response.send_message(
+                f"❌ You don't have access to {target_channel.mention}.", ephemeral=True)
+            return
+
+        await interaction.response.defer()
         time_threshold = datetime.now(timezone.utc) - timedelta(hours=hours)
 
         try:

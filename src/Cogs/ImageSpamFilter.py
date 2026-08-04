@@ -104,6 +104,7 @@ class ImageSpamFilter(commands.Cog):
         description="Enable / disable the image spam filter"
     )
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
     async def toggleimagespam(self, interaction: discord.Interaction):
         self.enabled = not self.enabled
         status = "**enabled**" if self.enabled else "**disabled**"
@@ -116,6 +117,8 @@ class ImageSpamFilter(commands.Cog):
         name="imagespamstatus",
         description="Check if the image spam filter is currently active"
     )
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
     async def imagespamstatus(self, interaction: discord.Interaction):
         status = "active" if self.enabled else "disabled"
         await interaction.response.send_message(

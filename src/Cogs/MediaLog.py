@@ -481,6 +481,7 @@ class MediaLog(commands.Cog):
                           description="Set the channel where deleted media gets logged")
     @app_commands.describe(channel="Where to post the logs")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def logchannel(self, interaction: discord.Interaction, channel: discord.TextChannel):
         guild = interaction.guild
@@ -520,6 +521,7 @@ class MediaLog(commands.Cog):
 
     @app_commands.command(name="logoff", description="Stop logging deleted media")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def logoff(self, interaction: discord.Interaction):
         await self._db(self.servers.update_one, {"guild_id": interaction.guild.id},
@@ -530,6 +532,7 @@ class MediaLog(commands.Cog):
 
     @app_commands.command(name="logstatus", description="Show the media logging setup")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def logstatus(self, interaction: discord.Interaction):
         guild = interaction.guild

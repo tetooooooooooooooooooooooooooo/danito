@@ -11,9 +11,10 @@ class Utility(commands.Cog):
 
     # ── Sync slash commands ────────────────────────────────────────
     @app_commands.command(name="sync", description="Force-refresh this server's slash commands")
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def sync(self, interaction: discord.Interaction):
-        # Gated only by the bot-wide manage_guild interaction check — any admin in any
-        # server can use this, which matters now that the bot isn't confined to one guild.
         if interaction.guild is None:
             await interaction.response.send_message(
                 "This only works inside a server.", ephemeral=True)
@@ -42,17 +43,10 @@ class Utility(commands.Cog):
     # ── Say ────────────────────────────────────────────────────────
     @app_commands.command(name="say", description="Make the bot send a message")
     @app_commands.describe(message="The message to send")
+    @app_commands.default_permissions(manage_messages=True)
+    @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.guild_only()
     async def say(self, interaction: discord.Interaction, message: str):
-        if not interaction.user.guild_permissions.manage_messages:
-            await interaction.response.send_message(
-                "❌ You need **Manage Messages** permission to use this command.",
-                ephemeral=True
-            )
-            return
-
-        # You can also add: if message is too long / contains @everyone etc.
-        # but keeping it simple for now
-
         try:
             await interaction.channel.send(message)
             await interaction.response.send_message("✅ Message sent.", ephemeral=True)
