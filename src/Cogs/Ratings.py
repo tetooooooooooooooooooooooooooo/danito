@@ -16,6 +16,7 @@ ballot.
 import asyncio
 import datetime
 import re
+from typing import Optional
 
 import discord
 from discord import app_commands
@@ -340,23 +341,51 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
 
     # ── /forcesurvey ─────────────────────────────────────────────────
     @app_commands.command(
-        name="forcesurvey", description="Send today's nudge now instead of waiting for midday"
+        name="forcesurvey", description="Send a nudge now instead of waiting for midday"
     )
+    @app_commands.describe(
+        days="Nudge whoever joined this many days ago. Defaults to 8, the normal schedule.")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
     @app_commands.guild_only()
-    async def force_survey(self, interaction: discord.Interaction):
+    async def force_survey(self, interaction: discord.Interaction,
+                           days: Optional[app_commands.Range[int, 0, 30]] = None):
         await interaction.response.defer(ephemeral=True)
+        target_days = PING_AFTER_DAYS if days is None else days
         try:
-            await self.Client.mention_players()
+            # Scoped to this server, and cleanup is left to the scheduled pass so testing
+            # can't delete anybody's roles as a side effect.
+            summary = await self.Client.mention_players(
+                days=target_days, guild_id=interaction.guild.id, cleanup=False)
         except Exception as e:
             await interaction.followup.send(f"The nudge failed: {e}", ephemeral=True)
             return
-        await interaction.followup.send(
-            f"Done. Anyone who joined {PING_AFTER_DAYS} days ago has been nudged. Groups that "
-            f"were already nudged get skipped, so running this twice won't spam anybody.",
-            ephemeral=True,
-        )
+
+        summary = summary or {}
+        date = summary.get("date", "?")
+        found = summary.get("found", 0)
+        pinged = summary.get("pinged", 0)
+
+        if pinged:
+            body = (f"Nudged **{pinged}** group{'' if pinged == 1 else 's'} who joined on "
+                    f"`{date}`. The ping deletes itself after 2 seconds, so you'll only catch "
+                    f"it if you're watching the channel.")
+        elif found and summary.get("already"):
+            body = (f"Found the group who joined on `{date}`, but they've already been nudged. "
+                    f"Nobody gets pinged twice.")
+        elif found and summary.get("no_channel"):
+            body = (f"Found the group who joined on `{date}`, but I can't reach the ratings "
+                    f"channel. Run `/setchannel` to point me at one.")
+        elif found:
+            body = (f"Found the group who joined on `{date}` but couldn't nudge them. Check the "
+                    f"logs for why.")
+        else:
+            body = (f"Nobody joined on `{date}`, so there was nothing to nudge.\n"
+                    f"That's normal if the bot hasn't been collecting for {target_days} days "
+                    f"yet. Use `/discoveryhelp` to see which groups are queued, or pass "
+                    f"`days:0` to nudge whoever joined today.")
+
+        await interaction.followup.send(body, ephemeral=True)
 
     # ── /discoveryhelp ───────────────────────────────────────────────
     @app_commands.command(

@@ -130,68 +130,101 @@ class Bot(commands.Bot):
         except Exception as e:
             print(f"[LOG ERROR] Failed to send log: {e}")
 
-    async def mention_players(self):
-        print("Mentioning players!")
+    async def mention_players(self, days: int = 8, guild_id: int = None, cleanup: bool = True):
+        """Nudge the cohort that joined `days` ago.
+
+        `guild_id` scopes it to one server. The scheduled midday pass leaves it None so every
+        server gets its nudges, but /forcesurvey passes its own guild: without that, one admin
+        running the command would fire nudges in every server the bot is in.
+
+        Returns a summary so the caller can say what actually happened instead of guessing.
+        """
+        print(f"Mentioning players! (days={days}, guild={guild_id or 'all'})")
         database = Database.get_bot_database(self.MongoClient)
         roles_collection = database["roles"]
         servers_collection = database["servers"]
 
-        wantedDate = (datetime.datetime.now() - datetime.timedelta(days=8)).date()
+        summary = {"date": None, "found": 0, "pinged": 0, "already": 0,
+                   "no_channel": 0, "failed": 0, "cleaned": 0}
 
-        objects_to_mention = roles_collection.find({"date": str(wantedDate)})
+        wantedDate = (datetime.datetime.now() - datetime.timedelta(days=days)).date()
+        summary["date"] = str(wantedDate)
+
+        query = {"date": str(wantedDate)}
+        if guild_id is not None:
+            query["guild_id"] = guild_id
+
+        objects_to_mention = list(roles_collection.find(query))
+        summary["found"] = len(objects_to_mention)
         for obj in objects_to_mention:
-            if "mentioned" not in obj or not obj["mentioned"]:
-                print(f"Found unmentioned role for date {obj['date']} in guild {obj['guild_id']}!")
+            if obj.get("mentioned"):
+                summary["already"] += 1
+                continue
+            print(f"Found unmentioned role for date {obj['date']} in guild {obj['guild_id']}!")
 
-                guild = await self.fetch_guild(obj["guild_id"])
-                if not guild:
-                    print(f"Guild {obj['guild_id']} not found or bot isn't in it.")
-                    continue
+            guild = await self.fetch_guild(obj["guild_id"])
+            if not guild:
+                print(f"Guild {obj['guild_id']} not found or bot isn't in it.")
+                summary["failed"] += 1
+                continue
 
-                server_data = servers_collection.find_one({"guild_id": obj["guild_id"]})
-                if not server_data or "discovery_channel" not in server_data:
-                    print(f'Could not find server data or discovery channel for guild {obj["guild_id"]}')
-                    continue
+            server_data = servers_collection.find_one({"guild_id": obj["guild_id"]})
+            if not server_data or "discovery_channel" not in server_data:
+                print(f'Could not find server data or discovery channel for guild {obj["guild_id"]}')
+                summary["no_channel"] += 1
+                continue
 
-                try:
-                    channel = await guild.fetch_channel(server_data["discovery_channel"])
-                except discord.NotFound:
-                    print(f"Discovery channel {server_data['discovery_channel']} not found.")
-                    continue
-                except discord.Forbidden:
-                    print(f"No permission to access channel {server_data['discovery_channel']}.")
-                    continue
-                except Exception as e:
-                    print(f"Error fetching channel: {e}")
-                    continue
+            try:
+                channel = await guild.fetch_channel(server_data["discovery_channel"])
+            except discord.NotFound:
+                print(f"Discovery channel {server_data['discovery_channel']} not found.")
+                summary["no_channel"] += 1
+                continue
+            except discord.Forbidden:
+                print(f"No permission to access channel {server_data['discovery_channel']}.")
+                summary["no_channel"] += 1
+                continue
+            except Exception as e:
+                print(f"Error fetching channel: {e}")
+                summary["failed"] += 1
+                continue
 
-                if not channel:
-                    continue
+            if not channel:
+                summary["no_channel"] += 1
+                continue
 
-                try:
-                    message = await channel.send(content=f'<@&{obj["role_id"]}>')
-                    await message.delete(delay=2.0)
-                    print(f"Message sent for role {obj['role_id']} in guild {obj['guild_id']}!")
-                except Exception as e:
-                    print(f"Error sending/deleting message: {e}")
-                    continue
+            try:
+                message = await channel.send(content=f'<@&{obj["role_id"]}>')
+                await message.delete(delay=2.0)
+                print(f"Message sent for role {obj['role_id']} in guild {obj['guild_id']}!")
+                summary["pinged"] += 1
+            except Exception as e:
+                print(f"Error sending/deleting message: {e}")
+                summary["failed"] += 1
+                continue
 
-                # Not awaited: pymongo is synchronous and an UpdateResult isn't awaitable.
-                # This used to be `await`ed inside the try above, so it raised TypeError every
-                # time, "mentioned" was never set, and the cohort got re-pinged on every pass
-                # of the 10-minute loop for the whole midday window.
-                try:
-                    roles_collection.update_one(
-                        {"_id": obj["_id"]},
-                        {"$set": {"mentioned": True}}
-                    )
-                except Exception as e:
-                    print(f"Error marking role as mentioned: {e}")
+            # Not awaited: pymongo is synchronous and an UpdateResult isn't awaitable.
+            # This used to be `await`ed inside the try above, so it raised TypeError every
+            # time, "mentioned" was never set, and the cohort got re-pinged on every pass
+            # of the 10-minute loop for the whole midday window.
+            try:
+                roles_collection.update_one(
+                    {"_id": obj["_id"]},
+                    {"$set": {"mentioned": True}}
+                )
+            except Exception as e:
+                print(f"Error marking role as mentioned: {e}")
+
+        if not cleanup:
+            return summary
 
         # Cleanup old roles (9 days)
         oldDate = (datetime.datetime.now() - datetime.timedelta(days=9)).date()
         print(f"Cleaning up roles for date {str(oldDate)}")
-        objects_to_delete = list(roles_collection.find({"date": str(oldDate)}))
+        old_query = {"date": str(oldDate)}
+        if guild_id is not None:
+            old_query["guild_id"] = guild_id
+        objects_to_delete = list(roles_collection.find(old_query))
 
         for obj in objects_to_delete:
             guild = await self.fetch_guild(obj["guild_id"])
@@ -209,10 +242,13 @@ class Bot(commands.Bot):
                 print(f"Error deleting role: {e}")
 
         try:
-            delete_result = roles_collection.delete_many({"date": str(oldDate)})
+            delete_result = roles_collection.delete_many(old_query)
+            summary["cleaned"] = delete_result.deleted_count
             print(f"Deleted {delete_result.deleted_count} old database records.")
         except Exception as e:
             print(f"Error deleting old records: {e}")
+
+        return summary
 
     async def setup_hook(self):
         for ext in self.cogslist:
