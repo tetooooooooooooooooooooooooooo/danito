@@ -45,6 +45,7 @@ class Bot(commands.Bot):
             "Cogs.utility",
             "Cogs.ImageSpamFilter",
             "Cogs.MediaLog",
+            "Cogs.PingLog",
             "Cogs.Moderation",
             "Cogs.owner",
         ]
