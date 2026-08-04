@@ -61,7 +61,13 @@ class Help(commands.Cog):
     def _commands_by_category(self) -> dict:
         by_cat = {}
         for cmd in self.bot.tree.walk_commands():
-            cog_name = cmd.binding.__class__.__name__ if cmd.binding else "Other"
+            # walk_commands() yields Group containers as well as their subcommands. Groups
+            # have no .binding, and listing them would duplicate what their children already
+            # show, so only leaf Commands are collected.
+            if not isinstance(cmd, app_commands.Command):
+                continue
+            binding = getattr(cmd, "binding", None)
+            cog_name = binding.__class__.__name__ if binding else "Other"
             by_cat.setdefault(cog_name, []).append(cmd)
         return by_cat
 
