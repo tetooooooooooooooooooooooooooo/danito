@@ -4,6 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}{{ brand }}{% endblock %}</title>
+  <meta name="theme-color" content="#0c1311">
+  {# Inline so there's no extra request and no binary asset to keep in the repo. #}
+  <link rel="icon" href="data:image/svg+xml,
+    %3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E
+    %3Ccircle cx='16' cy='16' r='16' fill='%230c1311'/%3E
+    %3Ccircle cx='16' cy='16' r='7' fill='%233ddc97'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
@@ -30,6 +36,7 @@
     {% block content %}{% endblock %}
   </main>
 
-  <footer>Changes made here reach the bot within a few seconds.</footer>
+  {# Only meaningful once there's something to change. #}
+  {% if user %}<footer>Changes made here reach the bot within a few seconds.</footer>{% endif %}
 </body>
 </html>
