@@ -302,9 +302,10 @@ def save_guild_settings(guild_id: int):
 
     store.save(guild_id, values)
     flash("Saved. The bot picks this up within a few seconds.")
-    # The moderation log shares a tab with the server log, so it has no pane of its own to
-    # come back to. Without this the save would land on whatever tab is first.
-    anchor = {"modlog": "logging"}.get(section, section)
+    # All four logs share one tab, so three of the sections have no pane of their own to come
+    # back to. Without this a save would land on whatever tab happens to be first.
+    anchor = {"modlog": "logging", "medialog": "logging",
+              "pinglog": "logging"}.get(section, section)
     return redirect(url_for("guild_settings", guild_id=guild_id) + f"#{anchor}")
 
 

@@ -34,7 +34,7 @@ class Bot(commands.Bot):
         #
         # Three of these are privileged and need Discord's written approval past 100 servers,
         # so the list is kept as short as it can be:
-        #   members         - join/leave handling, role.members for nudge reach, /stats scans
+        #   members         - join/leave handling, role.members for reminder reach, /stats scans
         #   message_content - without it Discord strips content *and attachments* from any
         #                     message that doesn't mention the bot, which would break both
         #                     MediaLog and the spam filter
@@ -171,11 +171,11 @@ class Bot(commands.Bot):
             print(f"[LOG ERROR] Failed to send log: {e}")
 
     async def mention_players(self, days: int = 8, guild_id: int = None, cleanup: bool = True):
-        """Nudge the cohort that joined `days` ago.
+        """Remind the cohort that joined `days` ago.
 
         `guild_id` scopes it to one server. The scheduled midday pass leaves it None so every
-        server gets its nudges, but /forcesurvey passes its own guild: without that, one admin
-        running the command would fire nudges in every server the bot is in.
+        server gets its reminders, but /forcesurvey passes its own guild: without that, one admin
+        running the command would fire reminders in every server the bot is in.
 
         Returns a summary so the caller can say what actually happened instead of guessing.
         """
@@ -254,14 +254,14 @@ class Bot(commands.Bot):
                 print(f"Error marking role as mentioned: {e}")
 
             # Stamp the membership spells for this cohort, so /retention can show which
-            # joining groups were nudged and which weren't.
+            # joining groups were reminded and which weren't.
             try:
                 await self._db(
                     database["memberships"].update_many,
                     {"guild_id": obj["guild_id"], "cohort": obj["date"]},
                     {"$set": {"nudged": True}})
             except Exception as e:
-                print(f"Error marking cohort as nudged: {e}")
+                print(f"Error marking cohort as reminded: {e}")
 
         if not cleanup:
             return summary

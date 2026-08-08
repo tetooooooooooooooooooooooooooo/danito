@@ -99,7 +99,7 @@ class Members(commands.Cog, name="Members"):
 
     async def _open_spell(self, member: discord.Member, cohort: str):
         """Record the start of a membership. Their join date doubles as the cohort key, so it
-        lines up with the cohort role and with whatever the nudge later targets."""
+        lines up with the cohort role and with whatever the reminder later targets."""
         try:
             await self._run(self.spells.insert_one, {
                 "guild_id": member.guild.id,
@@ -114,7 +114,7 @@ class Members(commands.Cog, name="Members"):
 
     async def _assign_cohort_role(self, member: discord.Member, today: str):
         """Give the member the role for today's date, creating it if this is the day's first
-        join. Everyone who joins today shares it, which is what lets the nudge target one group
+        join. Everyone who joins today shares it, which is what lets the reminder target one group
         at a time instead of the whole server."""
         roles = self._db["roles"]
 
@@ -253,7 +253,7 @@ class Members(commands.Cog, name="Members"):
                         index[key]["still"] += 1
                     if s.get("nudged"):
                         # Counted rather than flagged: a weekly or monthly bucket spans several
-                        # cohorts, so some of its intake may have been nudged and some not.
+                        # cohorts, so some of its intake may have been reminded and some not.
                         index[key]["nudged"] += 1
             left = s.get("left_at")
             if left is not None:
@@ -328,9 +328,9 @@ class Members(commands.Cog, name="Members"):
             if tally["joined"]:
                 piece += f"  ·  {tally['still']} here ({_pct(tally['still'], tally['joined'])})"
             if tally["nudged"] == tally["joined"] and tally["joined"]:
-                piece += "  · nudged"
+                piece += "  · reminded"
             elif tally["nudged"]:
-                piece += f"  · {tally['nudged']} nudged"
+                piece += f"  · {tally['nudged']} reminded"
             rows.append(piece)
 
         if rows:

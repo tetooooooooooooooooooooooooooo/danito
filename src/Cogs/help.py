@@ -8,14 +8,13 @@ from discord.ext import commands
 CATEGORIES = {
     "Moderation": ("🔨", "Moderation",
                    "Ban, kick, timeout and warn, with every action saved as a numbered case."),
-    "MediaLog": ("🗄️", "Media Logging",
-                 "Logs deleted images, videos and voice memos with the file attached."),
-    "Logging": ("📋", "Server Log",
-                "Deletes, edits, joins, bans, roles and more, wherever you want them."),
-    "Ping Tracking": ("🔔", "Nudge Tracking",
-                      "Records each survey nudge and how many members it reached."),
+    # MediaLog and PingLog still do the work, but all four logs are switched on and off from
+    # the Logging cog now, so those two have no commands of their own to list.
+    "Logging": ("📋", "Logs",
+                "Deletes, edits, joins, bans, roles, voice, deleted files and moderation "
+                "cases, each wherever you want it."),
     "Server Ratings": ("⭐", "Server Ratings",
-                       "Ask members to rate your server, and nudge newcomers to answer."),
+                       "Ask members to rate your server, and remind newcomers to answer."),
     "Stats": ("📊", "Server Stats",
               "Roles, activity, badges, tags and what people are playing."),
     "ImageSpamFilter": ("🛡️", "Spam Filter",

@@ -60,9 +60,8 @@
   ("goodbye",  "🚪", "Goodbye",        settings.goodbye_enabled),
   ("autorole", "🎫", "Autorole",       settings.autorole_enabled and settings.autorole_ids),
   ("panels",   "🎛️", "Role buttons",   panels|length),
-  ("logging",  "📋", "Logs",           settings.logging_enabled or settings.modlog_channel),
-  ("medialog", "🗄️", "Deleted media",  settings.medialog_enabled),
-  ("pinglog",  "🔔", "Nudge tracking", settings.pinglog_enabled),
+  ("logging",  "📋", "Logs",           settings.logging_enabled or settings.modlog_channel
+                                       or settings.medialog_enabled or settings.pinglog_enabled),
   ("survey",   "⭐", "Ratings survey", settings.discovery_channel),
 ] %}
 
@@ -301,34 +300,34 @@
           rather than in both places.</p>
         <button type="submit">Save</button>
       </form>
-    </section>
 
-    <section class="pane" id="medialog">
       <form class="card" method="post"
             action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         <input type="hidden" name="section" value="medialog">
-        {{ head("Deleted media log", "Logs deleted images, videos and voice memos, with the file attached.") }}
+        {{ head("Deleted media", "Keeps the file itself when somebody deletes an image, video or voice memo, not just the filename.") }}
         <label class="check">
           <input type="checkbox" name="medialog_enabled" {% if settings.medialog_enabled %}checked{% endif %}>
-          Log deleted media
+          Keep deleted media
         </label>
         <label>Channel {{ channel_select("medialog_channel", settings.medialog_channel) }}</label>
+        <p class="fine">Separate from the server log above because it re-uploads the actual
+          file. Deleted messages carrying a picture are reported here rather than in both.</p>
         <button type="submit">Save</button>
       </form>
-    </section>
 
-    <section class="pane" id="pinglog">
       <form class="card" method="post"
             action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         <input type="hidden" name="section" value="pinglog">
-        {{ head("Nudge tracking", "Records each survey nudge and how many members it reached.") }}
+        {{ head("Survey reminders", "A record of the reminders sent to new members asking them to rate the server, and how many people each one reached.") }}
         <label class="check">
           <input type="checkbox" name="pinglog_enabled" {% if settings.pinglog_enabled %}checked{% endif %}>
-          Log nudges
+          Record survey reminders
         </label>
         <label>Channel {{ channel_select("pinglog_channel", settings.pinglog_channel) }}</label>
+        <p class="fine">The reminder itself deletes two seconds after it's sent, so this is the
+          only lasting proof it went out.</p>
         <button type="submit">Save</button>
       </form>
     </section>

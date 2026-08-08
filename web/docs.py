@@ -43,29 +43,29 @@ SECTIONS = [
         "setup": [
             "Go to the channel you want the survey to live in and run <code>/setchannel</code>. "
             "That posts a message with buttons from 1 to 10 and marks that channel as the one "
-            "the nudges go to.",
+            "the reminders go to.",
             "That's the whole setup. From then on, everybody who joins gets a hidden role for "
             "the day they arrived, and about a week later their group gets a single ping "
             "pointing them back at the survey.",
         ],
         "notes": [
-            "The nudge deletes itself two seconds after it is sent, so it shows up as a "
+            "The reminder deletes itself two seconds after it is sent, so it shows up as a "
             "notification without leaving a mess in the channel. If you are watching for it "
-            "and blink, you will miss it. Use <code>/trackping</code> to log them instead.",
-            "Each member is nudged once, not repeatedly. Nudging the same people every week "
+            "and blink, you will miss it. Use <code>/logging reminders</code> to record them instead.",
+            "Each member is reminded once, not repeatedly. Reminding the same people every week "
             "would drive off the members you are trying to keep.",
             "Scores are saved one per member. Somebody who taps a second number replaces their "
             "old answer rather than voting twice.",
         ],
         "commands": [
-            ("/setchannel", "", "Post the survey here and use this channel for nudges.",
+            ("/setchannel", "", "Post the survey here and use this channel for reminders.",
              MANAGE_SERVER),
             ("/ratings", "", "The average score, a breakdown, the happy and unhappy split, and "
              "the most recent votes.", MANAGE_SERVER),
             ("/retention", "[period]", "How many new members are still around, grouped hourly, "
              "daily, weekly or monthly.", MANAGE_SERVER),
-            ("/forcesurvey", "[days]", "Send a nudge now instead of waiting for midday. Use "
-             "<code>days:0</code> to nudge whoever joined today, which is how you test it.",
+            ("/forcesurvey", "[days]", "Send a reminder now instead of waiting for midday. Use "
+             "<code>days:0</code> to remind whoever joined today, which is how you test it.",
              MANAGE_SERVER),
             ("/discoveryhelp", "", "Explains the whole loop and shows this server's status.",
              EVERYONE),
@@ -183,7 +183,7 @@ SECTIONS = [
         "blurb": "The usual actions, except every one becomes a numbered case you can look up "
                  "later.",
         "setup": [
-            "Run <code>/modlogchannel</code> and pick a channel. Every action then gets posted "
+            "Run <code>/logging moderation</code> and pick a channel. Every action then gets posted "
             "there with a case number, who did it, who it was done to, and why.",
             "Actions still work without a log channel and are still recorded. They just are "
             "not posted anywhere you can see.",
@@ -223,7 +223,7 @@ SECTIONS = [
              "Manage Channels"),
             ("/lock", "[reason]", "Stop members posting in this channel.", "Manage Channels"),
             ("/unlock", "[reason]", "Let them post again.", "Manage Channels"),
-            ("/modlogchannel", "[channel]",
+            ("/logging moderation", "[channel]",
              "Where cases get posted. Leave the channel out to switch it off.", MANAGE_SERVER),
         ],
     },
@@ -255,12 +255,13 @@ SECTIONS = [
             "The voice log covers joining, leaving and moving between voice channels. Muting, "
             "deafening, streaming and turning a camera on are left out, and so are bots: a "
             "music bot rejoins on every track and would bury everybody else.",
-            "There are two logs and they do different jobs. The <strong>moderation log</strong> "
-            "records punishments handed out with Newt's own commands and gives each one a case "
-            "number you can look up. The <strong>server log</strong> here records everything "
-            "that happens, however it happened, including bans placed straight through "
-            "Discord. Use the moderation log if you want a clean list of what your moderators "
-            "did, and the server log if you want the full picture.",
+            "There are four logs and they all answer to <code>/logging</code>. The "
+            "<strong>server log</strong> records everything that happens, however it happened. "
+            "The <strong>moderation log</strong> records only the punishments handed out with "
+            "Newt's own commands, and gives each one a case number. <strong>Deleted media</strong> "
+            "keeps the actual file when a picture or video is removed. <strong>Survey "
+            "reminders</strong> records the reminders sent to new members and how many people "
+            "each one reached.",
             "With both switched on, a ban placed with <code>/ban</code> is written once as a "
             "numbered case rather than appearing in both. A ban placed through Discord itself "
             "has no case, so the server log records it as normal.",
@@ -287,8 +288,17 @@ SECTIONS = [
              "turn logging off.", MANAGE_SERVER),
             ("/logging event", "<event> <on> [channel]",
              "Switch one kind on or off, or send it somewhere of its own.", MANAGE_SERVER),
-            ("/logging status", "", "What is being recorded, and where each kind goes.",
+            ("/logging moderation", "[channel]",
+             "Where numbered moderation cases go. Leave the channel out to switch it off.",
              MANAGE_SERVER),
+            ("/logging media", "[channel]",
+             "Where deleted images, videos and voice memos are kept, with the file. Leave the "
+             "channel out to switch it off.", MANAGE_SERVER),
+            ("/logging reminders", "[channel]",
+             "Where survey reminders are recorded. Leave the channel out to switch it off.",
+             MANAGE_SERVER),
+            ("/logging status", "",
+             "All four logs at once: what each records and where it goes.", MANAGE_SERVER),
         ],
     },
     {
@@ -297,8 +307,8 @@ SECTIONS = [
         "title": "Deleted media logging",
         "blurb": "When an image, video or voice memo is deleted, you get the file itself.",
         "setup": [
-            "Run <code>/logchannel</code> and pick where the logs should go. That is the only "
-            "step.",
+            "Run <code>/logging media</code> and pick where the files should go. That is the "
+            "only step.",
         ],
         "notes": [
             "Discord destroys a file the moment its message is deleted, so the bot downloads a "
@@ -316,31 +326,34 @@ SECTIONS = [
             "leaves no audit entry at all, so that case always reads as unknown.",
         ],
         "commands": [
-            ("/logchannel", "<channel>", "Where deleted media gets logged.", MANAGE_SERVER),
-            ("/logoff", "", "Stop logging.", MANAGE_SERVER),
-            ("/logstatus", "", "What is configured, plus a permission check.", MANAGE_SERVER),
+            ("/logging media", "[channel]",
+             "Where deleted media is kept. Leave the channel out to switch it off.",
+             MANAGE_SERVER),
+            ("/logging status", "", "What is configured, plus a permission check.",
+             MANAGE_SERVER),
         ],
     },
     {
         "id": "trackping",
         "icon": "🔔",
-        "title": "Nudge tracking",
-        "blurb": "Because the nudge deletes itself, this is the only lasting record that it "
-                 "fired.",
+        "title": "Survey reminders",
+        "blurb": "Because the reminder deletes itself two seconds after it is sent, this is the "
+                 "only lasting record that it went out.",
         "setup": [
-            "Run <code>/trackping</code> with a channel. Every nudge then gets logged with "
-            "which joining group it targeted and how many members it reached.",
+            "Run <code>/logging reminders</code> with a channel. Every reminder then gets "
+            "recorded with which joining group it went to and how many members it reached.",
         ],
         "notes": [
-            "Only this bot's own nudges are logged. Ordinary pings from members are not "
-            "tracked.",
-            "Run <code>/trackping</code> on its own, with no channel, for a summary of the last "
-            "seven days.",
+            "Only this bot's own reminders are recorded. Ordinary pings from members are not.",
+            "<code>/logging status</code> shows a summary of the last 30 days alongside the "
+            "other logs.",
         ],
         "commands": [
-            ("/trackping", "[channel]",
-             "Set the log channel, or leave it out to see recent activity.", MANAGE_SERVER),
-            ("/trackpingoff", "", "Stop logging nudges.", MANAGE_SERVER),
+            ("/logging reminders", "[channel]",
+             "Where reminders are recorded. Leave the channel out to switch it off.",
+             MANAGE_SERVER),
+            ("/logging status", "", "Recent reminders and how many they reached.",
+             MANAGE_SERVER),
         ],
     },
     {
@@ -400,14 +413,14 @@ TROUBLESHOOTING = [
      "The bot's role has to sit above the member you are actioning. Move it up in Server "
      "Settings, then Roles."),
     ("Deleted files are not being kept",
-     "Check <code>/logstatus</code>. The usual causes are a missing permission in the log "
+     "Check <code>/logging status</code>. The usual causes are a missing permission in the log "
      "channel, a file over 8MB, or a message posted before the bot last restarted."),
     ("The mod log says the deleter is unknown",
      "Either the bot is missing View Audit Log, or the person deleted their own message. "
      "Discord does not write an audit entry for that, so it genuinely cannot be known."),
-    ("/forcesurvey says there was nobody to nudge",
+    ("/forcesurvey says there was nobody to remind",
      "It looks for people who joined exactly eight days ago. If the bot has not been in your "
-     "server that long there is nobody to nudge yet. Use <code>days:0</code> to test it against "
+     "server that long there is nobody to remind yet. Use <code>days:0</code> to test it against "
      "whoever joined today."),
     ("A change on the dashboard has not taken effect",
      "Give it a few seconds. The bot checks for changes every ten seconds rather than on every "

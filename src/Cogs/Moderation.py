@@ -2,7 +2,7 @@
 
 Every action that touches a member creates a numbered case in Mongo, so moderators can see
 whether someone is a repeat offender rather than reacting to each incident in isolation.
-Cases are also posted to a mod-log channel set with /modlogchannel.
+Cases are also posted to a mod-log channel, set with /logging moderation.
 
 Two guards run before any action, because skipping either produces confusing Discord API
 errors instead of useful messages:
@@ -663,33 +663,8 @@ class Moderation(commands.Cog):
             embed.set_footer(text=f"Showing 15 of {len(rows)}")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
-    # ── /modlogchannel ───────────────────────────────────────────────
-    @app_commands.command(name="modlogchannel",
-                          description="Set where moderation cases get posted")
-    @app_commands.describe(channel="Channel for the mod log (omit to disable)")
-    @app_commands.default_permissions(manage_guild=True)
-    @app_commands.checks.has_permissions(manage_guild=True)
-    @app_commands.guild_only()
-    async def modlogchannel(self, interaction: discord.Interaction,
-                            channel: discord.TextChannel = None):
-        guild = interaction.guild
-        if channel is None:
-            await GuildConfig.update(self.bot, guild.id, unset={"modlog_channel": ""})
-            return await interaction.response.send_message(
-                "🔴 Mod logging is off. Actions still work and are still recorded, they just "
-                "won't be posted anywhere.", ephemeral=True)
-
-        perms = channel.permissions_for(guild.me)
-        missing = [n for n, ok in (("View Channel", perms.view_channel),
-                                   ("Send Messages", perms.send_messages),
-                                   ("Embed Links", perms.embed_links)) if not ok]
-        if missing:
-            return await self._fail(
-                interaction, f"I'm missing **{', '.join(missing)}** in {channel.mention}.")
-
-        await GuildConfig.update(self.bot, guild.id, {"modlog_channel": channel.id})
-        await interaction.response.send_message(
-            f"✅ Moderation cases will be posted to {channel.mention}.", ephemeral=True)
+    # Choosing the channel lives in the Logging cog, under /logging moderation, alongside the
+    # other three logs. The cases themselves are still this cog's job.
 
 
 async def setup(bot: commands.Bot):

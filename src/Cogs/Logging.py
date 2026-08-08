@@ -23,7 +23,10 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+import Database
 import GuildConfig
+
+REMINDER_DAYS = 30          # how far back /logging status looks for survey reminders
 
 # (key, icon, label). The keys are stored in the database and are mirrored in the dashboard's
 # store.LOG_EVENTS; a test asserts the two lists agree, because a typo here would silently
@@ -651,49 +654,224 @@ class Logging(commands.Cog, name="Logging"):
         await interaction.response.send_message(
             f"**{event.name}** is {'on, going to ' + where if on else 'off'}.", ephemeral=True)
 
-    @logging.command(name="status", description="See what is being logged and where")
-    @app_commands.checks.has_permissions(manage_guild=True)
-    async def status(self, interaction: discord.Interaction):
-        cfg = await GuildConfig.get(self.bot, interaction.guild.id)
-        events = cfg.get("log_events") or {}
-        main_id = cfg.get("log_channel")
-        main = interaction.guild.get_channel(int(main_id)) if main_id else None
+    # ── the other three logs ─────────────────────────────────────────
+    # These used to be /logchannel, /modlogchannel and /trackping, spread across three cogs
+    # with three different naming conventions. Somebody typing /log got a menu of unrelated
+    # things and no way to tell which was which, so all four logs answer to /logging now.
+    # The settings still belong to the cogs that act on them; only the switches moved.
+    @staticmethod
+    def _missing(guild: discord.Guild, channel: discord.TextChannel,
+                 files: bool = False) -> list:
+        perms = channel.permissions_for(guild.me)
+        checks = [("View Channel", perms.view_channel),
+                  ("Send Messages", perms.send_messages),
+                  ("Embed Links", perms.embed_links)]
+        if files:
+            checks.append(("Attach Files", perms.attach_files))
+        return [name for name, ok in checks if not ok]
 
-        embed = discord.Embed(
-            title="Server log",
-            color=GREEN if cfg.get("logging_enabled") else BLURPLE)
-        if not cfg.get("logging_enabled"):
-            embed.description = ("**Off.** Run `/logging channel` and pick somewhere for it to "
-                                 "go, and everything gets switched on at once.")
-            await interaction.response.send_message(embed=embed, ephemeral=True)
+    @logging.command(name="media",
+                     description="Where deleted images, videos and voice memos are kept")
+    @app_commands.describe(channel="Where to post them. Leave blank to switch this off.")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def media(self, interaction: discord.Interaction,
+                    channel: Optional[discord.TextChannel] = None):
+        if channel is None:
+            await GuildConfig.update(self.bot, interaction.guild.id,
+                                     {"medialog_enabled": False})
+            await interaction.response.send_message(
+                "Deleted media logging is off. Give this command a channel to switch it back "
+                "on.", ephemeral=True)
             return
 
-        embed.description = (f"Everything goes to {main.mention} unless it says otherwise."
-                             if main else
-                             "**No main channel set.** Only events with a channel of their own "
-                             "are being recorded.")
+        missing = self._missing(interaction.guild, channel, files=True)
+        if missing:
+            await interaction.response.send_message(
+                f"I'm missing **{', '.join(missing)}** in {channel.mention}. Grant those and "
+                f"try again.", ephemeral=True)
+            return
 
-        on_lines, off_lines = [], []
-        for key, icon, label in EVENTS:
-            setting = events.get(key) or {}
-            if not setting.get("on"):
-                off_lines.append(f"{icon} {label}")
-                continue
-            own = setting.get("channel")
-            channel = interaction.guild.get_channel(int(own)) if own else None
-            if own and channel is None:
-                on_lines.append(f"{icon} {label} · ⚠️ its channel is gone")
-            elif channel is not None:
-                on_lines.append(f"{icon} {label} · {channel.mention}")
-            else:
-                on_lines.append(f"{icon} {label}")
-
-        embed.add_field(name=f"Recording ({len(on_lines)})",
-                        value="\n".join(on_lines) or "*nothing*", inline=False)
-        if off_lines:
-            embed.add_field(name=f"Not recording ({len(off_lines)})",
-                            value="\n".join(off_lines), inline=False)
+        await GuildConfig.update(self.bot, interaction.guild.id,
+                                 {"medialog_enabled": True, "medialog_channel": channel.id})
+        embed = discord.Embed(
+            title="Deleted media log is on", color=GREEN,
+            description=f"Deleted images, video and audio go to {channel.mention} with the "
+                        f"file itself attached, from members and bots alike.")
+        if not interaction.guild.me.guild_permissions.view_audit_log:
+            embed.add_field(
+                name="Worth knowing",
+                value="I don't have **View Audit Log**, so \"deleted by\" will always say "
+                      "unknown. Grant it if you want to see who removed something.",
+                inline=False)
+        embed.set_footer(text="Coverage starts now. Files posted before this aren't kept.")
         await interaction.response.send_message(embed=embed, ephemeral=True)
+
+    @logging.command(name="moderation",
+                     description="Where numbered moderation cases are posted")
+    @app_commands.describe(channel="Where to post them. Leave blank to switch this off.")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def moderation(self, interaction: discord.Interaction,
+                         channel: Optional[discord.TextChannel] = None):
+        if channel is None:
+            await GuildConfig.update(self.bot, interaction.guild.id,
+                                     unset={"modlog_channel": ""})
+            await interaction.response.send_message(
+                "The moderation log is off. Actions still work and are still recorded against "
+                "each member, they just won't be posted anywhere.", ephemeral=True)
+            return
+
+        missing = self._missing(interaction.guild, channel)
+        if missing:
+            await interaction.response.send_message(
+                f"I'm missing **{', '.join(missing)}** in {channel.mention}. Grant those and "
+                f"try again.", ephemeral=True)
+            return
+
+        await GuildConfig.update(self.bot, interaction.guild.id,
+                                 {"modlog_channel": channel.id})
+        await interaction.response.send_message(
+            f"Moderation cases will be posted to {channel.mention}, each with its own number "
+            f"so you can look it up with `/modlogs`.", ephemeral=True)
+
+    @logging.command(name="reminders",
+                     description="Where the survey reminders sent to new members are recorded")
+    @app_commands.describe(channel="Where to post them. Leave blank to switch this off.")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def reminders(self, interaction: discord.Interaction,
+                        channel: Optional[discord.TextChannel] = None):
+        if channel is None:
+            await GuildConfig.update(self.bot, interaction.guild.id,
+                                     {"pinglog_enabled": False})
+            await interaction.response.send_message(
+                "Survey reminder logging is off. The ones already recorded are still there.",
+                ephemeral=True)
+            return
+
+        missing = self._missing(interaction.guild, channel)
+        if missing:
+            await interaction.response.send_message(
+                f"I'm missing **{', '.join(missing)}** in {channel.mention}. Grant those and "
+                f"try again.", ephemeral=True)
+            return
+
+        await GuildConfig.update(self.bot, interaction.guild.id,
+                                 {"pinglog_enabled": True, "pinglog_channel": channel.id})
+        cfg = await GuildConfig.get(self.bot, interaction.guild.id)
+        note = ("" if cfg.get("discovery_channel") else
+                "\n\nYou haven't run `/setchannel` yet, so there are no reminders to record. "
+                "Set that up first.")
+        await interaction.response.send_message(
+            f"Survey reminders will be recorded in {channel.mention}, with the group they went "
+            f"to, how many members they reached and when.\nThe reminder itself deletes after "
+            f"two seconds, so this is the only lasting record of it.{note}", ephemeral=True)
+
+    # ── /logging status ──────────────────────────────────────────────
+    async def _reminder_summary(self, guild_id: int) -> Optional[str]:
+        """A line or two about recent survey reminders, or None if there's nothing to say."""
+        try:
+            since = (datetime.datetime.now(datetime.timezone.utc)
+                     - datetime.timedelta(days=REMINDER_DAYS))
+            events = await asyncio.to_thread(lambda: list(
+                Database.get_bot_database(self.bot.MongoClient)["ping_events"].find(
+                    {"guild_id": guild_id, "created_at": {"$gte": since}})))
+        except Exception as e:
+            print(f"[Logging] couldn't read reminder history: {e}")
+            return None
+        if not events:
+            return None
+
+        reach = sum(e.get("reach", 0) for e in events)
+        lines = [f"**{len(events)}** sent in the last {REMINDER_DAYS} days, reaching "
+                 f"**{reach}** members"]
+        recent = sorted((e for e in events
+                         if isinstance(e.get("created_at"), datetime.datetime)),
+                        key=lambda e: e["created_at"], reverse=True)[:3]
+        for e in recent:
+            when = int(e["created_at"].replace(
+                tzinfo=datetime.timezone.utc).timestamp())
+            lines.append(f"`{e.get('cohort', '?')}` reached {e.get('reach', 0)} · <t:{when}:R>")
+        return "\n".join(lines)
+
+    @logging.command(name="status",
+                     description="Every log, what it records and where it goes")
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def status(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        cfg = await GuildConfig.get(self.bot, guild.id)
+
+        def channel_of(key):
+            cid = cfg.get(key)
+            return guild.get_channel(int(cid)) if cid else None
+
+        embed = discord.Embed(title=f"Logs in {guild.name}", color=BLURPLE,
+                              timestamp=discord.utils.utcnow())
+
+        # ── the server log, event by event ──
+        events = cfg.get("log_events") or {}
+        main = channel_of("log_channel")
+        if not cfg.get("logging_enabled"):
+            embed.add_field(
+                name="📋 Server log",
+                value="**Off.** `/logging setup` builds the channels and switches it all on, "
+                      "or `/logging channel` if you'd rather pick one yourself.",
+                inline=False)
+        else:
+            on_lines, off_lines = [], []
+            for key, icon, label in EVENTS:
+                setting = events.get(key) or {}
+                if not setting.get("on"):
+                    off_lines.append(label)
+                    continue
+                own = setting.get("channel")
+                where = guild.get_channel(int(own)) if own else None
+                if own and where is None:
+                    on_lines.append(f"{icon} {label} · ⚠️ its channel is gone")
+                elif where is not None:
+                    on_lines.append(f"{icon} {label} · {where.mention}")
+                else:
+                    on_lines.append(f"{icon} {label}")
+
+            heading = (f"Everything goes to {main.mention} unless it says otherwise."
+                       if main else
+                       "No shared channel, so only events with one of their own are recorded.")
+            embed.add_field(
+                name=f"📋 Server log · {len(on_lines)} of {len(EVENTS)} on",
+                value=(heading + "\n" + "\n".join(on_lines))[:1024], inline=False)
+            if off_lines:
+                embed.add_field(name="Not recording",
+                                value=_trim(", ".join(off_lines), 1000), inline=False)
+
+        # ── the three that live elsewhere ──
+        modlog = channel_of("modlog_channel")
+        embed.add_field(
+            name="🔨 Moderation log",
+            value=(f"Numbered cases go to {modlog.mention}." if modlog else
+                   "**Off.** `/logging moderation` switches it on."),
+            inline=False)
+
+        media = channel_of("medialog_channel")
+        media_on = bool(cfg.get("medialog_enabled") and media)
+        embed.add_field(
+            name="🗄️ Deleted media",
+            value=(f"Files go to {media.mention} with the picture attached." if media_on else
+                   "**Off.** `/logging media` switches it on."),
+            inline=False)
+
+        pings = channel_of("pinglog_channel")
+        pings_on = bool(cfg.get("pinglog_enabled") and pings)
+        value = (f"Recorded in {pings.mention}." if pings_on else
+                 "**Off.** `/logging reminders` switches it on.")
+        summary = await self._reminder_summary(guild.id) if pings_on else None
+        if summary:
+            value += "\n" + summary
+        elif pings_on:
+            value += ("\nNothing yet. They go out around midday to whoever joined 8 days "
+                      "earlier. `/forcesurvey days:0` sends one now.")
+        embed.add_field(name="⭐ Survey reminders", value=value[:1024], inline=False)
+
+        embed.set_footer(text="Change any of it here or on the dashboard.")
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
 
 async def setup(bot: commands.Bot):

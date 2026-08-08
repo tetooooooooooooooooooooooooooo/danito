@@ -1,4 +1,4 @@
-"""Server ratings, plus the nudges that get people to leave one.
+"""Server ratings, plus the reminders that get people to leave one.
 
 The loop, spread across three places:
 
@@ -46,7 +46,7 @@ def bar(count: int, biggest: int, width: int = 12) -> str:
 
 
 class ServerRatings(commands.Cog, name="Server Ratings"):
-    """Collects member ratings of your server and nudges newcomers to leave one."""
+    """Collects member ratings of your server and reminders newcomers to leave one."""
 
     def __init__(self, client: commands.Bot):
         self.Client = client
@@ -225,7 +225,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
 
     # ── /setchannel ──────────────────────────────────────────────────
     @app_commands.command(
-        name="setchannel", description="Post the rating survey here and use this channel for nudges"
+        name="setchannel", description="Post the rating survey here and use this channel for reminders"
     )
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -241,7 +241,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             {"discovery_channel": interaction.channel.id, "discovery_message": message.id})
         await interaction.response.send_message(
             f"Survey posted in {interaction.channel.mention}. Members who joined "
-            f"{PING_AFTER_DAYS} days ago will get a quiet nudge to come and rate the server.\n"
+            f"{PING_AFTER_DAYS} days ago will get a quiet reminder to come and rate the server.\n"
             f"Use `/ratings` to see the scores, or `/discoveryhelp` for how the whole thing works.",
             ephemeral=True,
         )
@@ -278,7 +278,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             embed.description = (
                 "No ratings yet.\n\n"
                 + ("The survey is up, so this will fill in as people vote. Members who joined "
-                   f"{PING_AFTER_DAYS} days ago get nudged to come and rate."
+                   f"{PING_AFTER_DAYS} days ago get reminded to come and rate."
                    if configured else
                    "Run `/setchannel` in the channel where you want the survey to live.")
             )
@@ -334,10 +334,10 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
 
     # ── /forcesurvey ─────────────────────────────────────────────────
     @app_commands.command(
-        name="forcesurvey", description="Send a nudge now instead of waiting for midday"
+        name="forcesurvey", description="Send a reminder now instead of waiting for midday"
     )
     @app_commands.describe(
-        days="Nudge whoever joined this many days ago. Defaults to 8, the normal schedule.")
+        days="Remind whoever joined this many days ago. Defaults to 8, the normal schedule.")
     # Per guild: this pings real people, so two admins shouldn't be able to double it up.
     @app_commands.checks.cooldown(1, 60.0, key=lambda i: i.guild_id)
     @app_commands.default_permissions(manage_guild=True)
@@ -353,7 +353,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             summary = await self.Client.mention_players(
                 days=target_days, guild_id=interaction.guild.id, cleanup=False)
         except Exception as e:
-            await interaction.followup.send(f"The nudge failed: {e}", ephemeral=True)
+            await interaction.followup.send(f"The reminder failed: {e}", ephemeral=True)
             return
 
         summary = summary or {}
@@ -362,30 +362,30 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
         pinged = summary.get("pinged", 0)
 
         if pinged:
-            body = (f"Nudged **{pinged}** group{'' if pinged == 1 else 's'} who joined on "
+            body = (f"Reminded **{pinged}** group{'' if pinged == 1 else 's'} who joined on "
                     f"`{date}`. The ping deletes itself after 2 seconds, so you'll only catch "
                     f"it if you're watching the channel.")
         elif found and summary.get("already"):
-            body = (f"Found the group who joined on `{date}`, but they've already been nudged. "
+            body = (f"Found the group who joined on `{date}`, but they've already been reminded. "
                     f"Nobody gets pinged twice.")
         elif found and summary.get("no_channel"):
             body = (f"Found the group who joined on `{date}`, but I can't reach the ratings "
                     f"channel. Run `/setchannel` to point me at one.")
         elif found:
-            body = (f"Found the group who joined on `{date}` but couldn't nudge them. Check the "
+            body = (f"Found the group who joined on `{date}` but couldn't remind them. Check the "
                     f"logs for why.")
         else:
-            body = (f"Nobody joined on `{date}`, so there was nothing to nudge.\n"
+            body = (f"Nobody joined on `{date}`, so there was nothing to remind.\n"
                     f"That's normal if the bot hasn't been collecting for {target_days} days "
                     f"yet. Use `/discoveryhelp` to see which groups are queued, or pass "
-                    f"`days:0` to nudge whoever joined today.")
+                    f"`days:0` to remind whoever joined today.")
 
         await interaction.followup.send(body, ephemeral=True)
 
     # ── /discoveryhelp ───────────────────────────────────────────────
     @app_commands.command(
         name="discoveryhelp",
-        description="How server ratings and the retention nudges work",
+        description="How server ratings and the retention reminders work",
     )
     @app_commands.guild_only()
     async def discoveryhelp(self, interaction: discord.Interaction):
@@ -405,7 +405,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
         embed = discord.Embed(
             title="Server Ratings",
             description="Asks your members how they're finding the server, and gives people who "
-                        "joined a week ago a quiet nudge to come and answer.",
+                        "joined a week ago a quiet reminder to come and answer.",
             color=COLOR_INFO,
             timestamp=discord.utils.utcnow(),
         )
@@ -433,7 +433,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             value=(
                 "Most people decide whether a server is worth sticking with in their first "
                 "couple of weeks. Asking for a score right at that point tells you what's "
-                "actually landing, and the nudge itself pulls quiet members back in.\n\n"
+                "actually landing, and the reminder itself pulls quiet members back in.\n\n"
                 "Retention is also one of the things Discord weighs up when deciding which "
                 "servers to surface in Server Discovery, so keeping people around genuinely "
                 "helps your chances of getting listed."
@@ -467,12 +467,12 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
                 ping_on = joined + datetime.timedelta(days=PING_AFTER_DAYS)
                 days = (ping_on - today).days
                 when = "today" if days == 0 else (f"in {days} days" if days > 0 else "overdue")
-                next_up.append(f"joined `{c['date']}`, nudge {when}")
+                next_up.append(f"joined `{c['date']}`, reminded {when}")
 
             status = (f"**Running** in {channel.mention}\n"
                       f"{rating_count} {'rating' if rating_count == 1 else 'ratings'} collected, "
                       f"{len(pending)} group{'' if len(pending) == 1 else 's'} waiting to be "
-                      f"nudged")
+                      f"reminded")
             if next_up:
                 status += "\n\n" + "\n".join(f"-# {line}" for line in next_up[:5])
 
