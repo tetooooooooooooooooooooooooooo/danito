@@ -130,21 +130,39 @@
   /* ── all on / all off for the log events ─────────────────────────── */
   /* Twelve toggles is a lot of clicking to get to "record everything", which is what most
      people want. The buttons only exist when this script runs, so nothing is lost without it. */
+  /* Setting .checked in code doesn't fire change, and the rows above listen for it, so the
+     event is dispatched by hand or the settings stay revealed for rows now switched off. */
+  var setAll = function (boxes, on) {
+    boxes.forEach(function (box) {
+      box.checked = on;
+      box.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  };
+
   document.querySelectorAll("[data-log-all]").forEach(function (button) {
     button.addEventListener("click", function () {
-      var on = button.getAttribute("data-log-all") === "1";
-      var rows = button.closest("form").querySelectorAll(".logrow input[type=checkbox]");
-      rows.forEach(function (box) { box.checked = on; });
+      setAll(button.closest("form").querySelectorAll(".logrow input[type=checkbox]"),
+             button.getAttribute("data-log-all") === "1");
     });
+  });
+
+  /* ── settings that only appear once their row is on ──────────────── */
+  /* A row's own controls are irrelevant until you switch it on, and thirteen log events or
+     nine automod rules with every box showing at once is a wall. The markup keeps them, so
+     with the script off you get the full form rather than settings you can't reach. */
+  document.querySelectorAll("[data-reveals]").forEach(function (row) {
+    var box = row.querySelector("input[type=checkbox]");
+    if (!box) return;
+    var sync = function () { row.classList.toggle("on", box.checked); };
+    box.addEventListener("change", sync);
+    sync();
   });
 
   /* Automod only gets an "all off", deliberately. Switching every filter on at once is how a
      server ends up deleting its own moderators' messages. */
   document.querySelectorAll("[data-am-all]").forEach(function (button) {
     button.addEventListener("click", function () {
-      button.closest("form")
-        .querySelectorAll(".amrow input[type=checkbox]")
-        .forEach(function (box) { box.checked = false; });
+      setAll(button.closest("form").querySelectorAll(".amrow input[type=checkbox]"), false);
     });
   });
 

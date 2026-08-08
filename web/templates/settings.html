@@ -51,19 +51,38 @@
   {% if limit %}<p class="fine">Up to {{ limit }}.</p>{% endif %}
 {% endmacro %}
 
+{# Ticking things off a list, rather than a multi-select nobody knows you Ctrl-click. #}
+{% macro tick_list(name, items, chosen, swatch=false, hash=false) %}
+  <div class="rolelist short">
+    {% for item in items %}
+      <div class="rolerow">
+        <label class="pick">
+          <input type="checkbox" name="{{ name }}" value="{{ item.id }}"
+            {% if item.id|int in chosen %}checked{% endif %}>
+          {% if swatch %}
+            <span class="swatch" {% if item.colour %}style="background:{{ item.colour }}"{% endif %}></span>
+          {% endif %}
+          <span class="rolename">{% if hash %}#{% endif %}{{ item.name }}</span>
+        </label>
+      </div>
+    {% else %}
+      <p class="fine">Nothing to pick from.</p>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
 {% block content %}
 {#- The last item of each row is whether that feature is actually doing something, which is
     what puts a dot beside it in the sidebar. Eight cards on one page was a wall; this way a
     server owner can see at a glance what they have switched on. -#}
 {% set tabs = [
-  ("welcome",  "👋", "Welcome",        settings.welcome_enabled),
-  ("goodbye",  "🚪", "Goodbye",        settings.goodbye_enabled),
-  ("autorole", "🎫", "Autorole",       settings.autorole_enabled and settings.autorole_ids),
-  ("panels",   "🎛️", "Role buttons",   panels|length),
-  ("automod",  "🛡️", "Automod",        (settings.automod or {}).get('enabled')),
-  ("logging",  "📋", "Logs",           settings.logging_enabled or settings.modlog_channel
-                                       or settings.medialog_enabled or settings.pinglog_enabled),
-  ("survey",   "⭐", "Ratings survey", settings.discovery_channel),
+  ("greetings", "👋", "Greetings", settings.welcome_enabled or settings.goodbye_enabled),
+  ("roles",     "🎭", "Roles",     (settings.autorole_enabled and settings.autorole_ids)
+                                   or panels|length),
+  ("automod",   "🛡️", "Automod",   (settings.automod or {}).get('enabled')),
+  ("logging",   "📋", "Logs",      settings.logging_enabled or settings.modlog_channel
+                                   or settings.medialog_enabled or settings.pinglog_enabled),
+  ("survey",    "⭐", "Ratings",   settings.discovery_channel),
 ] %}
 
 <p><a class="fine" href="{{ url_for('servers') }}">&larr; All servers</a></p>
@@ -86,7 +105,7 @@
   </nav>
 
   <div class="panes">
-    <section class="pane" id="welcome">
+    <section class="pane" id="greetings">
       <form class="card" method="post"
             action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -110,9 +129,7 @@
           <code>{server}</code> <code>{count}</code> <code>{ordinal}</code>.</p>
         <button type="submit">Save</button>
       </form>
-    </section>
 
-    <section class="pane" id="goodbye">
       <form class="card" method="post"
             action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -135,7 +152,7 @@
       </form>
     </section>
 
-    <section class="pane" id="autorole">
+    <section class="pane" id="roles">
       <form class="card" method="post"
             action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
@@ -149,9 +166,7 @@
         {{ role_list("autorole_ids", chosen, limit=max_autoroles) }}
         <button type="submit">Save</button>
       </form>
-    </section>
 
-    <section class="pane" id="panels">
       <div class="card">
         {{ head("Role buttons", "A message people click to give themselves roles. Pick the roles, and the bot posts it and keeps it up to date.") }}
 
@@ -247,10 +262,12 @@
           <button type="button" class="tiny" data-am-all="0">All off</button>
         </div>
 
+        {#- Each rule's settings stay out of sight until it's switched on. Nine rules with
+            every box showing at once is a wall of controls that mostly don't apply. -#}
         <div class="logrows">
           {% for key, icon, label, blurb, fields in automod_rules %}
             {% set r = amrules.get(key) or {} %}
-            <div class="logrow amrow">
+            <div class="logrow amrow" data-reveals>
               <label class="pick">
                 <input type="checkbox" name="am_on_{{ key }}" {% if r.on %}checked{% endif %}>
                 <span class="lg-icon" aria-hidden="true">{{ icon }}</span>
@@ -260,7 +277,7 @@
                 </span>
               </label>
 
-              <div class="amset">
+              <div class="amset when-on">
                 {% for name, flabel, low, high in fields %}
                   <label class="num">{{ flabel }}
                     <input type="number" name="am_{{ key }}_{{ name }}"
@@ -275,27 +292,25 @@
                   {% endfor %}
                 </select>
               </div>
-            </div>
 
-            {# The two rules that need a list of their own get a box under the row. #}
-            {% if key == 'words' %}
-              <div class="logrow sub">
-                <label>Words to block
+              {# The two rules that need a list of their own keep it inside the row, so it
+                 appears and disappears with the rule rather than floating underneath. #}
+              {% if key == 'words' %}
+                <label class="amsub when-on">Words to block
                   <textarea name="am_words_list" rows="2"
-                    placeholder="one per line, or separated by commas">{{ (r.list or [])|join(', ') }}</textarea>
-                  <span class="lg-blurb">Up to {{ 100 }}. Matched as whole words only.</span>
+                    placeholder="nitro, free robux">{{ (r.list or [])|join(', ') }}</textarea>
+                  <span class="lg-blurb">Separate with commas. Matched as whole words, so a
+                    short one won't eat the longer words containing it.</span>
                 </label>
-              </div>
-            {% elif key == 'links' %}
-              <div class="logrow sub">
-                <label>Sites to allow
+              {% elif key == 'links' %}
+                <label class="amsub when-on">Sites to allow
                   <textarea name="am_links_allow" rows="2"
                     placeholder="youtube.com, tenor.com">{{ (r.allow or [])|join(', ') }}</textarea>
                   <span class="lg-blurb">Subdomains count too, so one entry covers a whole
-                    site. Leave empty to block every link.</span>
+                    site. Leave it empty to block every link.</span>
                 </label>
-              </div>
-            {% endif %}
+              {% endif %}
+            </div>
           {% endfor %}
         </div>
 
@@ -309,41 +324,31 @@
           Anyone who can manage messages
         </label>
 
+        {% set chosen_roles = (am.exempt_roles or [])|map('int')|list %}
+        {% set chosen_chans = (am.exempt_channels or [])|map('int')|list %}
         <div class="row">
-          <label>Roles
-            {% set chosen_roles = (am.exempt_roles or [])|map('int')|list %}
-            <select name="automod_exempt_roles" multiple size="5">
-              {% for r in roles %}
-                <option value="{{ r.id }}"
-                  {% if r.id|int in chosen_roles %}selected{% endif %}>{{ r.name }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          <label>Channels
-            {% set chosen_chans = (am.exempt_channels or [])|map('int')|list %}
-            <select name="automod_exempt_channels" multiple size="5">
-              {% for c in channels %}
-                <option value="{{ c.id }}"
-                  {% if c.id|int in chosen_chans %}selected{% endif %}>#{{ c.name }}</option>
-              {% endfor %}
-            </select>
-          </label>
+          <div>
+            <span class="mini-head">Roles</span>
+            {{ tick_list("automod_exempt_roles", roles, chosen_roles, swatch=true) }}
+          </div>
+          <div>
+            <span class="mini-head">Channels</span>
+            {{ tick_list("automod_exempt_channels", channels, chosen_chans, hash=true) }}
+          </div>
         </div>
-        <p class="fine">Hold Ctrl, or Cmd on a Mac, to pick more than one.</p>
 
-        <div class="row">
-          <label>Timeout length, in minutes
-            <input type="number" name="automod_timeout" min="1" max="10080"
-              value="{{ am.get('timeout_minutes', 10) }}">
-          </label>
-          <label class="check standalone">
-            <input type="checkbox" name="automod_notify"
-              {% if am.get('notify', True) %}checked{% endif %}>
-            Say why in the channel
-          </label>
-        </div>
-        <p class="fine">The note deletes itself after a few seconds. Without it people repost
-          the same thing three times wondering where it went.</p>
+        <h3 class="sub-head">When it acts</h3>
+        <label class="check">
+          <input type="checkbox" name="automod_notify"
+            {% if am.get('notify', True) %}checked{% endif %}>
+          Say why in the channel
+        </label>
+        <p class="fine">A short note that deletes itself after a few seconds. Without it people
+          repost the same thing three times wondering where it went.</p>
+        <label>Timeout length, in minutes
+          <input type="number" name="automod_timeout" min="1" max="10080"
+            value="{{ am.get('timeout_minutes', 10) }}">
+        </label>
 
         <button type="submit">Save</button>
       </form>
@@ -381,7 +386,9 @@
         <div class="logrows">
           {% for key, icon, label, blurb in log_events %}
             {% set current = events.get(key) or {} %}
-            <div class="logrow">
+            {#- The channel picker only appears once the event is on, so the list reads as
+                thirteen names rather than thirteen dropdowns you mostly don't need. -#}
+            <div class="logrow" data-reveals>
               <label class="pick">
                 <input type="checkbox" name="log_on_{{ key }}"
                   {% if current.on %}checked{% endif %}>
@@ -391,7 +398,8 @@
                   <span class="lg-blurb">{{ blurb }}</span>
                 </span>
               </label>
-              <select name="log_ch_{{ key }}" aria-label="Channel for {{ label }}">
+              <select class="when-on" name="log_ch_{{ key }}"
+                      aria-label="Channel for {{ label }}">
                 <option value="">Same as above</option>
                 {% for c in channels %}
                   <option value="{{ c.id }}"

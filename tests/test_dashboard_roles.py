@@ -247,18 +247,33 @@ def main():
     pane_ids = re.findall(r'<section class="pane" id="([a-z]+)"', body)
     tab_ids = re.findall(r'data-tab="([a-z]+)"', body)
     assert pane_ids == tab_ids, (pane_ids, tab_ids)
-    for expected in ("welcome", "goodbye", "autorole", "panels", "automod", "logging",
-                     "survey"):
+    for expected in ("greetings", "roles", "automod", "logging", "survey"):
         assert expected in pane_ids, expected
-    assert len(pane_ids) == 7, pane_ids
-    # All four logs share the one tab now, so three sections have no pane of their own. They
-    # still have to be reachable, and saving one has to come back to the tab it lives in.
-    for section in ("modlog", "medialog", "pinglog"):
-        assert section not in pane_ids, f"{section} should share the logging tab"
+    assert len(pane_ids) == 5, pane_ids
+
+    # Related settings share a tab, so most sections have no pane of their own. Each still has
+    # to be reachable, and saving one has to come back to the tab it actually lives in.
+    for section, tab in (("welcome", "greetings"), ("goodbye", "greetings"),
+                         ("autorole", "roles"), ("modlog", "logging"),
+                         ("medialog", "logging"), ("pinglog", "logging")):
+        assert section not in pane_ids, f"{section} shares the {tab} tab"
         assert f'value="{section}"' in body, f"the {section} form should be inside a pane"
         r2 = c.post("/servers/111", data={"section": section, "csrf": token})
-        assert r2.headers["Location"].endswith("#logging"), (section, r2.headers["Location"])
-    print("  6 tabs, all four logs in one of them, each saving back to it OK")
+        assert r2.headers["Location"].endswith(f"#{tab}"), (section, r2.headers["Location"])
+    print(f"  5 tabs, {len(pane_ids)} panes, 6 sections saving back to the right one OK")
+
+    print("\n=== nothing needs a multi-select ===")
+    # Ctrl-clicking a multi-select is the one control nobody discovers, so exemptions are
+    # ticked off a list like every other set of roles and channels on the page.
+    assert "multiple" not in body, "multi-selects should be tick lists"
+    for field in ("automod_exempt_roles", "automod_exempt_channels"):
+        assert f'type="checkbox" name="{field}"' in body, field
+    print("  automod exemptions are checkboxes OK")
+
+    print("\n=== a rule's own settings only appear once it's on ===")
+    assert body.count("data-reveals") >= 20, "log events and automod rules should both reveal"
+    assert 'class="when-on"' in body or 'when-on' in body
+    print("  rows carry the markup, and the script does the hiding OK")
     # Every pane is in the markup and none is hidden server side, so with JavaScript off the
     # page is the plain list it used to be rather than a single tab with no way to leave it.
     # The attribute on a tag, not the word: page copy is allowed to say "hidden".
@@ -269,10 +284,10 @@ def main():
     print("\n=== a save comes back to the tab you were on ===")
     r = c.post("/servers/111", data={
         "section": "autorole", "csrf": token, "autorole_ids": ["10"], "autorole_enabled": "on"})
-    assert r.headers["Location"].endswith("#autorole"), r.headers["Location"]
+    assert r.headers["Location"].endswith("#roles"), r.headers["Location"]
     r = c.post("/servers/111/panels", data={
         "csrf": token, "title": "Another", "channel_id": "900", "mode": "toggle"})
-    assert r.headers["Location"].endswith("#panels"), r.headers["Location"]
+    assert r.headers["Location"].endswith("#roles"), r.headers["Location"]
     print("  both redirects carry the section anchor OK")
 
     print("\nALL CHECKS PASSED")

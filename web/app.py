@@ -191,6 +191,15 @@ def logout():
 
 
 # ── servers ──────────────────────────────────────────────────────────
+# Which tab each form's section lives in. Related settings share a tab, so a save has to know
+# where to send you back to rather than assuming its own name is a pane.
+SECTION_TABS = {
+    "welcome": "greetings", "goodbye": "greetings",
+    "autorole": "roles",
+    "modlog": "logging", "medialog": "logging", "pinglog": "logging",
+}
+
+
 @app.route("/servers")
 @login_required
 def servers():
@@ -317,10 +326,9 @@ def save_guild_settings(guild_id: int):
 
     store.save(guild_id, values)
     flash("Saved. The bot picks this up within a few seconds.")
-    # All four logs share one tab, so three of the sections have no pane of their own to come
-    # back to. Without this a save would land on whatever tab happens to be first.
-    anchor = {"modlog": "logging", "medialog": "logging",
-              "pinglog": "logging"}.get(section, section)
+    # Several sections share a tab, so they have no pane of their own to come back to.
+    # Without this a save would land on whatever tab happens to be first.
+    anchor = SECTION_TABS.get(section, section)
     return redirect(url_for("guild_settings", guild_id=guild_id) + f"#{anchor}")
 
 
@@ -359,7 +367,7 @@ def create_panel(guild_id: int):
         flash(f"That's the limit of {store.MAX_PANELS} panels. Delete one first.")
     else:
         flash("Panel created. Add some roles to it and it gets posted.")
-    return redirect(url_for("guild_settings", guild_id=guild_id) + "#panels")
+    return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
 
 
 @app.route("/servers/<int:guild_id>/panels/<panel_id>", methods=["POST"])
@@ -373,7 +381,7 @@ def save_panel(guild_id: int, panel_id: str):
             flash("Panel deleted. The message disappears within a few seconds.")
         else:
             flash("That panel is already gone.")
-        return redirect(url_for("guild_settings", guild_id=guild_id) + "#panels")
+        return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
 
     channel_id, title, description, mode = _panel_form(guild_id)
     # Names as well as ids: a button left without a label should read as the role it grants,
@@ -402,7 +410,7 @@ def save_panel(guild_id: int, panel_id: str):
         abort(404)
     flash("Saved. The panel updates itself within a few seconds."
           if roles else "Saved. Tick at least one role and it gets posted.")
-    return redirect(url_for("guild_settings", guild_id=guild_id) + "#panels")
+    return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
 
 
 @app.errorhandler(400)

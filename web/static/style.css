@@ -1155,9 +1155,35 @@ button.tiny:hover {
   .logrow select { width: 100%; flex: 1; }
 }
 
+/* ── rows that reveal their own settings ─────────────────────────── */
+/* Only ever hidden by script, so with JavaScript off the whole form is there. */
+.js [data-reveals]:not(.on) .when-on { display: none; }
+
 /* ── automod ─────────────────────────────────────────────────────── */
-.amrow { align-items: flex-start; }
+.amrow { align-items: flex-start; flex-wrap: wrap; }
 .amrow label.pick { align-items: flex-start; padding-top: 2px; }
+
+/* A word list or an allow list belongs to its rule, so it sits inside the row and comes and
+   goes with it. */
+.amsub {
+  flex-basis: 100%;
+  margin: 10px 0 2px 44px;
+  font-size: 12.5px;
+  color: var(--dim);
+}
+.amsub textarea { min-height: 52px; font-size: 13.5px; }
+.amsub .lg-blurb { display: block; margin-top: 5px; }
+
+.mini-head {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Short, because these lists sit side by side and neither should push the card long. */
+.rolelist.short { max-height: 188px; margin-top: 0; }
 
 /* The thresholds and the action sit together on the right, so the left column stays a
    readable list of rule names rather than a row of scattered controls. */
@@ -1197,30 +1223,15 @@ label.num input:focus {
   box-shadow: 0 0 0 3px var(--mint-glow);
 }
 
-/* A word list or an allow list belongs under the rule it serves, not beside it. */
-.logrow.sub { display: block; padding: 12px 13px 14px 44px; background: var(--surface); }
-.logrow.sub label { margin: 0; font-size: 12.5px; color: var(--dim); }
-.logrow.sub textarea { min-height: 52px; font-size: 13.5px; }
-.logrow.sub .lg-blurb { display: block; margin-top: 5px; }
-
 .sub-head { margin: 26px 0 0; font-size: 14.5px; }
 .sub-head + .fine { margin: 6px 0 14px; }
-
-select[multiple] {
-  padding: 6px;
-  background-image: none;
-  cursor: default;
-}
-select[multiple] option { padding: 4px 7px; border-radius: 5px; }
-
-label.check.standalone { align-self: end; padding-bottom: 10px; }
 
 @media (max-width: 620px) {
   .amrow { flex-wrap: wrap; }
   .amrow label.pick { flex-basis: 100%; }
   .amset { width: 100%; justify-content: flex-start; }
   .amset select { flex: 1; width: auto; min-width: 0; }
-  .logrow.sub { padding-left: 13px; }
+  .amsub { margin-left: 0; }
 }
 
 /* ── text inputs and panels ──────────────────────────────────────── */
