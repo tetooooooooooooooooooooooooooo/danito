@@ -234,8 +234,14 @@ SECTIONS = [
         "blurb": "A record of what happens in the server, in one channel or in as many as you "
                  "want.",
         "setup": [
-            "Run <code>/logging channel</code> and pick where the log goes. Everything is "
-            "switched on at once, so that is the whole setup for most servers.",
+            "The quickest way is <code>/logging setup</code>. It builds a hidden category of "
+            "log channels for you, points every event at the right one and switches the lot "
+            "on. Pick a few channels grouped by type, one channel for everything, or a "
+            "separate channel for every event. Run it twice and it reuses what is already "
+            "there rather than making a second set.",
+            "If you would rather do it yourself, run <code>/logging channel</code> and pick "
+            "where the log goes. Everything is switched on at once, so that is the whole "
+            "setup for most servers.",
             "If you want a particular kind of log kept apart, open the dashboard, find Server "
             "log, and give that one its own channel. Anything left on <em>Same as above</em> "
             "keeps going to the main channel.",
@@ -273,6 +279,9 @@ SECTIONS = [
             "reads.",
         ],
         "commands": [
+            ("/logging setup", "[style] [category]",
+             "Build the log channels and switch everything on in one go. The category is "
+             "hidden from everybody but staff.", MANAGE_SERVER),
             ("/logging channel", "[channel]",
              "Send every kind of log here, and switch them all on. Leave the channel out to "
              "turn logging off.", MANAGE_SERVER),

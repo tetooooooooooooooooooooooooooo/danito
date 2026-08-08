@@ -54,6 +54,21 @@ BLURPLE = 0x5865F2
 MAX_FIELD = 1000            # an embed field caps at 1024; leave room for the code fence
 AUDIT_WINDOW = 15           # seconds an audit entry can lag the event and still be the cause
 
+DEFAULT_CATEGORY = "Server Logs"
+
+# How /logging setup lays the channels out. (channel name, the events that go there.)
+# One channel per event is offered too, but this is the default: thirteen channels is a lot of
+# sidebar for something most people skim.
+GROUPED = [
+    ("message-log", ["message_delete", "message_edit", "message_purge"]),
+    ("member-log", ["member_join", "member_leave", "member_nickname", "member_roles"]),
+    ("moderation-log", ["member_ban", "member_unban"]),
+    ("voice-log", ["voice_activity"]),
+    ("server-log", ["channel_changes", "role_changes", "server_changes"]),
+]
+# The numbered cases from /ban and friends belong beside the ban entries.
+MODLOG_CHANNEL = "moderation-log"
+
 
 def _trim(text: str, limit: int = MAX_FIELD) -> str:
     text = text or ""
@@ -426,6 +441,148 @@ class Logging(commands.Cog, name="Logging"):
                               description="\n".join(changes),
                               timestamp=discord.utils.utcnow())
         await self._send(after, "server_changes", embed)
+
+    # ── /logging setup ───────────────────────────────────────────────
+    @staticmethod
+    def _layout(style: str) -> list:
+        """The channels to build, as (name, events)."""
+        if style == "single":
+            return [("server-log", list(EVENT_KEYS))]
+        if style == "each":
+            return [(key.replace("_", "-"), [key]) for key in EVENT_KEYS]
+        return [(name, list(keys)) for name, keys in GROUPED]
+
+    @logging.command(
+        name="setup",
+        description="Build the log channels and switch everything on, all in one go")
+    @app_commands.describe(
+        style="How many channels to make.",
+        category="What to call the category they go in.")
+    @app_commands.choices(style=[
+        app_commands.Choice(name="A few channels, grouped by what they record", value="grouped"),
+        app_commands.Choice(name="One channel for everything", value="single"),
+        app_commands.Choice(name="A separate channel for every kind of event", value="each"),
+    ])
+    @app_commands.checks.cooldown(1, 60.0)
+    @app_commands.checks.has_permissions(manage_guild=True)
+    async def setup_logs(self, interaction: discord.Interaction,
+                         style: Optional[app_commands.Choice[str]] = None,
+                         category: Optional[app_commands.Range[str, 1, 90]] = None):
+        guild = interaction.guild
+        chosen = style.value if style else "grouped"
+        category_name = (category or DEFAULT_CATEGORY).strip()
+
+        if not guild.me.guild_permissions.manage_channels:
+            await interaction.response.send_message(
+                "I need the **Manage Channels** permission to make these for you. Grant it and "
+                "run this again, or set the channels up yourself with `/logging channel`.",
+                ephemeral=True)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+
+        # Without Manage Roles the bot can't deny @everyone, and a log full of deleted messages
+        # would be readable by the whole server. Say so rather than quietly building it.
+        can_hide = guild.me.guild_permissions.manage_roles
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            guild.me: discord.PermissionOverwrite(
+                view_channel=True, send_messages=True, embed_links=True),
+        } if can_hide else None
+
+        reason = f"Log channels, set up by {interaction.user}"
+
+        # Reuse anything already there, so running this twice doesn't leave two of everything.
+        parent = discord.utils.find(
+            lambda c: c.name.lower() == category_name.lower(), guild.categories)
+        reused_category = parent is not None
+        if parent is None:
+            try:
+                parent = await guild.create_category(
+                    category_name, overwrites=overwrites, reason=reason)
+            except discord.Forbidden:
+                await interaction.followup.send(
+                    "Discord wouldn't let me make the category. Check that I have Manage "
+                    "Channels and that my role is high enough.", ephemeral=True)
+                return
+            except discord.HTTPException as e:
+                await interaction.followup.send(f"That didn't work: {e}", ephemeral=True)
+                return
+
+        routes, made, reused, failed = {}, [], [], None
+        for name, keys in self._layout(chosen):
+            existing = discord.utils.find(
+                lambda c: c.name == name, parent.text_channels)
+            if existing is not None:
+                channel = existing
+                reused.append(channel)
+            else:
+                try:
+                    channel = await guild.create_text_channel(
+                        name, category=parent, reason=reason)
+                    made.append(channel)
+                except (discord.Forbidden, discord.HTTPException) as e:
+                    # Keep whatever was built rather than abandoning half a category.
+                    failed = e
+                    break
+            for key in keys:
+                routes[key] = channel
+
+        if not routes:
+            await interaction.followup.send(
+                f"I couldn't create any channels: {failed}", ephemeral=True)
+            return
+
+        events = {key: {"on": key in routes,
+                        "channel": routes[key].id if key in routes else None}
+                  for key in EVENT_KEYS}
+        values = {"logging_enabled": True, "log_events": events}
+        # Each channel is named on its own events, so there is nothing left for a shared one
+        # to catch. Clearing it stops an old setting quietly collecting anything added later.
+        values["log_channel"] = routes[EVENT_KEYS[0]].id if chosen == "single" else None
+
+        modlog = next((c for c in list(routes.values())
+                       if c.name == MODLOG_CHANNEL), None)
+        if modlog is not None:
+            values["modlog_channel"] = modlog.id
+
+        await GuildConfig.update(self.bot, guild.id, values)
+
+        embed = discord.Embed(
+            title="Logging is set up", color=GREEN,
+            description=f"Everything is switched on and going to **{parent.name}**.",
+            timestamp=discord.utils.utcnow())
+
+        seen, lines = set(), []
+        for key in EVENT_KEYS:
+            channel = routes.get(key)
+            if channel is None or channel.id in seen:
+                continue
+            seen.add(channel.id)
+            covered = [label for k, icon, label in EVENTS if routes.get(k) is channel]
+            lines.append(f"{channel.mention}\n{'  ·  '.join(covered)}")
+        embed.add_field(name="Where things go", value="\n\n".join(lines)[:1024], inline=False)
+
+        notes = []
+        if made:
+            notes.append(f"Made {len(made)} channel{'s' if len(made) != 1 else ''}.")
+        if reused or reused_category:
+            notes.append("Reused what was already there.")
+        if modlog is not None:
+            notes.append(f"Moderation cases now go to {modlog.mention} too.")
+        if not can_hide:
+            embed.color = AMBER
+            notes.append("⚠️ I don't have Manage Roles, so these channels are visible to "
+                         "everyone. Hide the category yourself, or the whole server will be "
+                         "able to read your deleted messages.")
+        if failed is not None:
+            embed.color = AMBER
+            notes.append(f"⚠️ I had to stop early: {failed}")
+        if notes:
+            embed.add_field(name="Notes", value="\n".join(notes)[:1024], inline=False)
+        embed.set_footer(text="Change any of it with /logging event or on the dashboard.")
+
+        await interaction.followup.send(embed=embed, ephemeral=True)
 
     # ── commands ─────────────────────────────────────────────────────
     @logging.command(name="channel", description="Send every kind of log to one channel")
