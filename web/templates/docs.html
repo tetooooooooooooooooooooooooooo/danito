@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block bodyclass %}docs-page{% endblock %}
+{% block title %}Documentation · {{ brand }}{% endblock %}
+
+{% macro command_table(rows) %}
+  <div class="table-wrap">
+    <table class="commands">
+      <thead>
+        <tr><th>Command</th><th>What it does</th><th>Who can use it</th></tr>
+      </thead>
+      <tbody>
+        {% for name, args, what, who in rows %}
+          <tr>
+            <td class="cmd">
+              <code>{{ name }}</code>
+              {% if args %}<span class="args">{{ args }}</span>{% endif %}
+            </td>
+            <td>{{ what | safe }}</td>
+            <td><span class="who-tag {% if who == 'Anyone' %}open{% endif %}">{{ who }}</span></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endmacro %}
+
+{% block content %}
+<div class="docs">
+  <nav class="toc" aria-label="Contents">
+    <span class="toc-title">Contents</span>
+    <a href="#start">Getting started</a>
+    {% for s in sections %}
+      <a href="#{{ s.id }}">{{ s.title }}</a>
+    {% endfor %}
+    <a href="#permissions">Permissions</a>
+    <a href="#trouble">Troubleshooting</a>
+  </nav>
+
+  <article class="docs-body">
+    <h1>Documentation</h1>
+    <p class="lead-text">How to set {{ brand }} up and what each command does. Everything is
+      off until you switch it on, so nothing here happens by default.</p>
+
+    <section id="start">
+      <h2>Getting started</h2>
+      <ol class="numbered">
+        {% for step in setup %}
+          <li>
+            <strong>{{ step.title }}</strong>
+            <p>{{ step.body }}</p>
+          </li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    {% for s in sections %}
+      <section id="{{ s.id }}">
+        <h2><span class="sec-icon">{{ s.icon }}</span>{{ s.title }}</h2>
+        {% if s.blurb %}<p class="lead-text">{{ s.blurb }}</p>{% endif %}
+
+        {% if s.setup %}
+          <h3>Setting it up</h3>
+          <ol class="numbered tight">
+            {% for step in s.setup %}<li><p>{{ step | safe }}</p></li>{% endfor %}
+          </ol>
+        {% endif %}
+
+        {% if s.notes %}
+          <h3>Worth knowing</h3>
+          <ul class="notes">
+            {% for note in s.notes %}<li>{{ note | safe }}</li>{% endfor %}
+          </ul>
+        {% endif %}
+
+        <h3>Commands</h3>
+        {{ command_table(s.commands) }}
+      </section>
+    {% endfor %}
+
+    <section id="permissions">
+      <h2>Permissions</h2>
+      <p>Two separate things decide whether a command works: what you are allowed to do, and
+        what the bot is allowed to do.</p>
+      <ul class="notes">
+        <li><strong>Yours.</strong> Each command needs its matching Discord permission. Somebody
+          with Ban Members can ban, but cannot change where the log goes. Nothing needs
+          Administrator.</li>
+        <li><strong>The bot's.</strong> It needs to see and post in whichever channels you point
+          it at, Manage Roles for the joining groups, and View Audit Log to say who deleted
+          something. The status commands check all of this and tell you what is missing.</li>
+        <li><strong>Role position.</strong> For moderation, the bot's role has to sit above the
+          people it is actioning, in Server Settings then Roles. Permissions alone are not
+          enough.</li>
+      </ul>
+    </section>
+
+    <section id="trouble">
+      <h2>Troubleshooting</h2>
+      <dl class="faq">
+        {% for question, answer in troubleshooting %}
+          <dt>{{ question }}</dt>
+          <dd>{{ answer | safe }}</dd>
+        {% endfor %}
+      </dl>
+    </section>
+
+    <section class="docs-cta">
+      <h2>Ready to set it up?</h2>
+      <div class="cta">
+        <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
+        {% if user %}
+          <a class="button ghost" href="{{ url_for('servers') }}">Open the dashboard</a>
+        {% else %}
+          <a class="button ghost" href="{{ url_for('login') }}">Log in with Discord</a>
+        {% endif %}
+      </div>
+    </section>
+  </article>
+</div>
+{% endblock %}

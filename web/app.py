@@ -28,6 +28,7 @@ from flask import (Flask, abort, flash, redirect, render_template, request,  # n
                    session, url_for)
 
 import discord_api as api                                                    # noqa: E402
+import docs                                                                  # noqa: E402
 import store                                                                 # noqa: E402
 
 app = Flask(__name__)
@@ -129,6 +130,14 @@ def index():
     if current_user():
         return redirect(url_for("servers"))
     return render_template("landing.html")
+
+
+@app.route("/docs")
+def documentation():
+    """Public on purpose: somebody deciding whether to add the bot should be able to read what
+    it does without handing over an account first."""
+    return render_template("docs.html", setup=docs.SETUP, sections=docs.SECTIONS,
+                           troubleshooting=docs.TROUBLESHOOTING)
 
 
 @app.route("/login")
