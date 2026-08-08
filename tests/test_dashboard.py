@@ -227,6 +227,44 @@ def main():
     assert "{user}" in body, "the placeholder help should be shown"
     print("  all five cards, both channels and a csrf token present OK")
 
+    print("\n=== a brand new server is told where to start ===")
+    SAVED.pop(111, None)          # this suite's fake returns no role panels either
+    body = c.get("/servers/111").data.decode()
+    assert "Start here" in body, "a server with nothing on should be given a first step"
+    assert "/setchannel" in body and "/logging setup" in body
+    print("  the two commands that matter, and nothing else OK")
+
+    # It has to disappear on its own, or it becomes furniture nobody reads.
+    SAVED[111] = {"guild_id": 111, "welcome_enabled": True}
+    body = c.get("/servers/111").data.decode()
+    assert "Start here" not in body, "it should go once anything is switched on"
+    print("  gone the moment one feature is on OK")
+    SAVED.pop(111, None)
+
+    print("\n=== the just-added page ===")
+    body = c.get("/added?guild_id=111").data.decode()
+    assert "/servers/111" in body, "it should link straight into that server"
+    assert "/setchannel" in body and "/logging setup" in body
+    # Reachable without one, since somebody may arrive from a link.
+    plain = c.get("/added").data.decode()
+    assert "/servers" in plain and "guild_id" not in plain
+    # And a junk id must not end up in a link.
+    assert "/servers/abc" not in c.get("/added?guild_id=abc").data.decode()
+    print("  links into the server when it knows which, and ignores a junk id OK")
+
+    print("\n=== the changelog ===")
+    import changelog as log
+    body = c.get("/changelog").data.decode()
+    assert "What's new" in body
+    for entry in log.ENTRIES:
+        assert entry["title"] in body, entry["title"]
+        for kind, _text in entry["changes"]:
+            assert kind in log.KINDS, f"unknown kind {kind!r} in {entry['title']!r}"
+    dates = [e["date"] for e in log.ENTRIES]
+    assert dates == sorted(dates, reverse=True), f"newest first, got {dates}"
+    total = sum(len(e["changes"]) for e in log.ENTRIES)
+    print(f"  {len(log.ENTRIES)} entries, {total} changes, newest first OK")
+
     print("\n=== the docs page can be searched and linked into ===")
     import re as _re
     docs = c.get("/docs").data.decode()

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block bodyclass %}added-page{% endblock %}
+{% block title %}{{ brand }} is in · {{ brand }}{% endblock %}
+{% block description %}{{ brand }} has been added. Two commands and it starts working: one to
+post the ratings survey, one to build your log channels.{% endblock %}
+
+{% block content %}
+<div class="landed">
+  <div class="tick" aria-hidden="true">✓</div>
+  <h1>{{ brand }} is in</h1>
+  <p class="lead">Nothing is switched on yet, which is deliberate. Two commands and it starts
+    doing the thing you added it for.</p>
+</div>
+
+<ol class="numbered big">
+  <li>
+    <strong>Post the ratings survey</strong>
+    <p>Go to the channel you want it in and run <code>/setchannel</code>. That's the main
+      feature: everybody who joins gets a quiet reminder about a week later, comes back to
+      rate the server, and you get a number that Discord Discovery actually cares about.</p>
+  </li>
+  <li>
+    <strong>Build your log channels</strong>
+    <p>Run <code>/logging setup</code> anywhere. It makes a category of log channels, hidden
+      from everybody but staff, and switches the whole server log on in one go.</p>
+  </li>
+  <li>
+    <strong>Everything else, whenever you like</strong>
+    <p>Welcome messages, autorole, role buttons, automod and moderation are all optional and
+      all off until you turn them on. <code>/help</code> lists the lot.</p>
+  </li>
+</ol>
+
+<div class="cta landed-cta">
+  {% if guild_id %}
+    <a class="button" href="{{ url_for('guild_settings', guild_id=guild_id) }}">
+      Open the dashboard for this server</a>
+  {% else %}
+    <a class="button" href="{{ url_for('servers') }}">Open the dashboard</a>
+  {% endif %}
+  <a class="button ghost" href="{{ url_for('documentation') }}">Read the docs</a>
+</div>
+
+<p class="fine centred">Stuck on any of it? The <a href="{{ url_for('support') }}">support
+  page</a> has the usual answers and somewhere to ask.</p>
+{% endblock %}

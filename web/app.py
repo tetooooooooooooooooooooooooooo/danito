@@ -28,6 +28,7 @@ from flask import (Flask, abort, flash, redirect, render_template, request,  # n
                    session, url_for)
 
 import discord_api as api                                                    # noqa: E402
+import changelog                                                             # noqa: E402
 import docs                                                                  # noqa: E402
 import store                                                                 # noqa: E402
 
@@ -54,10 +55,21 @@ PRIVACY_URL = (os.environ.get("PRIVACY_URL") or
                ).strip()
 
 
+# Discord will send somebody back here after they add the bot, but only to an address
+# registered in the Developer Portal. Left unset the invite behaves exactly as before, because
+# an unregistered address makes Discord refuse the whole invite rather than skip the redirect.
+INVITE_REDIRECT_URI = (os.environ.get("INVITE_REDIRECT_URI") or "").strip()
+
+
 def invite_url(guild_id=None) -> str:
     url = (f"https://discord.com/oauth2/authorize?client_id={api.CLIENT_ID}"
            f"&scope=bot+applications.commands&permissions={INVITE_PERMISSIONS}")
-    return f"{url}&guild_id={guild_id}" if guild_id else url
+    if guild_id:
+        url += f"&guild_id={guild_id}"
+    if INVITE_REDIRECT_URI:
+        from urllib.parse import quote
+        url += f"&response_type=code&redirect_uri={quote(INVITE_REDIRECT_URI, safe='')}"
+    return url
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
@@ -320,6 +332,24 @@ def close_ticket_route(number: int):
     else:
         flash("That ticket is already closed, or isn't yours.")
     return redirect(url_for("support"))
+
+
+@app.route("/added")
+def added():
+    """Where Discord sends somebody after they add the bot.
+
+    Reachable directly as well, since the redirect only happens once the address is registered
+    and somebody may well arrive here from a link.
+    """
+    guild_id = request.args.get("guild_id") or ""
+    guild_id = guild_id if guild_id.isdigit() else ""
+    return render_template("added.html", guild_id=guild_id)
+
+
+@app.route("/changelog")
+def whats_new():
+    return render_template("changelog.html", entries=changelog.ENTRIES,
+                           kinds=changelog.KINDS)
 
 
 @app.route("/login")

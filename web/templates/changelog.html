@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block bodyclass %}changelog-page{% endblock %}
+{% block title %}What's new · {{ brand }}{% endblock %}
+{% block description %}Everything that has changed in {{ brand }}, newest first: new features,
+things made better, and things that were broken and now aren't.{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>What's new</h1>
+    <p class="fine">Every change, newest first. There are no version numbers because there are
+      no releases: it's deployed as it's finished.</p>
+  </div>
+</header>
+
+<div class="log">
+  {% for entry in entries %}
+    <article class="entry">
+      <div class="when">
+        <time datetime="{{ entry.date }}">{{ entry.date }}</time>
+      </div>
+      <div class="what">
+        <h2>{{ entry.title }}</h2>
+        <ul class="changes">
+          {% for kind, text in entry.changes %}
+            {% set icon, label = kinds[kind] %}
+            <li>
+              <span class="kind {{ kind }}" title="{{ label }}">
+                <span aria-hidden="true">{{ icon }}</span>{{ label }}</span>
+              <span class="text">{{ text | safe }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </article>
+  {% endfor %}
+</div>
+
+<p class="fine centred">Something missing, or something broken?
+  <a href="{{ url_for('support') }}">Say so on the support page.</a></p>
+{% endblock %}

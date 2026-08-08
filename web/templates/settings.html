@@ -93,6 +93,29 @@
     otherwise the dropdowns below will be empty.</div>
 {% endif %}
 
+{#- Nothing on at all means somebody just added the bot and is looking at five tabs of
+    settings with no idea which matters. It disappears the moment anything is switched on,
+    so there is nothing to dismiss. -#}
+{% set anything_on = tabs | map(attribute=3) | select | list | length %}
+{% if not anything_on %}
+  <div class="card firstrun">
+    <div class="fr-icon" aria-hidden="true">👋</div>
+    <div>
+      <h2>Start here</h2>
+      <p class="fine">Nothing is switched on yet. Two commands in Discord and {{ brand }}
+        starts doing the thing you added it for.</p>
+      <ol class="fr-steps">
+        <li><code>/setchannel</code> in the channel you want the ratings survey in. That's the
+          retention loop, which is the point of the bot.</li>
+        <li><code>/logging setup</code> anywhere, to build your log channels and switch the
+          server log on.</li>
+      </ol>
+      <p class="fine">Everything in the tabs below is optional. Welcome messages and Automod
+        are the ones most servers want next.</p>
+    </div>
+  </div>
+{% endif %}
+
 <div class="settings">
   <nav class="sidenav" data-tabs aria-label="Settings sections">
     {% for id, icon, label, on in tabs %}

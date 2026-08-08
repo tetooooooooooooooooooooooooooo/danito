@@ -1247,6 +1247,131 @@ button.tiny:hover {
   .logrow select { width: 100%; flex: 1; }
 }
 
+/* ── just added ──────────────────────────────────────────────────── */
+body.added-page main { max-width: 720px; }
+
+.landed { text-align: center; margin-bottom: 34px; }
+.landed h1 { margin-bottom: 12px; }
+.landed .lead { color: var(--dim); max-width: 46ch; margin: 0 auto; }
+
+.tick {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 30px;
+  color: #06251c;
+  background: linear-gradient(135deg, var(--mint-bright), var(--mint-deep));
+  box-shadow: 0 0 0 8px var(--mint-glow);
+}
+
+ol.numbered.big > li { margin-bottom: 26px; }
+ol.numbered.big > li::before { width: 29px; height: 29px; font-size: 13.5px; }
+ol.numbered.big strong { font-size: 16px; margin-bottom: 6px; }
+ol.numbered.big p { font-size: 14.6px; }
+
+.landed-cta { justify-content: center; margin: 34px 0 22px; }
+.centred { text-align: center; }
+
+/* ── first run ───────────────────────────────────────────────────── */
+.card.firstrun {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  border-color: rgba(61, 220, 151, .34);
+  background: linear-gradient(140deg, rgba(61, 220, 151, .09), var(--surface-2) 58%);
+}
+.fr-icon { font-size: 28px; flex: none; line-height: 1.2; }
+.card.firstrun h2 { margin-bottom: 8px; }
+.card.firstrun h2::before { display: none; }
+
+ol.fr-steps { counter-reset: fr; list-style: none; padding: 0; margin: 14px 0; }
+ol.fr-steps li {
+  counter-increment: fr;
+  position: relative;
+  padding-left: 30px;
+  margin-bottom: 10px;
+  font-size: 14.4px;
+  color: var(--dim);
+}
+ol.fr-steps li::before {
+  content: counter(fr);
+  position: absolute;
+  left: 0; top: 1px;
+  display: grid; place-items: center;
+  width: 21px; height: 21px;
+  border-radius: 50%;
+  background: rgba(61, 220, 151, .14);
+  border: 1px solid rgba(61, 220, 151, .32);
+  color: var(--mint-bright);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+/* ── changelog ───────────────────────────────────────────────────── */
+body.changelog-page main { max-width: 860px; }
+
+.entry {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 26px;
+  padding: 26px 0;
+  border-top: 1px solid var(--line);
+}
+.entry:first-child { border-top: 0; padding-top: 6px; }
+
+/* Sticky so the date stays beside its entry while a long one scrolls past. */
+.when { position: sticky; top: 88px; align-self: start; }
+.when time {
+  font-size: 12.6px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  color: var(--faint);
+}
+
+.what h2 { font-size: 18px; letter-spacing: -.3px; margin-bottom: 14px; }
+
+ul.changes { list-style: none; padding: 0; margin: 0; }
+ul.changes li {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 11px;
+  font-size: 14.4px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+ul.changes .text { flex: 1; min-width: 0; }
+
+.kind {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: 84px;
+  padding: 2.5px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+.kind.new { color: var(--mint-bright); background: rgba(61, 220, 151, .12);
+            border: 1px solid rgba(61, 220, 151, .3); }
+.kind.better { color: #a9c7ff; background: rgba(88, 101, 242, .14);
+               border: 1px solid rgba(88, 101, 242, .34); }
+.kind.fixed { color: var(--warn); background: rgba(240, 180, 95, .12);
+              border: 1px solid rgba(240, 180, 95, .3); }
+
+@media (max-width: 620px) {
+  .entry { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .when { position: static; }
+  ul.changes li { flex-wrap: wrap; gap: 6px; }
+  .card.firstrun { flex-direction: column; gap: 10px; }
+}
+
 /* ── support ─────────────────────────────────────────────────────── */
 body.support-page main { max-width: 860px; }
 
