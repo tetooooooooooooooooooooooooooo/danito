@@ -166,6 +166,82 @@
     });
   });
 
+  /* ── unsaved changes ─────────────────────────────────────────────── */
+  /* Every card is its own form with its own Save, and tabs hide the ones you aren't looking
+     at, so it is easy to change something, move on, and never find out it wasn't saved. Each
+     form watches itself against how it arrived, marks its tab, and offers to put it back. */
+  var dirtyForms = [].slice.call(document.querySelectorAll(".panes form"));
+  var leaving = false;
+
+  var stateOf = function (form) {
+    // FormData leaves unticked boxes out entirely, so a toggle shows up as a difference.
+    var parts = [];
+    new FormData(form).forEach(function (value, key) {
+      if (key !== "csrf") parts.push(key + "=" + value);
+    });
+    return parts.join("&");
+  };
+
+  dirtyForms.forEach(function (form) {
+    var pane = form.closest(".pane");
+    var tab = pane && document.querySelector('[data-tab="' + pane.id + '"]');
+    var saved = stateOf(form);
+
+    var notice = document.createElement("div");
+    notice.className = "unsaved";
+    notice.innerHTML = "<span>You have unsaved changes here.</span>";
+    var undo = document.createElement("button");
+    undo.type = "button";
+    undo.className = "tiny";
+    undo.textContent = "Undo";
+    notice.appendChild(undo);
+
+    // Above the Save button, which is where somebody is already looking.
+    var anchor = form.querySelector(".row.end") || form.querySelector("button[type=submit]");
+    if (!anchor) return;
+    anchor.parentNode.insertBefore(notice, anchor);
+
+    var mark = function () {
+      var dirty = stateOf(form) !== saved;
+      form.classList.toggle("dirty", dirty);
+      if (!tab) return;
+      // The pane may be hidden, so the tab has to carry the news.
+      var flag = tab.querySelector(".udot");
+      if (dirty && !flag) {
+        flag = document.createElement("span");
+        flag.className = "udot";
+        flag.title = "Unsaved changes";
+        tab.appendChild(flag);
+      } else if (!dirty && flag) {
+        flag.remove();
+      }
+    };
+
+    form.addEventListener("input", mark);
+    form.addEventListener("change", mark);
+
+    undo.addEventListener("click", function () {
+      form.reset();
+      // reset() puts the values back but fires no events, and the rows that reveal their own
+      // settings are listening for exactly those.
+      form.querySelectorAll("[data-reveals] input[type=checkbox]").forEach(function (box) {
+        box.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      mark();
+    });
+
+    form.addEventListener("submit", function () { leaving = true; });
+  });
+
+  if (dirtyForms.length) {
+    addEventListener("beforeunload", function (e) {
+      if (leaving || !document.querySelector(".panes form.dirty")) return;
+      // Switching tabs is safe, since the panes stay on the page. Actually leaving is not.
+      e.preventDefault();
+      e.returnValue = "";
+    });
+  }
+
   /* ── cards lit from wherever the cursor is ───────────────────────── */
   if (!still && matchMedia("(hover: hover)").matches) {
     document.querySelectorAll(".feature").forEach(function (card) {

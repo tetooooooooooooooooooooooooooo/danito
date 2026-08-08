@@ -1155,6 +1155,34 @@ button.tiny:hover {
   .logrow select { width: 100%; flex: 1; }
 }
 
+/* ── unsaved changes ─────────────────────────────────────────────── */
+/* Built by the script, so it never appears on a page that can't clear it. */
+.unsaved {
+  display: none;
+  align-items: center;
+  gap: 11px;
+  margin: 18px 0 0;
+  padding: 9px 9px 9px 13px;
+  border-radius: var(--r-sm);
+  background: rgba(240, 180, 95, .1);
+  border: 1px solid rgba(240, 180, 95, .32);
+  color: #f6dcaf;
+  font-size: 13.2px;
+  animation: rise .25s var(--ease);
+}
+.unsaved span { flex: 1; }
+form.dirty .unsaved { display: flex; }
+
+/* The pane may be hidden behind another tab, so the tab itself has to say so. */
+.sidenav .udot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(240, 180, 95, .18);
+}
+
 /* ── rows that reveal their own settings ─────────────────────────── */
 /* Only ever hidden by script, so with JavaScript off the whole form is there. */
 .js [data-reveals]:not(.on) .when-on { display: none; }

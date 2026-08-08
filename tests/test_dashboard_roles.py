@@ -270,6 +270,15 @@ def main():
         assert f'type="checkbox" name="{field}"' in body, field
     print("  automod exemptions are checkboxes OK")
 
+    print("\n=== every settings form is somewhere the unsaved tracker will find it ===")
+    # The tracker watches ".panes form". A card outside that wrapper would silently lose the
+    # unsaved warning, and the logout form in the header must stay out of it.
+    panes_html = body.split('<div class="panes">', 1)[1].rsplit("</main>", 1)[0]
+    assert panes_html.count("<form") == body.count("<form") - 1, \
+        "every form except the header's logout should be inside the panes"
+    assert "unsaved" not in body, "the notice is built by the script, not rendered"
+    print(f"  {panes_html.count('<form')} settings forms inside the panes, logout outside OK")
+
     print("\n=== a rule's own settings only appear once it's on ===")
     assert body.count("data-reveals") >= 20, "log events and automod rules should both reveal"
     assert 'class="when-on"' in body or 'when-on' in body
