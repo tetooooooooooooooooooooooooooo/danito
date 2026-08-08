@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block bodyclass %}landing-page{% endblock %}
-{% block title %}{{ brand }} · a Discord bot that helps your server keep people{% endblock %}
+{% block title %}{{ brand }} · get your server into Discord Discovery{% endblock %}
 
 {% macro feature(icon, title, body) %}
   <div class="feature">
@@ -12,33 +12,66 @@
 
 {% block content %}
 <section class="hero landing">
-  <span class="pill">Moderation · Logging · Retention</span>
-  <h1>Keep the people who join your server</h1>
-  <p>{{ brand }} handles the moderation and logging you'd expect, then does the thing most
-     bots don't: it asks your members what they think, and shows you whether they stay.</p>
+  <span class="pill">Built for Server Discovery</span>
+  <h1>Get found by people who aren't in your server yet</h1>
+  <p>Discord Discovery puts servers in front of everyone browsing for one, and Discord decides
+     who gets listed partly on whether members stay. {{ brand }} works on that exact number:
+     one quiet nudge to each new member around a week in, then the figures to show you where
+     you stand.</p>
   <div class="cta">
     <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
     <a class="button ghost" href="{{ url_for('login') }}">Log in with Discord</a>
   </div>
-  <p class="fine">Free. No setup required to start, and every feature is off until you turn
-     it on.</p>
+  <p class="fine">Free. Every feature is off until you turn it on.</p>
+</section>
+
+<section class="spotlight">
+  <h2 class="section">Why retention is the number that matters</h2>
+  <p class="lead">Getting listed in Discovery isn't about how many people joined. It's about how
+     many stayed. Discord looks at whether your members are still around weeks later, so a
+     server with a thousand people who drift off does worse than a smaller one that keeps
+     them.</p>
+  <ol class="steps">
+    <li>
+      <strong>Someone joins.</strong>
+      They quietly get a role named after that day, so everybody who arrived together forms
+      one group.
+    </li>
+    <li>
+      <strong>About a week later.</strong>
+      That group gets a single ping in your ratings channel, right at the point people
+      usually go quiet for good. It deletes itself two seconds afterwards, so they get the
+      notification without the clutter.
+    </li>
+    <li>
+      <strong>They come back and rate you.</strong>
+      One tap, 1 to 10. Being pulled back into the server is the point; the score tells you
+      whether they liked what they found.
+    </li>
+    <li>
+      <strong>You watch the number move.</strong>
+      {{ brand }} tracks how many of each joining group are still here after 1, 7, 14 and 30
+      days, so you can see your retention rather than guess at it.
+    </li>
+  </ol>
+  <p class="fine">Each member is nudged once, not weekly. A bot that pings your members
+     repeatedly costs you the retention you were trying to build.</p>
 </section>
 
 <section>
-  <h2 class="section">What it does</h2>
+  <h2 class="section">Everything else it does</h2>
   <div class="features">
+    {{ feature("📈", "Retention you can actually see",
+       "Of the people who joined a week ago, how many are still here. Grouped by hour, day,
+        week or month, per joining group, and honest about the figures it doesn't have enough
+        history for yet.") }}
+    {{ feature("⭐", "Ask what people think",
+       "A one tap survey from 1 to 10, in a channel you choose. Scores are saved per member,
+        so changing your mind replaces your old answer rather than stuffing the ballot.") }}
     {{ feature("🔨", "Moderation that remembers",
        "Ban, kick, timeout, purge and warn. Every action becomes a numbered case, so you can
         see whether somebody is a repeat offender instead of reacting to each incident on
         its own.") }}
-    {{ feature("⭐", "Ask what people think",
-       "A one tap survey from 1 to 10, posted in a channel you choose. Scores are saved per
-        member, so changing your mind replaces your old answer rather than stuffing the
-        ballot.") }}
-    {{ feature("📈", "See whether they stay",
-       "Retention measured properly: of the people who joined a week ago, how many are still
-        here. Grouped by hour, day, week or month, and honest about which figures it doesn't
-        have enough history for yet.") }}
     {{ feature("🗄️", "Deleted media, kept",
        "When somebody deletes an image, video or voice memo, you get the file itself, not
         just a filename. Along with who posted it, who deleted it and when.") }}
@@ -52,46 +85,19 @@
        "Batches of images posted with the giveaway filename patterns get removed on sight,
         and the file is kept in your log so you can still see what it was.") }}
     {{ feature("🔔", "Nothing happens invisibly",
-       "The nudge that brings members back deletes itself after two seconds. It gets logged
-        with how many people it actually reached, so you can tell it worked.") }}
+       "The nudge deletes itself after two seconds, so it gets logged with how many members
+        it actually reached. You can tell it fired without taking it on trust.") }}
   </div>
-</section>
-
-<section class="spotlight">
-  <h2 class="section">The part other bots don't do</h2>
-  <p class="lead">Most people decide whether a server is worth staying in during their first
-     couple of weeks. {{ brand }} works that window deliberately.</p>
-  <ol class="steps">
-    <li>
-      <strong>Someone joins.</strong>
-      They quietly get a role named after that day, so everybody who arrived together forms
-      a group.
-    </li>
-    <li>
-      <strong>Eight days later.</strong>
-      That group, and only that group, gets one ping in your ratings channel. It deletes
-      itself two seconds later, so they get the notification without the clutter.
-    </li>
-    <li>
-      <strong>They rate the server.</strong>
-      One tap, 1 to 10. You read the results with a command, or right here on the dashboard.
-    </li>
-    <li>
-      <strong>You find out if it worked.</strong>
-      Retention is tracked per joining group, so a bad week is visible instead of averaged
-      away.
-    </li>
-  </ol>
-  <p class="fine">Better retention is also one of the things Discord weighs when deciding
-     which servers to surface in Server Discovery, so keeping people around helps your
-     chances of being listed.</p>
 </section>
 
 <section class="closing">
-  <h2>Ready?</h2>
-  <p>Add it, run one command, and it starts working. Everything else is optional.</p>
+  <h2>Start keeping the members you already have</h2>
+  <p>Add it, run one command, and the nudges begin. Everything else is optional.</p>
   <div class="cta">
     <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
   </div>
+  <p class="fine">Discovery listing is Discord's decision and depends on their full criteria,
+     including your server size and standing. {{ brand }} works on the retention side of it
+     and shows you the numbers.</p>
 </section>
 {% endblock %}
