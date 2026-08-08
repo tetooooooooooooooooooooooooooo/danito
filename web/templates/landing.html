@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block bodyclass %}landing-page{% endblock %}
 {% block title %}{{ brand }} · get your server into Discord Discovery{% endblock %}
+{% block description %}Newt asks new members what they think about a week after they join, measures how many of them stay, and checks your server against everything Discord Server Discovery asks for. Free, and every feature is off until you turn it on.{% endblock %}
 
 {% macro feature(icon, title, body, delay) %}
   <div class="feature" data-reveal data-delay="{{ delay }}">

@@ -127,11 +127,27 @@ def require_guild(guild_id: int) -> dict:
     return match
 
 
+def absolute(path: str = "") -> str:
+    """A full url for the current host, for the link preview tags.
+
+    Open Graph will not follow a relative path, so these have to be absolute. The scheme is
+    forced to https off localhost because Heroku terminates TLS in front of the dyno and hands
+    the app a plain http request, which would otherwise put http:// in every shared link.
+    """
+    root = (os.environ.get("SITE_URL") or request.url_root).rstrip("/")
+    if root.startswith("http://") and not root.startswith(("http://127.0.0.1",
+                                                           "http://localhost")):
+        root = "https://" + root[len("http://"):]
+    return root + path
+
+
 @app.context_processor
 def inject():
     return {"user": current_user(), "csrf_token": csrf_token, "api": api,
             "brand": BRAND, "invite_url": invite_url,
-            "terms_url": TERMS_URL, "privacy_url": PRIVACY_URL}
+            "terms_url": TERMS_URL, "privacy_url": PRIVACY_URL,
+            "page_url": absolute(request.path),
+            "og_image": absolute(url_for("static", filename="og.png"))}
 
 
 # ── auth ─────────────────────────────────────────────────────────────
