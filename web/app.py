@@ -17,14 +17,25 @@ import os
 import secrets
 from functools import wraps
 
-from flask import (Flask, abort, flash, redirect, render_template, request,
+from dotenv import load_dotenv
+
+# Must run before discord_api is imported: that module reads its credentials at import time.
+# On Heroku the real environment already exists and load_dotenv leaves it alone, so this only
+# matters when running locally from a .env file.
+load_dotenv()
+
+from flask import (Flask, abort, flash, redirect, render_template, request,  # noqa: E402
                    session, url_for)
 
-import discord_api as api
-import store
+import discord_api as api                                                    # noqa: E402
+import store                                                                 # noqa: E402
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("DASHBOARD_SECRET_KEY") or secrets.token_hex(32)
+
+# The bot's own name inside Discord comes from the application itself, so it follows a rename
+# in the Developer Portal without a deploy. Only the web pages need telling.
+BRAND = os.environ.get("DASHBOARD_BRAND", "Newt")
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
@@ -96,7 +107,7 @@ def require_guild(guild_id: int) -> dict:
 
 @app.context_processor
 def inject():
-    return {"user": current_user(), "csrf_token": csrf_token, "api": api}
+    return {"user": current_user(), "csrf_token": csrf_token, "api": api, "brand": BRAND}
 
 
 # ── auth ─────────────────────────────────────────────────────────────

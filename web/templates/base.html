@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}soundcord{% endblock %}</title>
+  <title>{% block title %}{{ brand }}{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="bar">
-    <a class="brand" href="{{ url_for('index') }}">soundcord</a>
+    <a class="brand" href="{{ url_for('index') }}">{{ brand }}</a>
     {% if user %}
       <div class="who">
         <img src="{{ user.avatar }}" alt="" width="28" height="28">
