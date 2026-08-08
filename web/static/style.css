@@ -135,6 +135,152 @@ a.fine:hover { color: var(--mint); border-bottom-color: var(--mint-glow); }
 .hero p { color: var(--dim); max-width: 47ch; margin: 0 auto 26px; font-size: 15.5px; }
 .hero .fine { max-width: 44ch; margin: 22px auto 0; color: var(--faint); }
 
+/* ── landing page ────────────────────────────────────────────────── */
+/* Wider than the settings pages: marketing copy in a 800px column looks like a memo. */
+body.landing-page main { max-width: 1000px; }
+
+.hero.landing { padding: 76px 0 64px; }
+
+.pill {
+  display: inline-block;
+  margin-bottom: 22px;
+  padding: 6px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--line-bright);
+  background: rgba(61, 220, 151, .07);
+  color: var(--mint-bright);
+  font-size: 12.4px;
+  font-weight: 600;
+  letter-spacing: .3px;
+}
+
+.cta {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.button.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line-bright);
+  box-shadow: none;
+}
+.button.ghost:hover {
+  background: rgba(61, 220, 151, .07);
+  border-color: var(--mint);
+  color: var(--mint-bright);
+  filter: none;
+}
+
+.button.small { padding: 8px 15px; font-size: 13.6px; }
+
+.link-plain {
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 14px;
+  transition: color .18s var(--ease);
+}
+.link-plain:hover { color: var(--mint); }
+
+h2.section {
+  font-size: 22px;
+  letter-spacing: -.4px;
+  text-align: center;
+  margin: 0 0 30px;
+}
+
+section { margin-bottom: 72px; }
+
+.features {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+}
+
+.feature {
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 24px 22px;
+  transition: border-color .2s var(--ease), transform .2s var(--ease);
+}
+.feature:hover { border-color: var(--line-bright); transform: translateY(-2px); }
+
+.feature .icon {
+  width: 42px; height: 42px;
+  display: grid; place-items: center;
+  margin-bottom: 15px;
+  border-radius: 11px;
+  background: rgba(61, 220, 151, .1);
+  border: 1px solid rgba(61, 220, 151, .22);
+  font-size: 19px;
+}
+
+.feature h3 {
+  margin: 0 0 8px;
+  font-size: 15.8px;
+  letter-spacing: -.2px;
+}
+.feature p { margin: 0; color: var(--dim); font-size: 14.2px; line-height: 1.62; }
+
+/* The differentiator gets its own treatment so it doesn't read as another feature card. */
+.spotlight {
+  background:
+    radial-gradient(620px 300px at 50% 0%, rgba(61, 220, 151, .1), transparent 70%),
+    linear-gradient(180deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--line-bright);
+  border-radius: 20px;
+  padding: 44px 38px 38px;
+}
+.spotlight .lead {
+  text-align: center;
+  color: var(--dim);
+  max-width: 56ch;
+  margin: 0 auto 30px;
+  font-size: 15.4px;
+}
+.spotlight > .fine { text-align: center; max-width: 62ch; margin: 26px auto 0; }
+
+.steps {
+  counter-reset: step;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 15px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+}
+.steps li {
+  counter-increment: step;
+  position: relative;
+  padding: 18px 18px 18px 20px;
+  border-left: 2px solid var(--line-bright);
+  color: var(--dim);
+  font-size: 14.2px;
+  line-height: 1.6;
+}
+.steps li::before {
+  content: counter(step);
+  display: grid;
+  place-items: center;
+  width: 23px; height: 23px;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  background: rgba(61, 220, 151, .13);
+  border: 1px solid rgba(61, 220, 151, .3);
+  color: var(--mint-bright);
+  font-size: 12px;
+  font-weight: 700;
+}
+.steps strong { display: block; color: var(--text); margin-bottom: 3px; font-weight: 620; }
+
+.closing { text-align: center; margin-bottom: 40px; }
+.closing h2 { font-size: 24px; letter-spacing: -.4px; margin-bottom: 10px; }
+.closing p { color: var(--dim); margin-bottom: 22px; }
+
 /* ── buttons ─────────────────────────────────────────────────────── */
 .button, button {
   display: inline-flex;

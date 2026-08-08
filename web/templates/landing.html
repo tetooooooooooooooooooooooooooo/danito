@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block bodyclass %}landing-page{% endblock %}
+{% block title %}{{ brand }} · a Discord bot that helps your server keep people{% endblock %}
+
+{% macro feature(icon, title, body) %}
+  <div class="feature">
+    <div class="icon">{{ icon }}</div>
+    <h3>{{ title }}</h3>
+    <p>{{ body }}</p>
+  </div>
+{% endmacro %}
+
+{% block content %}
+<section class="hero landing">
+  <span class="pill">Moderation · Logging · Retention</span>
+  <h1>Keep the people who join your server</h1>
+  <p>{{ brand }} handles the moderation and logging you'd expect, then does the thing most
+     bots don't: it asks your members what they think, and shows you whether they stay.</p>
+  <div class="cta">
+    <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
+    <a class="button ghost" href="{{ url_for('login') }}">Log in with Discord</a>
+  </div>
+  <p class="fine">Free. No setup required to start, and every feature is off until you turn
+     it on.</p>
+</section>
+
+<section>
+  <h2 class="section">What it does</h2>
+  <div class="features">
+    {{ feature("🔨", "Moderation that remembers",
+       "Ban, kick, timeout, purge and warn. Every action becomes a numbered case, so you can
+        see whether somebody is a repeat offender instead of reacting to each incident on
+        its own.") }}
+    {{ feature("⭐", "Ask what people think",
+       "A one tap survey from 1 to 10, posted in a channel you choose. Scores are saved per
+        member, so changing your mind replaces your old answer rather than stuffing the
+        ballot.") }}
+    {{ feature("📈", "See whether they stay",
+       "Retention measured properly: of the people who joined a week ago, how many are still
+        here. Grouped by hour, day, week or month, and honest about which figures it doesn't
+        have enough history for yet.") }}
+    {{ feature("🗄️", "Deleted media, kept",
+       "When somebody deletes an image, video or voice memo, you get the file itself, not
+        just a filename. Along with who posted it, who deleted it and when.") }}
+    {{ feature("👋", "Greet people in your words",
+       "Welcome and goodbye messages you write, in a channel or by direct message, plain or
+        as an embed. Nothing is ever sent that you didn't write.") }}
+    {{ feature("📊", "Know your server",
+       "Which roles are most common, when your channels are busiest, who talks most, what
+        people are playing, and which profile badges your members carry.") }}
+    {{ feature("🛡️", "Quiet spam removal",
+       "Batches of images posted with the giveaway filename patterns get removed on sight,
+        and the file is kept in your log so you can still see what it was.") }}
+    {{ feature("🔔", "Nothing happens invisibly",
+       "The nudge that brings members back deletes itself after two seconds. It gets logged
+        with how many people it actually reached, so you can tell it worked.") }}
+  </div>
+</section>
+
+<section class="spotlight">
+  <h2 class="section">The part other bots don't do</h2>
+  <p class="lead">Most people decide whether a server is worth staying in during their first
+     couple of weeks. {{ brand }} works that window deliberately.</p>
+  <ol class="steps">
+    <li>
+      <strong>Someone joins.</strong>
+      They quietly get a role named after that day, so everybody who arrived together forms
+      a group.
+    </li>
+    <li>
+      <strong>Eight days later.</strong>
+      That group, and only that group, gets one ping in your ratings channel. It deletes
+      itself two seconds later, so they get the notification without the clutter.
+    </li>
+    <li>
+      <strong>They rate the server.</strong>
+      One tap, 1 to 10. You read the results with a command, or right here on the dashboard.
+    </li>
+    <li>
+      <strong>You find out if it worked.</strong>
+      Retention is tracked per joining group, so a bad week is visible instead of averaged
+      away.
+    </li>
+  </ol>
+  <p class="fine">Better retention is also one of the things Discord weighs when deciding
+     which servers to surface in Server Discovery, so keeping people around helps your
+     chances of being listed.</p>
+</section>
+
+<section class="closing">
+  <h2>Ready?</h2>
+  <p>Add it, run one command, and it starts working. Everything else is optional.</p>
+  <div class="cta">
+    <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
+  </div>
+</section>
+{% endblock %}

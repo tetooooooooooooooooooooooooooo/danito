@@ -37,8 +37,7 @@
         {% endif %}
         <div>
           <strong>{{ g.name }}</strong>
-          <a class="fine" rel="noopener" target="_blank"
-             href="https://discord.com/oauth2/authorize?client_id={{ client_id }}&scope=bot+applications.commands&permissions=1374389534294&guild_id={{ g.id }}">
+          <a class="fine" rel="noopener" target="_blank" href="{{ invite_url(g.id) }}">
             Add the bot
           </a>
         </div>

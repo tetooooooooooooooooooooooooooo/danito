@@ -12,7 +12,7 @@
     %3Ccircle cx='16' cy='16' r='7' fill='%233ddc97'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
+<body class="{% block bodyclass %}{% endblock %}">
   <header class="bar">
     <a class="brand" href="{{ url_for('index') }}">{{ brand }}</a>
     {% if user %}
@@ -23,6 +23,11 @@
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
           <button class="link" type="submit">Log out</button>
         </form>
+      </div>
+    {% else %}
+      <div class="who">
+        <a class="link-plain" href="{{ url_for('login') }}">Log in</a>
+        <a class="button small" rel="noopener" href="{{ invite_url() }}">Add to Discord</a>
       </div>
     {% endif %}
   </header>

@@ -36,6 +36,15 @@ app.secret_key = os.environ.get("DASHBOARD_SECRET_KEY") or secrets.token_hex(32)
 # The bot's own name inside Discord comes from the application itself, so it follows a rename
 # in the Developer Portal without a deploy. Only the web pages need telling.
 BRAND = os.environ.get("DASHBOARD_BRAND", "Newt")
+
+# The permissions the invite asks for, in one place rather than repeated in each template.
+INVITE_PERMISSIONS = "1374389534294"
+
+
+def invite_url(guild_id=None) -> str:
+    url = (f"https://discord.com/oauth2/authorize?client_id={api.CLIENT_ID}"
+           f"&scope=bot+applications.commands&permissions={INVITE_PERMISSIONS}")
+    return f"{url}&guild_id={guild_id}" if guild_id else url
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
@@ -107,7 +116,8 @@ def require_guild(guild_id: int) -> dict:
 
 @app.context_processor
 def inject():
-    return {"user": current_user(), "csrf_token": csrf_token, "api": api, "brand": BRAND}
+    return {"user": current_user(), "csrf_token": csrf_token, "api": api,
+            "brand": BRAND, "invite_url": invite_url}
 
 
 # ── auth ─────────────────────────────────────────────────────────────
@@ -118,7 +128,7 @@ def index():
         return render_template("misconfigured.html", problems=problems), 503
     if current_user():
         return redirect(url_for("servers"))
-    return render_template("login.html")
+    return render_template("landing.html")
 
 
 @app.route("/login")
@@ -186,8 +196,7 @@ def servers():
     joined, absent = [], []
     for g in sorted(allowed, key=lambda x: x["name"].lower()):
         (joined if int(g["id"]) in present else absent).append(g)
-    return render_template("servers.html", joined=joined, absent=absent,
-                           client_id=api.CLIENT_ID)
+    return render_template("servers.html", joined=joined, absent=absent)
 
 
 @app.route("/servers/<int:guild_id>")
