@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block bodyclass %}support-page{% endblock %}
+{% block title %}Support · {{ brand }}{% endblock %}
+{% block description %}Get help with {{ brand }}: the support server, answers to the usual
+problems, and a ticket you can open and track without leaving the site.{% endblock %}
+
+{% set status_words = {
+  "open": ("Waiting on us", "open"),
+  "answered": ("Replied", "answered"),
+  "closed": ("Closed", "closed")
+} %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Support</h1>
+    <p class="fine">Something not working, or not sure how to set it up? Start here.</p>
+  </div>
+</header>
+
+<div class="grid two">
+  <div class="card join">
+    <div class="join-icon" aria-hidden="true">💬</div>
+    <h2>The support server</h2>
+    {% if invite_ready %}
+      <p class="fine">The quickest route. Ask in the open, and other server owners can answer
+        too.</p>
+      <a class="button block" rel="noopener" target="_blank" href="{{ support_invite }}">
+        Join the {{ brand }} server</a>
+    {% else %}
+      <p class="fine">Being set up. Until it's ready, open a ticket below and it gets answered
+        the same way.</p>
+      <span class="button block disabled" aria-disabled="true">Coming soon</span>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Try these first</h2>
+    <p class="fine">Most of what people ask has an answer already.</p>
+    <ul class="quick">
+      <li><a href="{{ url_for('status') }}">Is the bot down?</a>
+        <span>Check before anything else.</span></li>
+      <li><a href="{{ url_for('documentation') }}#start">Nothing happens when I use it</a>
+        <span>Every feature is off until you switch it on.</span></li>
+      <li><a href="{{ url_for('documentation') }}#permissions">A command says I can't</a>
+        <span>Your permissions and the bot's are two separate things.</span></li>
+      <li><a href="{{ url_for('documentation') }}#autorole">Roles aren't being handed out</a>
+        <span>Nearly always the bot's role sitting too low.</span></li>
+      <li><a href="{{ url_for('documentation') }}#trouble">Everything else</a>
+        <span>The troubleshooting list in the docs.</span></li>
+    </ul>
+  </div>
+</div>
+
+<h2 class="section-head" id="tickets">Tickets</h2>
+{% if user %}
+  <p class="fine">Opened here, answered in Discord. You get a direct message when somebody
+    replies, and the whole thread stays on this page.</p>
+
+  <form class="card" method="post" action="{{ url_for('new_ticket') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    {{ "" }}
+    <div class="row">
+      <label>What's it about
+        <select name="category">
+          {% for value, label in categories %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Which server, if it's about one
+        <select name="guild_id">
+          <option value="">Not about a particular server</option>
+          {% for g in (user_guilds or []) %}
+            <option value="{{ g.id }}">{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Subject
+      <input type="text" name="subject" maxlength="{{ max_subject }}" required
+             placeholder="Autorole isn't giving anyone the role">
+    </label>
+    <label>What's happening
+      <textarea name="body" rows="5" maxlength="{{ max_body }}" required
+                placeholder="What you expected, what happened instead, and anything you've already tried."></textarea>
+    </label>
+    <p class="fine">Don't paste tokens, passwords or anything private. A server ID is fine.</p>
+    <button type="submit">Open a ticket</button>
+  </form>
+
+  {% if tickets %}
+    <div class="tickets">
+      {% for t in tickets %}
+        {% set label, cls = status_words.get(t.status, ("Open", "open")) %}
+        <div class="card ticket {{ cls }}" id="ticket-{{ t.number }}">
+          <div class="ticket-head">
+            <div>
+              <span class="tnum">#{{ t.number }}</span>
+              <strong>{{ t.subject }}</strong>
+              <span class="fine">{{ category_labels.get(t.category, "Something else") }}
+                {%- if t.guild_name %} · {{ t.guild_name }}{% endif %}</span>
+            </div>
+            <span class="tstatus {{ cls }}">{{ label }}</span>
+          </div>
+
+          <div class="thread">
+            <div class="msg you">
+              <span class="who">You</span>
+              <p>{{ t.body }}</p>
+            </div>
+            {% for m in t.messages or [] %}
+              <div class="msg {{ 'you' if m.from == 'you' else 'staff' }}">
+                <span class="who">{{ "You" if m.from == "you" else (m.author or "Support") }}</span>
+                <p>{{ m.body }}</p>
+              </div>
+            {% endfor %}
+          </div>
+
+          {% if t.status != "closed" %}
+            <form method="post" action="{{ url_for('reply_ticket', number=t.number) }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <textarea name="body" rows="2" maxlength="{{ max_body }}"
+                        placeholder="Add something to this ticket"></textarea>
+              <div class="row end">
+                <button type="submit">Send</button>
+                <button type="submit" class="danger"
+                        formaction="{{ url_for('close_ticket_route', number=t.number) }}">
+                  Close it</button>
+              </div>
+            </form>
+          {% else %}
+            <p class="fine">This ticket is closed. Open a new one if it comes back.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="fine">You haven't opened any yet.</p>
+  {% endif %}
+{% else %}
+  <div class="card empty">
+    <div class="empty-icon" aria-hidden="true">🎫</div>
+    <h2>Log in to open a ticket</h2>
+    <p class="fine">Signing in with Discord is how the reply reaches you. Nothing is posted
+      anywhere public, and it takes one click.</p>
+    <a class="button" href="{{ url_for('login', next='/support') }}">Log in with Discord</a>
+  </div>
+{% endif %}
+{% endblock %}

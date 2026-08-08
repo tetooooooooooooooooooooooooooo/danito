@@ -1247,6 +1247,99 @@ button.tiny:hover {
   .logrow select { width: 100%; flex: 1; }
 }
 
+/* ── support ─────────────────────────────────────────────────────── */
+body.support-page main { max-width: 860px; }
+
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); margin-bottom: 8px; }
+.grid.two .card { margin-bottom: 0; }
+
+.card.join { text-align: center; }
+.join-icon { font-size: 30px; margin-bottom: 8px; }
+.card.join h2 { justify-content: center; }
+.card.join .head, .card.join h2::before { display: none; }
+.card.join .fine { margin-bottom: 16px; }
+
+.button.disabled {
+  background: var(--surface-3);
+  color: var(--faint);
+  border: 1px solid var(--line-bright);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+ul.quick { list-style: none; padding: 0; margin: 12px 0 0; }
+ul.quick li { margin-bottom: 11px; }
+ul.quick a { color: var(--mint); text-decoration: none; font-size: 14.2px; font-weight: 500; }
+ul.quick a:hover { text-decoration: underline; }
+ul.quick span { display: block; color: var(--faint); font-size: 12.8px; }
+
+/* ── tickets ─────────────────────────────────────────────────────── */
+.tickets { margin-top: 18px; }
+
+.ticket { scroll-margin-top: 90px; }
+.ticket-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+}
+.ticket-head strong { display: block; font-size: 15.5px; letter-spacing: -.2px; }
+.ticket-head .fine { margin-top: 3px; }
+
+.tnum {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  color: var(--faint);
+}
+
+.tstatus {
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  padding: 4px 11px;
+  border-radius: 999px;
+}
+.tstatus.open { color: var(--warn); background: rgba(240, 180, 95, .12);
+                border: 1px solid rgba(240, 180, 95, .32); }
+.tstatus.answered { color: var(--mint-bright); background: rgba(61, 220, 151, .12);
+                    border: 1px solid rgba(61, 220, 151, .32); }
+.tstatus.closed { color: var(--faint); background: var(--surface-3);
+                  border: 1px solid var(--line-bright); }
+
+.thread { margin: 16px 0; display: flex; flex-direction: column; gap: 10px; }
+
+/* Staff replies lean the other way, so a thread reads as a conversation at a glance. */
+.msg {
+  padding: 11px 14px;
+  border-radius: var(--r-sm);
+  background: var(--surface-3);
+  border: 1px solid var(--line);
+  max-width: 88%;
+}
+.msg.staff {
+  align-self: flex-end;
+  background: rgba(61, 220, 151, .08);
+  border-color: rgba(61, 220, 151, .24);
+}
+.msg .who {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  color: var(--faint);
+  margin-bottom: 3px;
+}
+.msg p { margin: 0; font-size: 14.2px; white-space: pre-wrap; word-break: break-word; }
+
+.ticket form textarea { min-height: 60px; }
+
 /* ── status page ─────────────────────────────────────────────────── */
 body.status-page main { max-width: 760px; }
 
@@ -1592,12 +1685,20 @@ footer p { margin: 0; }
 
 /* ── small screens ───────────────────────────────────────────────── */
 @media (max-width: 560px) {
-  .bar { padding: 12px 16px; }
+  .bar { padding: 12px 16px; gap: 10px; }
   main { padding: 28px 16px 64px; }
   h1 { font-size: 25px; }
   .hero { padding: 52px 0 40px; }
   .who span { display: none; }
   .grid { grid-template-columns: 1fr; }
+
+  /* The nav scrolls rather than pushing the account block off the page. min-width: 0 is the
+     part that matters: without it a flex child refuses to shrink below its content, so every
+     link added to the header widens the whole document. */
+  .bar-left { gap: 15px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .bar-left::-webkit-scrollbar { display: none; }
+  .bar-left .nav-link { flex: none; }
+  .who { flex: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

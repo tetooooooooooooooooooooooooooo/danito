@@ -408,6 +408,125 @@ def save_panel(guild_id: int, panel_id, channel_id: int, title: str, description
     return result.matched_count == 1
 
 
+# ── support tickets ──────────────────────────────────────────────────
+# Written here and read by the bot, the same way role panels work: the dashboard has no
+# gateway connection, so it records the ticket and the bot is what announces it.
+
+TICKET_CATEGORIES = [
+    ("broken", "Something isn't working"),
+    ("howto", "How do I do something"),
+    ("idea", "An idea or a request"),
+    ("data", "Data, privacy or deletion"),
+    ("other", "Something else"),
+]
+TICKET_CATEGORY_LABELS = dict(TICKET_CATEGORIES)
+TICKET_STATUSES = ("open", "answered", "closed")
+
+MAX_SUBJECT = 120
+MAX_BODY = 2000
+MAX_OPEN_TICKETS = 3          # per person, so one bad day can't fill the queue
+TICKET_COOLDOWN = 60          # seconds between new tickets from the same person
+
+
+def _tickets():
+    return db()["tickets"]
+
+
+def _next_ticket_number() -> int:
+    """Sequential and global. find_one_and_update is atomic, so two people opening a ticket
+    at the same moment can't be handed the same number."""
+    doc = db()["counters"].find_one_and_update(
+        {"_id": "ticket"}, {"$inc": {"seq": 1}}, upsert=True, return_document=True)
+    return int(doc["seq"]) if doc else 1
+
+
+def tickets_for(user_id: int, limit: int = 25) -> list:
+    return list(_tickets().find({"user_id": int(user_id)})
+                .sort("created_at", -1).limit(limit))
+
+
+def ticket(user_id: int, number: int) -> dict:
+    """Scoped by user as well as number, so a guessed number matches nothing."""
+    try:
+        number = int(number)
+    except (TypeError, ValueError):
+        return {}
+    return _tickets().find_one({"number": number, "user_id": int(user_id)}) or {}
+
+
+def can_open_ticket(user_id: int) -> str:
+    """Empty string when they may, otherwise the reason they may not."""
+    user_id = int(user_id)
+    live = _tickets().count_documents(
+        {"user_id": user_id, "status": {"$ne": "closed"}})
+    if live >= MAX_OPEN_TICKETS:
+        return (f"You already have {live} tickets open. Close one, or reply on it, rather "
+                f"than starting another.")
+
+    last = list(_tickets().find({"user_id": user_id}).sort("created_at", -1).limit(1))
+    if last:
+        age = (datetime.datetime.now(datetime.timezone.utc)
+               - _aware(last[0].get("created_at"))).total_seconds()
+        if age < TICKET_COOLDOWN:
+            return f"Give it {int(TICKET_COOLDOWN - age)} more seconds before opening another."
+    return ""
+
+
+def _aware(value):
+    """pymongo hands back naive UTC datetimes; comparing one to an aware now raises."""
+    if value is None:
+        return datetime.datetime.now(datetime.timezone.utc)
+    return value.replace(tzinfo=datetime.timezone.utc) if value.tzinfo is None else value
+
+
+def open_ticket(user_id: int, user_tag: str, category: str, subject: str, body: str,
+                guild_id=None, guild_name=None) -> int:
+    now = datetime.datetime.now(datetime.timezone.utc)
+    number = _next_ticket_number()
+    _tickets().insert_one({
+        "number": number,
+        "user_id": int(user_id),
+        "user_tag": user_tag,
+        "guild_id": int(guild_id) if guild_id else None,
+        "guild_name": guild_name,
+        "category": category if category in TICKET_CATEGORY_LABELS else "other",
+        "subject": (subject or "").strip()[:MAX_SUBJECT] or "No subject",
+        "body": (body or "").strip()[:MAX_BODY],
+        "status": "open",
+        "created_at": now,
+        "updated_at": now,
+        # The bot announces it, and clears this once it has.
+        "posted": False,
+        "messages": [],
+    })
+    return number
+
+
+def reply_to_ticket(user_id: int, number: int, body: str) -> bool:
+    """A reply from the person who opened it, which reopens an answered ticket."""
+    found = ticket(user_id, number)
+    if not found or found.get("status") == "closed":
+        return False
+    now = datetime.datetime.now(datetime.timezone.utc)
+    _tickets().update_one(
+        {"_id": found["_id"]},
+        {"$set": {"status": "open", "updated_at": now, "posted": False},
+         "$push": {"messages": {"from": "you", "author": found.get("user_tag", ""),
+                                "body": (body or "").strip()[:MAX_BODY], "at": now}}})
+    return True
+
+
+def close_ticket(user_id: int, number: int) -> bool:
+    found = ticket(user_id, number)
+    if not found or found.get("status") == "closed":
+        return False
+    _tickets().update_one(
+        {"_id": found["_id"]},
+        {"$set": {"status": "closed",
+                  "updated_at": datetime.datetime.now(datetime.timezone.utc)}})
+    return True
+
+
 def delete_panel(guild_id: int, panel_id) -> bool:
     """Flag the panel for removal rather than dropping the document.
 

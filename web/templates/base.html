@@ -42,6 +42,7 @@
       <a class="brand" href="{{ url_for('index') }}">{{ brand }}</a>
       <a class="nav-link" href="{{ url_for('documentation') }}">Docs</a>
       <a class="nav-link" href="{{ url_for('status') }}">Status</a>
+      <a class="nav-link" href="{{ url_for('support') }}">Support</a>
       {% if user %}<a class="nav-link" href="{{ url_for('servers') }}">Servers</a>{% endif %}
     </div>
     {% if user %}
@@ -77,6 +78,7 @@
     <nav class="foot-links">
       <a href="{{ url_for('documentation') }}">Docs</a>
       <a href="{{ url_for('status') }}">Status</a>
+      <a href="{{ url_for('support') }}">Support</a>
       <a href="{{ terms_url }}" rel="noopener">Terms of Service</a>
       <a href="{{ privacy_url }}" rel="noopener">Privacy Policy</a>
     </nav>

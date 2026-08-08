@@ -244,6 +244,10 @@ async def main():
         "counters",           # keyed case:<guild_id>, handled separately in forget()
         "departed_guilds",    # the bookkeeping for this cog, deleted alongside
         "runtime",            # one global document, not per guild
+        # Support tickets belong to the person who opened them, not to a server. Removing the
+        # bot from one server is not a reason to erase somebody's support history, and a
+        # ticket can be about no server at all.
+        "tickets",
     }
     found = set()
     for path in list((ROOT / "src").rglob("*.py")) + list((ROOT / "web").rglob("*.py")):

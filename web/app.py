@@ -227,6 +227,101 @@ def status_json():
     return data
 
 
+# ── support ──────────────────────────────────────────────────────────
+# The invite is a placeholder until there is a server to point at. When it hasn't been set the
+# page says so rather than offering a link that goes nowhere, and leans on tickets instead.
+PLACEHOLDER_INVITE = "https://discord.gg/placeholder"
+SUPPORT_INVITE = (os.environ.get("SUPPORT_INVITE") or PLACEHOLDER_INVITE).strip()
+
+
+@app.route("/support")
+def support():
+    user = current_user()
+    mine, guilds = [], []
+    if user:
+        mine = store.tickets_for(int(user["id"]))
+        try:
+            # Only servers they administer, so a ticket can't be filed against somebody else's.
+            guilds = sorted(api.manageable_guilds(session["token"], int(user["id"])),
+                            key=lambda g: g["name"].lower())
+        except api.DiscordError:
+            guilds = []          # the picker is optional, so a Discord blip isn't fatal
+    return render_template(
+        "support.html",
+        tickets=mine,
+        user_guilds=guilds,
+        categories=store.TICKET_CATEGORIES,
+        category_labels=store.TICKET_CATEGORY_LABELS,
+        support_invite=SUPPORT_INVITE,
+        invite_ready=SUPPORT_INVITE != PLACEHOLDER_INVITE,
+        max_subject=store.MAX_SUBJECT,
+        max_body=store.MAX_BODY,
+    )
+
+
+@app.route("/support/new", methods=["POST"])
+@login_required
+def new_ticket():
+    check_csrf()
+    user = current_user()
+    user_id = int(user["id"])
+
+    blocked = store.can_open_ticket(user_id)
+    if blocked:
+        flash(blocked)
+        return redirect(url_for("support"))
+
+    subject = (request.form.get("subject") or "").strip()
+    body = (request.form.get("body") or "").strip()
+    if not subject or not body:
+        flash("A ticket needs a subject and a description.")
+        return redirect(url_for("support"))
+
+    # A server can only be attached if they really administer it, so a ticket can't be filed
+    # against somebody else's server.
+    guild_id, guild_name = None, None
+    raw = request.form.get("guild_id") or ""
+    if raw:
+        try:
+            allowed = api.manageable_guilds(session["token"], user_id)
+        except api.DiscordError:
+            allowed = []
+        match = next((g for g in allowed if g["id"] == raw), None)
+        if match:
+            guild_id, guild_name = int(match["id"]), match["name"]
+
+    number = store.open_ticket(
+        user_id, user["username"], request.form.get("category", "other"),
+        subject, body, guild_id, guild_name)
+    flash(f"Ticket #{number} is open. You'll get a direct message when somebody replies.")
+    return redirect(url_for("support") + f"#ticket-{number}")
+
+
+@app.route("/support/<int:number>/reply", methods=["POST"])
+@login_required
+def reply_ticket(number: int):
+    check_csrf()
+    body = (request.form.get("body") or "").strip()
+    if not body:
+        flash("Nothing to send.")
+    elif store.reply_to_ticket(int(current_user()["id"]), number, body):
+        flash(f"Added to ticket #{number}.")
+    else:
+        flash("That ticket is closed, or isn't yours.")
+    return redirect(url_for("support") + f"#ticket-{number}")
+
+
+@app.route("/support/<int:number>/close", methods=["POST"])
+@login_required
+def close_ticket_route(number: int):
+    check_csrf()
+    if store.close_ticket(int(current_user()["id"]), number):
+        flash(f"Ticket #{number} is closed. Thanks.")
+    else:
+        flash("That ticket is already closed, or isn't yours.")
+    return redirect(url_for("support"))
+
+
 @app.route("/login")
 def login():
     if api.configured():

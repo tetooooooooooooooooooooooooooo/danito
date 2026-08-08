@@ -90,6 +90,7 @@ class Bot(commands.Bot):
             "Cogs.Moderation",
             "Cogs.AutoMod",
             "Cogs.Lifecycle",
+            "Cogs.Support",
             "Cogs.owner",
         ]
 
