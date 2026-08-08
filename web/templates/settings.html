@@ -345,10 +345,21 @@
         </label>
         <p class="fine">A short note that deletes itself after a few seconds. Without it people
           repost the same thing three times wondering where it went.</p>
-        <label>Timeout length, in minutes
-          <input type="number" name="automod_timeout" min="1" max="10080"
-            value="{{ am.get('timeout_minutes', 10) }}">
-        </label>
+        <div class="row">
+          <label>Timeout length, in minutes
+            <input type="number" name="automod_timeout" min="1" max="10080"
+              value="{{ am.get('timeout_minutes', 10) }}">
+          </label>
+          <label>Most kicks or bans per hour
+            <input type="number" name="automod_max_removals" min="1" max="100"
+              value="{{ am.get('max_removals', 5) }}">
+          </label>
+        </div>
+        <p class="fine">Kicking and banning can't be undone by clicking something, so there's a
+          ceiling on how many can happen automatically in an hour. Past it they become timeouts
+          instead, and the case says why. One wrong word on the banned list would otherwise
+          empty the server before anybody noticed. Raise it if you'd rather it never got in the
+          way.</p>
 
         <button type="submit">Save</button>
       </form>

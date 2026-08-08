@@ -6,8 +6,15 @@ it stopped. So the defaults are all off, every rule is independent, and the exem
 checked before any rule runs: staff are skipped, chosen roles and channels are skipped, and
 anyone the bot could not moderate by hand is skipped too.
 
-Actions escalate: delete the message, delete and record a warning, or delete and time them
-out. Nothing here ever kicks or bans on its own. That decision stays with a person.
+Actions escalate: delete the message, delete and warn, delete and time them out, delete and
+kick, delete and ban. The last two can't be undone by clicking something, so there is a limit
+on how many can happen in an hour. Past it they become timeouts, which are reversible, and the
+case says why. A wrong entry on a banned word list otherwise empties a server before anybody
+notices, and that is not a theoretical way for an automod to go wrong.
+
+Every action falls back rather than giving up. A ban the bot has no permission for becomes a
+timeout; a timeout it can't place is still written down as a warning. The alternative is a
+rule that looks switched on and quietly does nothing.
 
 Warnings and timeouts are recorded through the Moderation cog, so an automod action lands in
 the same numbered case history as one a moderator took by hand. Somebody looking up a member
@@ -42,12 +49,16 @@ RULES = [
 ]
 RULE_KEYS = [key for key, _, _ in RULES]
 
-ACTIONS = ("delete", "warn", "timeout")
+ACTIONS = ("delete", "warn", "timeout", "kick", "ban")
 ACTION_WORDS = {
     "delete": "delete the message",
     "warn": "delete it and record a warning",
     "timeout": "delete it and time them out",
+    "kick": "delete it and kick them",
+    "ban": "delete it and ban them",
 }
+# The two that can't be undone by clicking something.
+REMOVALS = ("kick", "ban")
 
 # Everything off until a server turns it on, and the thresholds set where a reasonable person
 # would put them rather than where they catch the most.
@@ -64,6 +75,13 @@ DEFAULTS = {
 }
 
 DEFAULT_TIMEOUT_MINUTES = 10
+
+# A brake on the two actions nobody can undo with a click. A wrong word on the banned list, or
+# a rule that turns out to match more than anybody expected, otherwise empties a server before
+# a human notices. Past the limit, removals fall back to a timeout, which is reversible, and
+# the case says why. Raise it if you would rather it never got in the way.
+DEFAULT_MAX_REMOVALS = 5
+REMOVAL_WINDOW = 3600
 MAX_WORDS = 100
 MAX_WORD_LENGTH = 40
 MAX_DOMAINS = 50
@@ -109,6 +127,8 @@ class AutoMod(commands.Cog, name="AutoMod"):
         self._recent: dict[tuple, deque] = {}
         # The banned word list compiled once per distinct list rather than per message.
         self._word_cache: dict[tuple, re.Pattern] = {}
+        # guild_id -> when each automatic kick or ban happened, for the hourly brake.
+        self._removals: dict[int, deque] = {}
 
     automod = app_commands.Group(
         name="automod", description="Rules that act on messages by themselves",
@@ -266,6 +286,17 @@ class AutoMod(commands.Cog, name="AutoMod"):
                 return          # one rule per message, so nobody gets three punishments at once
 
     # ── acting on it ─────────────────────────────────────────────────
+    def _removal_allowed(self, guild_id: int, limit: int) -> bool:
+        """Whether another kick or ban is within the hourly limit, counting it if so."""
+        now = time.monotonic()
+        seen = self._removals.setdefault(guild_id, deque())
+        while seen and seen[0] < now - REMOVAL_WINDOW:
+            seen.popleft()
+        if len(seen) >= limit:
+            return False
+        seen.append(now)
+        return True
+
     async def _act(self, message, rule: str, reason: str, action: str, automod: dict):
         guild, member = message.guild, message.author
         label = next(lbl for key, _, lbl in RULES if key == rule)
@@ -281,33 +312,87 @@ class AutoMod(commands.Cog, name="AutoMod"):
             print(f"[AutoMod] delete failed in {guild.id}: {e}")
 
         minutes = int(automod.get("timeout_minutes") or DEFAULT_TIMEOUT_MINUTES)
-        timed_out = False
+        limit = int(automod.get("max_removals") or DEFAULT_MAX_REMOVALS)
+        note = ""
+
+        # A kick or a ban that can't go ahead becomes a timeout rather than nothing at all,
+        # so the person is still stopped and the case says what really happened.
+        if action in REMOVALS and not self._removal_allowed(guild.id, limit):
+            note = (f" Automatic {action}s are paused: {limit} in the last hour is the limit, "
+                    f"so this was a timeout instead.")
+            print(f"[AutoMod] removal limit of {limit}/hour reached in {guild.id}")
+            action = "timeout"
+
+        outcome = await self._carry_out(guild, member, action, label, minutes)
+        if outcome != action and action in REMOVALS:
+            note = (f" I couldn't {action} them, so this was a "
+                    f"{'timeout' if outcome == 'timeout' else 'warning'} instead.")
+
+        if automod.get("notify", True):
+            await self._notify(message, member, label, outcome, minutes)
+
+        if outcome != "delete":
+            await self._record_case(guild, member, outcome, reason + note,
+                                    minutes if outcome == "timeout" else None)
+
+    async def _carry_out(self, guild, member, action: str, label: str, minutes: int) -> str:
+        """Do it, and report what actually happened rather than what was asked for.
+
+        Every branch falls back rather than giving up: a ban the bot can't place still times
+        the person out, and a timeout it can't place is still written down as a warning. The
+        alternative is a rule that silently does nothing at all.
+        """
+        reason = f"AutoMod: {label}"
+        perms = guild.me.guild_permissions
+
+        if action == "ban":
+            if perms.ban_members:
+                try:
+                    await guild.ban(member, reason=reason)
+                    return "ban"
+                except (discord.Forbidden, discord.HTTPException) as e:
+                    print(f"[AutoMod] ban failed in {guild.id}: {e}")
+            else:
+                print(f"[AutoMod] no Ban Members in {guild.id}")
+            action = "timeout"
+
+        elif action == "kick":
+            if perms.kick_members:
+                try:
+                    await member.kick(reason=reason)
+                    return "kick"
+                except (discord.Forbidden, discord.HTTPException) as e:
+                    print(f"[AutoMod] kick failed in {guild.id}: {e}")
+            else:
+                print(f"[AutoMod] no Kick Members in {guild.id}")
+            action = "timeout"
+
         if action == "timeout":
-            if guild.me.guild_permissions.moderate_members:
+            if perms.moderate_members:
                 try:
                     until = discord.utils.utcnow() + datetime.timedelta(minutes=minutes)
-                    await member.timeout(until, reason=f"AutoMod: {label}")
-                    timed_out = True
+                    await member.timeout(until, reason=reason)
+                    return "timeout"
                 except (discord.Forbidden, discord.HTTPException) as e:
                     print(f"[AutoMod] timeout failed in {guild.id}: {e}")
             else:
                 print(f"[AutoMod] no Moderate Members in {guild.id}")
+            return "warn"
 
-        if automod.get("notify", True):
-            await self._notify(message, member, label, timed_out, minutes)
+        return action
 
-        if action in ("warn", "timeout"):
-            await self._record_case(guild, member, rule, reason,
-                                    minutes if timed_out else None)
-
-    async def _notify(self, message, member, label, timed_out, minutes):
+    async def _notify(self, message, member, label, outcome, minutes):
         """A short note in the channel that clears itself up.
 
         Without it people repost the same thing three times wondering why it vanished.
         """
         text = f"{member.mention} that was removed automatically ({label.lower()})."
-        if timed_out:
+        if outcome == "timeout":
             text += f" You're muted for {minutes} minutes."
+        elif outcome == "kick":
+            text = f"**{member}** was removed from the server automatically ({label.lower()})."
+        elif outcome == "ban":
+            text = f"**{member}** was banned automatically ({label.lower()})."
         try:
             await message.channel.send(
                 text, delete_after=NOTICE_SECONDS,
@@ -316,7 +401,7 @@ class AutoMod(commands.Cog, name="AutoMod"):
         except (discord.Forbidden, discord.HTTPException):
             pass
 
-    async def _record_case(self, guild, member, rule, reason, minutes):
+    async def _record_case(self, guild, member, action, reason, minutes):
         """Log it through the Moderation cog so it lands in the same case history.
 
         Going through that cog rather than writing to the collection here means one place
@@ -325,7 +410,6 @@ class AutoMod(commands.Cog, name="AutoMod"):
         mod = self.bot.get_cog("Moderation")
         if mod is None:
             return
-        action = "timeout" if minutes else "warn"
         me = guild.me
         try:
             case_id = await mod._record(
@@ -375,7 +459,9 @@ class AutoMod(commands.Cog, name="AutoMod"):
               for key, icon, label in RULES],
         action=[app_commands.Choice(name="Delete the message", value="delete"),
                 app_commands.Choice(name="Delete and warn", value="warn"),
-                app_commands.Choice(name="Delete and time them out", value="timeout")])
+                app_commands.Choice(name="Delete and time them out", value="timeout"),
+                app_commands.Choice(name="Delete and kick them", value="kick"),
+                app_commands.Choice(name="Delete and ban them", value="ban")])
     @app_commands.checks.has_permissions(manage_guild=True)
     async def rule(self, interaction: discord.Interaction,
                    rule: app_commands.Choice[str], on: bool,

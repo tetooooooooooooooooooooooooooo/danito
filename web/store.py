@@ -99,7 +99,12 @@ AUTOMOD_ACTIONS = [
     ("delete", "Delete the message"),
     ("warn", "Delete and warn"),
     ("timeout", "Delete and time them out"),
+    ("kick", "Delete and kick them"),
+    ("ban", "Delete and ban them"),
 ]
+# Kicks and bans can't be undone with a click, so there is a ceiling on how many can
+# happen in an hour. Past it they become timeouts.
+AUTOMOD_REMOVAL_RANGE = (1, 100)
 # Mirrors Cogs/AutoMod.DEFAULTS, so an unconfigured server sees sensible numbers in the boxes
 # rather than blanks. Only the thresholds are needed here; the bot owns the rest.
 AUTOMOD_DEFAULTS = {
@@ -250,6 +255,7 @@ def clean_automod(form, valid_channels: set, valid_roles: set, existing: dict) -
         return out[:AUTOMOD_MAX_EXEMPT]
 
     low, high = AUTOMOD_TIMEOUT_RANGE
+    rlow, rhigh = AUTOMOD_REMOVAL_RANGE
     return {
         "enabled": "automod_enabled" in form,
         "notify": "automod_notify" in form,
@@ -257,6 +263,7 @@ def clean_automod(form, valid_channels: set, valid_roles: set, existing: dict) -
         "exempt_roles": ids("automod_exempt_roles", valid_roles),
         "exempt_channels": ids("automod_exempt_channels", valid_channels),
         "timeout_minutes": _clamp(form.get("automod_timeout"), low, high, 10),
+        "max_removals": _clamp(form.get("automod_max_removals"), rlow, rhigh, 5),
         "rules": rules,
     }
 

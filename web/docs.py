@@ -205,10 +205,17 @@ SECTIONS = [
         "notes": [
             "The rules: banned words, Discord invites, links, mass mentions, message floods, "
             "repeated messages, shouting, emoji spam and walls of text.",
-            "Three responses, and it never goes further on its own: delete the message, delete "
-            "it and record a warning, or delete it and time the person out. Kicking and "
-            "banning stay with a person.",
-            "Warnings and timeouts become numbered cases in the moderation log, the same as "
+            "Five responses: delete the message, delete and warn, delete and time them out, "
+            "delete and kick, delete and ban.",
+            "Kicking and banning cannot be undone by clicking something, so there is a limit "
+            "on how many can happen automatically in an hour, five by default. Past it they "
+            "become timeouts instead and the case says why. One wrong entry on a banned word "
+            "list would otherwise empty a server before anybody noticed. Raise the limit if "
+            "you would rather it never got in the way.",
+            "Every action falls back rather than giving up. A ban the bot has no permission "
+            "for becomes a timeout, and a timeout it cannot place is still written down as a "
+            "warning. The case records what actually happened, not what was asked for.",
+            "Everything except a plain delete becomes a numbered case in the moderation log, the same as "
             "one a moderator handed out, so <code>/modlogs</code> shows the whole picture "
             "rather than half of it.",
             "Banned words are matched as whole words. Blocking a short word will not start "

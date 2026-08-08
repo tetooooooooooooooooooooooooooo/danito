@@ -98,6 +98,7 @@ class FakeChannel:
 class FakeMember:
     def __init__(self, uid=500, roles=(PLAIN,), staff=False):
         self.id = uid; self.bot = False; self.roles = list(roles)
+        self.guild = GUILD_OBJ
         self.is_staff = staff
         self.mention = f"<@{uid}>"
         self.timeouts = []
@@ -105,6 +106,7 @@ class FakeMember:
     def top_role(self): return max(self.roles, key=lambda r: r.position)
     def __str__(self): return f"user{self.id}"
     async def timeout(self, until, reason=None): self.timeouts.append((until, reason))
+    async def kick(self, reason=None): self.guild.kicked.append(self.id)
 
 
 class FakeMessage:
@@ -130,11 +132,16 @@ def reset():
     CHANNELS[QUIET] = FakeChannel(QUIET)
 
 
-def make_guild(can_timeout=True):
+def make_guild(can_timeout=True, can_kick=True, can_ban=True):
     g = types.SimpleNamespace(id=GUILD, name="Cool Server", owner_id=OWNER_ID)
+    g.kicked, g.banned = [], []
+    async def ban(member, reason=None): g.banned.append(member.id)
+    g.ban = ban
     g.me = types.SimpleNamespace(
         id=BOT_ID, top_role=BOT_TOP,
         guild_permissions=types.SimpleNamespace(moderate_members=can_timeout,
+                                                kick_members=can_kick,
+                                                ban_members=can_ban,
                                                 manage_messages=True))
     g.get_channel = lambda i: CHANNELS.get(i)
     g.get_role = lambda i: None
@@ -344,6 +351,70 @@ async def main():
         "without Moderate Members it should record what actually happened"
     GUILD_OBJ = make_guild()
     print("  message removed, recorded as a warning rather than a timeout OK")
+
+    print("\n=== kick and ban ===")
+    DB["mod_cases"].docs.clear()
+    automod(rules={"words": {"on": True, "action": "kick", "list": ["spam"]}})
+    member = FakeMember()
+    m = await send("spam", author=member)
+    assert m.deleted and GUILD_OBJ.kicked == [member.id], GUILD_OBJ.kicked
+    assert DB["mod_cases"].docs[0]["action"] == "kick"
+    print("  kick removed them and recorded a case OK")
+
+    GUILD_OBJ.kicked.clear(); DB["mod_cases"].docs.clear()
+    automod(rules={"words": {"on": True, "action": "ban", "list": ["spam"]}})
+    member = FakeMember()
+    await send("spam", author=member)
+    assert GUILD_OBJ.banned == [member.id], GUILD_OBJ.banned
+    assert DB["mod_cases"].docs[0]["action"] == "ban"
+    print("  ban removed them and recorded a case OK")
+
+    print("\n=== without the permission it falls back rather than doing nothing ===")
+    GUILD_OBJ = make_guild(can_ban=False)
+    GUILD_OBJ.banned.clear(); DB["mod_cases"].docs.clear()
+    member = FakeMember()
+    m = await send("spam", author=member)
+    assert m.deleted and not GUILD_OBJ.banned
+    assert len(member.timeouts) == 1, "a ban it can't place should still stop them"
+    case = DB["mod_cases"].docs[0]
+    assert case["action"] == "timeout", case
+    assert "couldn't ban" in case["reason"], case["reason"]
+    print(f"  no Ban Members -> timeout, case says {case['reason'][-46:].strip()!r}")
+
+    GUILD_OBJ = make_guild(can_ban=False, can_timeout=False)
+    DB["mod_cases"].docs.clear()
+    member = FakeMember()
+    m = await send("spam", author=member)
+    assert m.deleted and not member.timeouts
+    assert DB["mod_cases"].docs[0]["action"] == "warn"
+    print("  no timeout either -> still deleted and written down as a warning OK")
+    GUILD_OBJ = make_guild()
+
+    print("\n=== the hourly brake on kicks and bans ===")
+    cog._removals.clear()
+    GUILD_OBJ.banned.clear(); DB["mod_cases"].docs.clear()
+    automod(max_removals=3,
+            rules={"words": {"on": True, "action": "ban", "list": ["spam"]}})
+    people = [FakeMember(uid=1000 + i) for i in range(5)]
+    for p in people:
+        await send("spam", author=p)
+
+    assert len(GUILD_OBJ.banned) == 3, GUILD_OBJ.banned
+    assert [p.id for p in people[:3]] == GUILD_OBJ.banned
+    # The two past the limit are still dealt with, just reversibly.
+    assert all(p.timeouts for p in people[3:]), "past the limit should become a timeout"
+    actions = [c["action"] for c in DB["mod_cases"].docs]
+    assert actions == ["ban", "ban", "ban", "timeout", "timeout"], actions
+    assert "paused" in DB["mod_cases"].docs[3]["reason"], DB["mod_cases"].docs[3]["reason"]
+    print(f"  3 banned, then it stopped: {actions} OK")
+
+    print("\n=== the brake is per server ===")
+    cog._removals.clear()
+    automod(max_removals=1,
+            rules={"words": {"on": True, "action": "ban", "list": ["spam"]}})
+    assert cog._removal_allowed(1, 1) and not cog._removal_allowed(1, 1)
+    assert cog._removal_allowed(2, 1), "a different server has its own allowance"
+    print("  one server hitting the limit doesn't stop another OK")
 
     print("\n=== the notice, and switching it off ===")
     reset()
