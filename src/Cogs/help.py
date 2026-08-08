@@ -21,7 +21,9 @@ CATEGORIES = {
                         "Removes batches of images posted with spam-looking filenames."),
     "Greetings": ("👋", "Greetings",
                   "Welcome and goodbye messages, written by you."),
-    "Members": ("📈", "Members", "How well the server holds on to the people who join."),
+    "Members": ("📈", "Retention & Discovery",
+                "How well the server holds on to the people who join, and whether it's ready "
+                "to be listed."),
     "AutoRole": ("🎫", "Autorole", "Roles handed out the moment somebody joins."),
     "RoleButtons": ("🎛️", "Role Buttons",
                     "Messages people click to give themselves roles."),

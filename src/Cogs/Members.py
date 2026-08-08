@@ -42,6 +42,18 @@ DEFAULT_PERIOD = "daily"
 
 COLOR_INFO = 0x5865F2
 COLOR_WARN = 0xE67E22
+COLOR_GOOD = 0x2ECC71
+
+# What Discovery asks for. Discord moves these, and only some of them are visible to a bot at
+# all: the engagement figures it actually judges a server on live in Server Insights and are
+# not in the API. So this reports what it can see and says plainly what it can't, rather than
+# pretending to be the decision.
+# https://support.discord.com/hc/en-us/articles/360035969312
+DISCOVERY_MIN_MEMBERS = 500
+DISCOVERY_MIN_AGE_WEEKS = 8
+DISCOVERY_RETENTION_HINT = 0.30      # our own 7 day figure, as a rough indicator only
+
+CHECK_ICONS = {"pass": "✅", "fail": "❌", "warn": "⚠️", "unknown": "❔"}
 
 def _aware(dt: datetime.datetime) -> datetime.datetime:
     """pymongo returns naive UTC datetimes; comparing one against an aware 'now' raises."""
@@ -382,6 +394,153 @@ class Members(commands.Cog, name="Members"):
         if chosen == "monthly":
             notes.append(f"Records expire after {SPELL_TTL_DAYS} days.")
         embed.set_footer(text="  ".join(notes))
+        await interaction.followup.send(embed=embed, ephemeral=True)
+
+
+    # ── /discovery ───────────────────────────────────────────────────
+    @staticmethod
+    def _discovery_checks(guild: discord.Guild, retention) -> list:
+        """Every Discovery requirement a bot can actually see, as (state, label, what to do)."""
+        checks = []
+
+        community = "COMMUNITY" in guild.features
+        checks.append((
+            "pass" if community else "fail", "Community enabled",
+            "Server Settings, then Enable Community. Nothing else here counts without it."))
+
+        checks.append((
+            "pass" if guild.rules_channel else "fail", "Rules channel set",
+            "Part of the Community setup: point it at the channel holding your rules."))
+
+        checks.append((
+            "pass" if guild.public_updates_channel else "fail",
+            "Moderator updates channel set",
+            "Where Discord posts notices for your moderators. Also part of Community setup."))
+
+        strict = guild.explicit_content_filter == discord.ContentFilter.all_members
+        checks.append((
+            "pass" if strict else "fail", "Media scanned for everyone",
+            "Safety Setup, then scan media from all members."))
+
+        verified = guild.verification_level >= discord.VerificationLevel.medium
+        checks.append((
+            "pass" if verified else "warn",
+            f"Verification level is {guild.verification_level.name}",
+            "Medium or higher is what Discord expects of a Community server."))
+
+        mfa = guild.mfa_level == discord.MFALevel.require_2fa
+        checks.append((
+            "pass" if mfa else "fail", "Two factor required for moderators",
+            "Safety Setup, then require 2FA for moderator actions."))
+
+        members = guild.member_count or len(guild.members)
+        checks.append((
+            "pass" if members >= DISCOVERY_MIN_MEMBERS else "fail",
+            f"{members:,} members",
+            f"Discovery asks for {DISCOVERY_MIN_MEMBERS:,}. "
+            f"{max(DISCOVERY_MIN_MEMBERS - members, 0):,} to go."))
+
+        weeks = max((discord.utils.utcnow() - guild.created_at).days // 7, 0)
+        checks.append((
+            "pass" if weeks >= DISCOVERY_MIN_AGE_WEEKS else "fail",
+            f"{weeks} weeks old",
+            f"Discovery asks for {DISCOVERY_MIN_AGE_WEEKS}. "
+            f"{max(DISCOVERY_MIN_AGE_WEEKS - weeks, 0)} to go, and nothing to do but wait."))
+
+        checks.append((
+            "pass" if guild.icon else "warn", "Server icon",
+            "A server without one looks abandoned next to the ones that have it."))
+
+        checks.append((
+            "pass" if (guild.description or "").strip() else "warn", "Server description",
+            "This is what people read in Discovery before deciding whether to join."))
+
+        # Ours, not Discord's, and labelled that way wherever it appears.
+        if retention is None:
+            checks.append((
+                "unknown", "7 day retention",
+                "Not enough history yet. This needs a week of joins before it means anything."))
+        else:
+            kept, of = retention
+            rate = kept / of if of else 0
+            checks.append((
+                "pass" if rate >= DISCOVERY_RETENTION_HINT else "warn",
+                f"7 day retention is {rate * 100:.0f}% ({kept} of {of})",
+                f"My own measurement, not Discord's. Under about "
+                f"{DISCOVERY_RETENTION_HINT * 100:.0f}% is worth looking into."))
+
+        return checks
+
+    @app_commands.command(
+        name="discovery",
+        description="Check whether this server is ready for Discord Server Discovery")
+    @app_commands.checks.cooldown(1, 30.0)
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def discovery(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        try:
+            spells = await self._run(lambda: list(
+                self.spells.find({"guild_id": guild.id})
+                .sort("joined_at", -1).limit(MAX_SPELLS)))
+        except Exception as e:
+            print(f"[Members] couldn't read spells for /discovery: {e}")
+            spells = []
+        retention = self._survival(spells, now).get(7) if spells else None
+
+        checks = self._discovery_checks(guild, retention)
+        blocking = [c for c in checks if c[0] == "fail"]
+        worth = [c for c in checks if c[0] == "warn"]
+        ready = [c for c in checks if c[0] == "pass"]
+        unknown = [c for c in checks if c[0] == "unknown"]
+
+        listed = "DISCOVERABLE" in guild.features
+        if listed:
+            color = COLOR_GOOD
+            headline = ("**This server is already in Discovery.** Everything below is what "
+                        "keeps it there.")
+        elif blocking:
+            color = COLOR_WARN
+            headline = (f"**{len(blocking)} thing{'' if len(blocking) == 1 else 's'} to sort "
+                        f"out** before you can apply.")
+        else:
+            color = COLOR_GOOD
+            headline = ("**Everything I can check is in place.** Apply in Server Settings, "
+                        "then Discovery.")
+
+        embed = discord.Embed(title="Discovery readiness", description=headline,
+                              color=color, timestamp=now)
+        if guild.icon:
+            embed.set_thumbnail(url=guild.icon.url)
+
+        def block(items):
+            return "\n".join(f"{CHECK_ICONS[state]} **{label}**\n-# {detail}"
+                             for state, label, detail in items)
+
+        if blocking:
+            embed.add_field(name="Blocking", value=block(blocking)[:1024], inline=False)
+        if worth:
+            embed.add_field(name="Worth fixing", value=block(worth)[:1024], inline=False)
+        if unknown:
+            embed.add_field(name="Can't tell yet", value=block(unknown)[:1024], inline=False)
+        if ready:
+            embed.add_field(
+                name=f"Already fine ({len(ready)})",
+                value=" · ".join(label for _, label, _ in ready)[:1024], inline=False)
+
+        # The part that matters most, and the part a bot genuinely cannot answer.
+        embed.add_field(
+            name="Only Discord can see these",
+            value=("How many visitors go on to talk, and how many of those come back the next "
+                   "week. Those two decide most of it and are not available to bots. Server "
+                   "Settings, then Server Insights, is where you'll find them."),
+            inline=False)
+        embed.set_footer(text="Discord changes its criteria and has the final say. "
+                              "This is a checklist, not a verdict.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 

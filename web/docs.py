@@ -56,12 +56,25 @@ SECTIONS = [
             "would drive off the members you are trying to keep.",
             "Scores are saved one per member. Somebody who taps a second number replaces their "
             "old answer rather than voting twice.",
+            "<code>/discovery</code> checks the server against what Discovery asks for: "
+            "Community enabled, a rules channel, a moderator updates channel, media scanning, "
+            "two factor for moderators, the member count and how old the server is. It says "
+            "what is blocking you and what is only worth tidying.",
+            "Two of Discord's criteria are not visible to any bot: how many visitors go on to "
+            "talk, and how many of those come back the next week. Those decide most of it. "
+            "Server Settings, then Server Insights, is where you will find them. The retention "
+            "figure <code>/discovery</code> shows is our own measurement of the same idea, and "
+            "is labelled as such rather than passed off as Discord's.",
+            "Discord changes its criteria and has the final say, so treat this as a checklist "
+            "rather than a verdict.",
         ],
         "commands": [
             ("/setchannel", "", "Post the survey here and use this channel for reminders.",
              MANAGE_SERVER),
             ("/ratings", "", "The average score, a breakdown, the happy and unhappy split, and "
              "the most recent votes.", MANAGE_SERVER),
+            ("/discovery", "", "Checks this server against everything Discovery asks for and "
+             "tells you what is still in the way.", MANAGE_SERVER),
             ("/retention", "[period]", "How many new members are still around, grouped hourly, "
              "daily, weekly or monthly.", MANAGE_SERVER),
             ("/forcesurvey", "[days]", "Send a reminder now instead of waiting for midday. Use "
