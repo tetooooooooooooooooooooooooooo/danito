@@ -61,6 +61,72 @@
     sweep();
   }
 
+  /* ── settings tabs ───────────────────────────────────────────────── */
+  /* One pane at a time instead of eight cards down a single page. Nothing is hidden in the
+     markup, only by this script, so with JavaScript off the page is the long list it used to
+     be and every sidebar link is an ordinary anchor to a section that is really there. */
+  var nav = document.querySelector("[data-tabs]");
+  var panes = [].slice.call(document.querySelectorAll(".pane"));
+
+  if (nav && panes.length) {
+    var links = [].slice.call(nav.querySelectorAll("[data-tab]"));
+
+    /* On a narrow screen the sidebar is a strip you scroll sideways, so the tab you are on can
+       sit outside it. Then nothing on screen says which section you are looking at. */
+    var keepVisible = function (link) {
+      if (nav.scrollWidth <= nav.clientWidth) return;
+      var left = link.offsetLeft;
+      var right = left + link.offsetWidth;
+      if (left < nav.scrollLeft) {
+        nav.scrollLeft = left - 12;
+      } else if (right > nav.scrollLeft + nav.clientWidth) {
+        nav.scrollLeft = right - nav.clientWidth + 12;
+      }
+    };
+
+    var show = function (id) {
+      var matched = false;
+      panes.forEach(function (pane) {
+        var wanted = pane.id === id;
+        pane.hidden = !wanted;
+        if (wanted) matched = true;
+      });
+      links.forEach(function (link) {
+        var on = link.getAttribute("data-tab") === id;
+        link.classList.toggle("on", on);
+        // Tells a screen reader which one it is currently looking at.
+        if (on) {
+          link.setAttribute("aria-current", "true");
+          keepVisible(link);
+        } else {
+          link.removeAttribute("aria-current");
+        }
+      });
+      return matched;
+    };
+
+    // Falls back to the first pane, so a stale or hand-typed hash still lands somewhere.
+    var open = function (id) {
+      if (!show(id)) show(panes[0].id);
+    };
+
+    links.forEach(function (link) {
+      link.addEventListener("click", function (e) {
+        e.preventDefault();
+        var id = link.getAttribute("data-tab");
+        // pushState rather than setting location.hash: same shareable url, no jump to the
+        // anchor, and the back button still walks through the tabs you opened.
+        history.pushState(null, "", "#" + id);
+        open(id);
+      });
+    });
+
+    addEventListener("popstate", function () { open(location.hash.slice(1)); });
+
+    // Saving redirects back with #section, so the tab you were on is the one that reopens.
+    open(location.hash.slice(1));
+  }
+
   /* ── cards lit from wherever the cursor is ───────────────────────── */
   if (!still && matchMedia("(hover: hover)").matches) {
     document.querySelectorAll(".feature").forEach(function (card) {

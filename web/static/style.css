@@ -923,6 +923,90 @@ label.check input:focus-visible { outline: 2px solid var(--mint-bright); outline
 
 form.card button[type="submit"] { margin-top: 4px; }
 
+/* ── settings, as tabs down the side ─────────────────────────────── */
+body.settings-page main { max-width: 1060px; }
+
+.settings {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 30px;
+  align-items: start;
+}
+
+/* Sticky so the section list stays put while a long pane scrolls. 84px clears the header. */
+.sidenav {
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidenav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 14.2px;
+  font-weight: 500;
+  transition: background .16s var(--ease), color .16s var(--ease),
+              border-color .16s var(--ease);
+}
+.sidenav a:hover { background: var(--surface); color: var(--text); }
+.sidenav a.on {
+  background: linear-gradient(100deg, rgba(61, 220, 151, .14), rgba(61, 220, 151, .04));
+  border-color: rgba(61, 220, 151, .32);
+  color: var(--text);
+}
+
+.sidenav .ti { flex: none; width: 18px; text-align: center; font-size: 14px; }
+.sidenav .tl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Says which features are actually doing something without opening every tab. */
+.sidenav .dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mint);
+  box-shadow: 0 0 0 3px var(--mint-glow);
+}
+
+.pane { animation: fade .22s var(--ease); }
+.pane > .card { margin-bottom: 0; }
+
+@keyframes fade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* The panes are only ever hidden by script, so this has to beat anything that sets display. */
+[hidden] { display: none !important; }
+
+@media (max-width: 860px) {
+  /* The sidebar becomes a scrolling strip above the pane. */
+  .settings { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .sidenav {
+    position: static;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scrollbar-width: thin;
+  }
+  .sidenav a { flex: none; border: 1px solid var(--line); }
+  .sidenav .tl { max-width: 130px; }
+}
+
 /* ── roles ───────────────────────────────────────────────────────── */
 /* A compact tick rather than the switch above. A server can easily have fifty roles, and a
    column of fifty switches is a wall; a tick reads as "one of many" and scans quickly. */
