@@ -24,6 +24,11 @@
   </div>
 {% endmacro %}
 
+{# A permalink beside each heading, so somebody answering a support question can send
+   the exact place rather than "scroll down a bit". #}
+{% macro anchor(target) %}<a class="anchor" href="#{{ target }}"
+   aria-label="Link to this section" title="Copy link to this section">#</a>{% endmacro %}
+
 {% block content %}
 <div class="docs">
   <nav class="toc" aria-label="Contents">
@@ -41,8 +46,20 @@
     <p class="lead-text">How to set {{ brand }} up and what each command does. Everything is
       off until you switch it on, so nothing here happens by default.</p>
 
+    {%- set command_count = sections | map(attribute='commands') | map('length') | sum %}
+    {# Sticky, because the thing you are searching for is usually further down than the box. #}
+    <div class="docs-search">
+      <input type="search" data-docs-search autocomplete="off" spellcheck="false"
+             placeholder="Search {{ command_count }} commands, or press /"
+             aria-label="Search the commands">
+      <span class="hits" data-docs-count hidden></span>
+    </div>
+    <p class="no-hits" data-docs-empty hidden>
+      Nothing matched. Try a shorter word, or part of a command name.
+    </p>
+
     <section id="start">
-      <h2>Getting started</h2>
+      <h2>Getting started{{ anchor("start") }}</h2>
       <ol class="numbered">
         {% for step in setup %}
           <li>
@@ -55,18 +72,18 @@
 
     {% for s in sections %}
       <section id="{{ s.id }}">
-        <h2><span class="sec-icon">{{ s.icon }}</span>{{ s.title }}</h2>
+        <h2><span class="sec-icon">{{ s.icon }}</span>{{ s.title }}{{ anchor(s.id) }}</h2>
         {% if s.blurb %}<p class="lead-text">{{ s.blurb }}</p>{% endif %}
 
         {% if s.setup %}
-          <h3>Setting it up</h3>
+          <h3 id="{{ s.id }}-setup">Setting it up{{ anchor(s.id ~ "-setup") }}</h3>
           <ol class="numbered tight">
             {% for step in s.setup %}<li><p>{{ step | safe }}</p></li>{% endfor %}
           </ol>
         {% endif %}
 
         {% if s.notes %}
-          <h3>Worth knowing</h3>
+          <h3 id="{{ s.id }}-notes">Worth knowing{{ anchor(s.id ~ "-notes") }}</h3>
           <ul class="notes">
             {% for note in s.notes %}<li>{{ note | safe }}</li>{% endfor %}
           </ul>
@@ -74,14 +91,14 @@
 
         {# Not every section has commands. "Your data" is just something to know. #}
         {% if s.commands %}
-          <h3>Commands</h3>
+          <h3 id="{{ s.id }}-commands">Commands{{ anchor(s.id ~ "-commands") }}</h3>
           {{ command_table(s.commands) }}
         {% endif %}
       </section>
     {% endfor %}
 
     <section id="permissions">
-      <h2>Permissions</h2>
+      <h2>Permissions{{ anchor("permissions") }}</h2>
       <p>Two separate things decide whether a command works: what you are allowed to do, and
         what the bot is allowed to do.</p>
       <ul class="notes">
@@ -98,7 +115,7 @@
     </section>
 
     <section id="trouble">
-      <h2>Troubleshooting</h2>
+      <h2>Troubleshooting{{ anchor("trouble") }}</h2>
       <dl class="faq">
         {% for question, answer in troubleshooting %}
           <dt>{{ question }}</dt>

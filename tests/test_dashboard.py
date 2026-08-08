@@ -227,6 +227,32 @@ def main():
     assert "{user}" in body, "the placeholder help should be shown"
     print("  all five cards, both channels and a csrf token present OK")
 
+    print("\n=== the docs page can be searched and linked into ===")
+    import re as _re
+    docs = c.get("/docs").data.decode()
+
+    rows = docs.count("<tr>") - docs.count("<tr><th")
+    command_rows = len(_re.findall(r'<td class="cmd">', docs))
+    placeholder = _re.search(r'placeholder="Search (\d+) commands', docs)
+    assert placeholder, "the search box should say how much it is searching"
+    assert int(placeholder.group(1)) == command_rows, \
+        (placeholder.group(1), command_rows)
+    print(f"  search box offers all {command_rows} commands OK")
+
+    # Every anchor has to point at an id that exists, or the permalink goes nowhere.
+    ids = set(_re.findall(r'<(?:section|h3) id="([^"]+)"', docs))
+    targets = _re.findall(r'class="anchor" href="#([^"]+)"', docs)
+    assert targets, "headings should carry permalinks"
+    missing = [t for t in targets if t not in ids]
+    assert not missing, f"anchors pointing at nothing: {missing}"
+    print(f"  {len(targets)} permalinks, all resolving OK")
+
+    # And ids have to be unique, or the browser jumps to whichever came first.
+    every_id = _re.findall(r' id="([^"]+)"', docs)
+    dupes = {i for i in every_id if every_id.count(i) > 1}
+    assert not dupes, f"duplicate ids would break linking: {sorted(dupes)}"
+    print(f"  {len(every_id)} ids on the page, none repeated OK")
+
     print("\n=== logging out ===")
     r = c.post("/logout", data={"csrf": "test-csrf"})
     assert r.status_code == 302

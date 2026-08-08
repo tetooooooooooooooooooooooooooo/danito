@@ -166,6 +166,126 @@
     });
   });
 
+  /* ── documentation: search, scroll-spy, permalinks ───────────────── */
+  var docsBody = document.querySelector(".docs-body");
+  if (docsBody) {
+    var sections = [].slice.call(docsBody.querySelectorAll("section[id]"));
+    var tocLink = function (id) {
+      return document.querySelector('.toc a[href="#' + id + '"]');
+    };
+
+    /* Search. Sixty-odd commands across a dozen sections is more than anybody scrolls
+       through, so typing narrows it to the matching rows and hides everything else. */
+    var box = document.querySelector("[data-docs-search]");
+    var hits = document.querySelector("[data-docs-count]");
+    var noHits = document.querySelector("[data-docs-empty]");
+
+    if (box) {
+      var filter = function () {
+        var q = box.value.trim().toLowerCase();
+        var on = q.length > 0;
+        docsBody.classList.toggle("filtering", on);
+        var found = 0;
+
+        sections.forEach(function (section) {
+          var heading = section.querySelector("h2");
+          var titleHit = on && heading &&
+            heading.textContent.toLowerCase().indexOf(q) !== -1;
+          var rows = [].slice.call(section.querySelectorAll("table.commands tbody tr"));
+          var showing = 0;
+
+          rows.forEach(function (row) {
+            // A section whose own title matches keeps all of its commands, so searching
+            // "automod" gives you the whole thing rather than the rows mentioning the word.
+            var hit = !on || titleHit || row.textContent.toLowerCase().indexOf(q) !== -1;
+            row.hidden = !hit;
+            if (hit) showing++;
+          });
+
+          // Sections with no command table, like Permissions, match on their heading only.
+          // Otherwise every search would drag the prose along with it.
+          var keep = !on || (rows.length ? showing > 0 : titleHit);
+          section.hidden = !keep;
+          var link = tocLink(section.id);
+          if (link) link.hidden = !keep;
+          found += showing;
+        });
+
+        if (hits) {
+          hits.hidden = !on;
+          hits.textContent = found + (found === 1 ? " command" : " commands");
+        }
+        if (noHits) noHits.hidden = !(on && found === 0);
+      };
+
+      box.addEventListener("input", filter);
+      box.addEventListener("keydown", function (e) {
+        if (e.key === "Escape") { box.value = ""; filter(); box.blur(); }
+      });
+      // "/" to search, the way every reference site does, but not while typing somewhere else.
+      addEventListener("keydown", function (e) {
+        if (e.key !== "/" || e.metaKey || e.ctrlKey) return;
+        var tag = (document.activeElement || {}).tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA") return;
+        e.preventDefault();
+        box.focus();
+        box.select();
+      });
+      filter();
+    }
+
+    /* Scroll-spy. Position is compared directly rather than watched with an
+       IntersectionObserver: jumping down the page moves a heading from below the viewport to
+       above it without ever crossing a threshold, so no callback would arrive. */
+    var spyLinks = [].slice.call(document.querySelectorAll(".toc a"));
+    if (spyLinks.length) {
+      var current = null;
+      var queued = false;
+
+      var spy = function () {
+        queued = false;
+        var line = 120;                 // a little under the sticky header
+        var active = null;
+        sections.forEach(function (section) {
+          if (section.hidden) return;
+          if (section.getBoundingClientRect().top <= line) active = section.id;
+        });
+        // Before the first heading, or filtered down to nothing, highlight neither.
+        if (active === current) return;
+        current = active;
+        spyLinks.forEach(function (link) {
+          var on = link.getAttribute("href") === "#" + active;
+          link.classList.toggle("here", on);
+          if (on) { link.setAttribute("aria-current", "true"); }
+          else { link.removeAttribute("aria-current"); }
+        });
+      };
+
+      var askSpy = function () {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(spy);
+      };
+      addEventListener("scroll", askSpy, { passive: true });
+      addEventListener("resize", askSpy, { passive: true });
+      if (box) box.addEventListener("input", askSpy);
+      spy();
+    }
+
+    /* Permalinks. Following the link works without any of this; clicking also puts the full
+       url on the clipboard, which is the actual reason somebody wants one. */
+    docsBody.querySelectorAll("a.anchor").forEach(function (link) {
+      link.addEventListener("click", function () {
+        var url = location.origin + location.pathname + link.getAttribute("href");
+        if (!navigator.clipboard) return;
+        navigator.clipboard.writeText(url).then(function () {
+          link.classList.add("copied");
+          setTimeout(function () { link.classList.remove("copied"); }, 1400);
+        }).catch(function () { /* the link still worked */ });
+      });
+    });
+  }
+
   /* ── the status page keeps itself current ────────────────────────── */
   /* Somebody watching to see whether the bot has come back shouldn't have to keep reloading.
      Everything is rendered server side first, so the page is right before this ever runs. */
