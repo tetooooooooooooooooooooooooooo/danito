@@ -36,6 +36,7 @@ PLACEHOLDERS = {
     "{server}": "this server's name",
     "{count}": "how many members there are now",
     "{ordinal}": "their position, e.g. 42nd",
+    "\\n": "starts a new line",
 }
 
 # Custom text is rendered into a message the bot sends, so mass pings have to be impossible
@@ -52,7 +53,10 @@ def _ordinal(n: int) -> str:
 
 def render(template: str, member: discord.Member, guild: discord.Guild) -> str:
     count = guild.member_count or 0
+    # Slash command text inputs are single-line, so there is no way to type a real line break.
+    # Writing \n is the only option available to somebody setting this up.
     out = (template
+           .replace("\\n", "\n")
            .replace("{user}", member.mention)
            .replace("{username}", member.display_name)
            .replace("{tag}", str(member))
