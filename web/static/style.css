@@ -982,7 +982,8 @@ body.settings-page main { max-width: 1060px; }
 }
 
 .pane { animation: fade .22s var(--ease); }
-.pane > .card { margin-bottom: 0; }
+/* Only the last one, since a tab can hold more than one card. */
+.pane > .card:last-child { margin-bottom: 0; }
 
 @keyframes fade {
   from { opacity: 0; transform: translateY(4px); }

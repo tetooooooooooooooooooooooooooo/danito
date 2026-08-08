@@ -249,6 +249,15 @@ SECTIONS = [
             "The voice log covers joining, leaving and moving between voice channels. Muting, "
             "deafening, streaming and turning a camera on are left out, and so are bots: a "
             "music bot rejoins on every track and would bury everybody else.",
+            "There are two logs and they do different jobs. The <strong>moderation log</strong> "
+            "records punishments handed out with Newt's own commands and gives each one a case "
+            "number you can look up. The <strong>server log</strong> here records everything "
+            "that happens, however it happened, including bans placed straight through "
+            "Discord. Use the moderation log if you want a clean list of what your moderators "
+            "did, and the server log if you want the full picture.",
+            "With both switched on, a ban placed with <code>/ban</code> is written once as a "
+            "numbered case rather than appearing in both. A ban placed through Discord itself "
+            "has no case, so the server log records it as normal.",
             "Your log channels are never logged themselves. Without that, deleting an entry "
             "would write another one about the deletion.",
             "Deleted images and videos stay with the media log, which keeps the file itself. "

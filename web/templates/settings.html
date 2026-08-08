@@ -60,9 +60,8 @@
   ("goodbye",  "🚪", "Goodbye",        settings.goodbye_enabled),
   ("autorole", "🎫", "Autorole",       settings.autorole_enabled and settings.autorole_ids),
   ("panels",   "🎛️", "Role buttons",   panels|length),
-  ("logging",  "📋", "Server log",     settings.logging_enabled),
+  ("logging",  "📋", "Logs",           settings.logging_enabled or settings.modlog_channel),
   ("medialog", "🗄️", "Deleted media",  settings.medialog_enabled),
-  ("modlog",   "🔨", "Moderation log", settings.modlog_channel),
   ("pinglog",  "🔔", "Nudge tracking", settings.pinglog_enabled),
   ("survey",   "⭐", "Ratings survey", settings.discovery_channel),
 ] %}
@@ -283,6 +282,23 @@
 
         <button type="submit">Save</button>
       </form>
+
+      {# Deliberately in the same tab as the server log above. The two overlap enough that
+         having them in separate places invited the question of which one to use. #}
+      <form class="card" method="post"
+            action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="section" value="modlog">
+        {{ head("Moderation log", "A separate record of the punishments handed out with Newt's own commands, each one numbered so you can look it up later.") }}
+        <label>Channel {{ channel_select("modlog_channel", settings.modlog_channel) }}</label>
+        <p class="fine">This is the one to use if you want a clean list of moderator actions.
+          The server log above records everything that happens, however it happened; this
+          records only what was done with <code>/ban</code>, <code>/kick</code>,
+          <code>/timeout</code>, <code>/warn</code> and the rest, and gives each a case number.
+          With both switched on, a ban placed with <code>/ban</code> is written here as a case
+          rather than in both places.</p>
+        <button type="submit">Save</button>
+      </form>
     </section>
 
     <section class="pane" id="medialog">
@@ -296,17 +312,6 @@
           Log deleted media
         </label>
         <label>Channel {{ channel_select("medialog_channel", settings.medialog_channel) }}</label>
-        <button type="submit">Save</button>
-      </form>
-    </section>
-
-    <section class="pane" id="modlog">
-      <form class="card" method="post"
-            action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <input type="hidden" name="section" value="modlog">
-        {{ head("Moderation log", "Where bans, kicks, timeouts and warnings are recorded as numbered cases.") }}
-        <label>Channel {{ channel_select("modlog_channel", settings.modlog_channel) }}</label>
         <button type="submit">Save</button>
       </form>
     </section>

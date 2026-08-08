@@ -145,6 +145,19 @@ class Logging(commands.Cog, name="Logging"):
             return None
         return None
 
+    def _own_action(self, cfg: dict, entry) -> bool:
+        """Whether the moderation log has already recorded this.
+
+        A ban placed with /ban goes through the bot, so Discord fires on_member_ban as well and
+        the same ban would be written twice: once as a numbered case, once here. When the mod
+        log is set up it owns those, and the server log stays out of the way. When it isn't,
+        this is the only record there would be, so it gets logged after all.
+        """
+        if not cfg.get("modlog_channel"):
+            return False
+        return (entry is not None and entry.user is not None
+                and entry.user.id == self.bot.user.id)
+
     @staticmethod
     def _stamp(embed: discord.Embed, who) -> discord.Embed:
         if who is not None:
@@ -254,9 +267,12 @@ class Logging(commands.Cog, name="Logging"):
 
     @commands.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user):
-        if await self._wanted(guild, "member_ban") is None:
+        cfg = await self._wanted(guild, "member_ban")
+        if cfg is None:
             return
         entry = await self._actor(guild, discord.AuditLogAction.ban, user.id)
+        if self._own_action(cfg, entry):
+            return
         embed = discord.Embed(title="Member banned", color=RED,
                               description=f"{user.mention} was banned")
         if entry is not None:
@@ -268,9 +284,12 @@ class Logging(commands.Cog, name="Logging"):
 
     @commands.Cog.listener()
     async def on_member_unban(self, guild: discord.Guild, user):
-        if await self._wanted(guild, "member_unban") is None:
+        cfg = await self._wanted(guild, "member_unban")
+        if cfg is None:
             return
         entry = await self._actor(guild, discord.AuditLogAction.unban, user.id)
+        if self._own_action(cfg, entry):
+            return
         embed = discord.Embed(title="Member unbanned", color=GREEN,
                               description=f"{user.mention} was unbanned")
         if entry is not None and entry.user:
