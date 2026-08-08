@@ -146,6 +146,63 @@ def bot_guild_ids() -> set:
     return set(doc.get("guild_ids") or [])
 
 
+# The bot writes a heartbeat once a minute. The dashboard is a separate process and cannot see
+# it at all, so "is it up" is really "how long since it last said so". A couple of missed beats
+# is a restart or a slow deploy and not worth alarming anybody; past ten minutes it is down.
+HEARTBEAT_GRACE = 180
+HEARTBEAT_DOWN = 600
+
+
+def bot_status() -> dict:
+    """Whether the bot is up, and what it was doing when it last checked in.
+
+    Always the same shape, including when there is nothing to report, so anything reading it
+    can look at one field rather than checking which keys arrived.
+    """
+    unknown = {"state": "unknown", "reason": None, "seconds_quiet": None, "last_seen": None,
+               "started_at": None, "uptime_seconds": None, "guilds": 0, "members": None,
+               "latency_ms": None}
+
+    try:
+        doc = db()["runtime"].find_one({"_id": "bot"}) or {}
+    except Exception:
+        # The database being unreachable is itself worth reporting rather than a 500.
+        return {**unknown, "reason": "I can't reach the database to find out."}
+
+    last = doc.get("last_seen")
+    if last is None:
+        return {**unknown,
+                "reason": "The bot hasn't checked in since this page was added."}
+
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=datetime.timezone.utc)
+    now = datetime.datetime.now(datetime.timezone.utc)
+    quiet = max((now - last).total_seconds(), 0)
+
+    if quiet <= HEARTBEAT_GRACE:
+        state = "up"
+    elif quiet <= HEARTBEAT_DOWN:
+        state = "wobbly"
+    else:
+        state = "down"
+
+    started = doc.get("started_at")
+    if started is not None and started.tzinfo is None:
+        started = started.replace(tzinfo=datetime.timezone.utc)
+
+    return {
+        "state": state,
+        "reason": None,
+        "seconds_quiet": int(quiet),
+        "last_seen": last,
+        "started_at": started,
+        "uptime_seconds": int((last - started).total_seconds()) if started else None,
+        "guilds": doc.get("guild_count") or len(doc.get("guild_ids") or []),
+        "members": doc.get("member_count"),
+        "latency_ms": doc.get("latency_ms"),
+    }
+
+
 def clean(field: str, raw, valid_channels: set, valid_roles: set = frozenset()):
     """Coerce one submitted value, rejecting anything that isn't allowed.
 

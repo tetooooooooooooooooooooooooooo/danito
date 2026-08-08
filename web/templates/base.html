@@ -18,6 +18,7 @@
     <div class="bar-left">
       <a class="brand" href="{{ url_for('index') }}">{{ brand }}</a>
       <a class="nav-link" href="{{ url_for('documentation') }}">Docs</a>
+      <a class="nav-link" href="{{ url_for('status') }}">Status</a>
       {% if user %}<a class="nav-link" href="{{ url_for('servers') }}">Servers</a>{% endif %}
     </div>
     {% if user %}

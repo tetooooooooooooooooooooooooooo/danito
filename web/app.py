@@ -140,6 +140,64 @@ def documentation():
                            troubleshooting=docs.TROUBLESHOOTING)
 
 
+# ── status ───────────────────────────────────────────────────────────
+# Public, and deliberately the one page that needs no login and no database write. Somebody
+# whose bot has gone quiet wants an answer, not a sign-in form.
+STATUS_WORDS = {
+    "up": ("All good", "Newt is online and answering."),
+    "wobbly": ("Having a moment", "Newt hasn't checked in for a few minutes. This is usually a "
+                                  "restart or a deploy and clears itself."),
+    "down": ("Offline", "Newt hasn't checked in for a while, so commands won't be working."),
+    "unknown": ("Not sure", "There's nothing recent to go on."),
+}
+
+
+def _ago(seconds) -> str:
+    if seconds is None:
+        return "unknown"
+    seconds = int(seconds)
+    if seconds < 60:
+        return f"{seconds} second{'' if seconds == 1 else 's'}"
+    minutes = seconds // 60
+    if minutes < 60:
+        return f"{minutes} minute{'' if minutes == 1 else 's'}"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours} hour{'' if hours == 1 else 's'}"
+    days = hours // 24
+    return f"{days} day{'' if days == 1 else 's'}"
+
+
+def status_payload() -> dict:
+    status = store.bot_status()
+    heading, detail = STATUS_WORDS[status["state"]]
+    return {
+        **status,
+        "heading": heading,
+        "detail": status.get("reason") or detail,
+        "quiet_for": _ago(status.get("seconds_quiet")),
+        "uptime": _ago(status.get("uptime_seconds")),
+        # The page you are reading is served by the web process, so its being up is a given.
+        "dashboard": "up",
+    }
+
+
+@app.route("/status")
+def status():
+    return render_template("status.html", status=status_payload(),
+                           brand=BRAND)
+
+
+@app.route("/status.json")
+def status_json():
+    """Polled by the page so it updates without a reload, and usable by anything else."""
+    data = status_payload()
+    for key in ("last_seen", "started_at"):
+        if data.get(key) is not None:
+            data[key] = data[key].isoformat()
+    return data
+
+
 @app.route("/login")
 def login():
     if api.configured():

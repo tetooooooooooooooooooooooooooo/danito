@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block bodyclass %}status-page{% endblock %}
+{% block title %}Status · {{ brand }}{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Status</h1>
+    <p class="fine">Whether {{ brand }} is running right now. This page checks itself every
+      twenty seconds, so you can leave it open.</p>
+  </div>
+</header>
+
+{#- data-status lets the script find the parts it needs to keep current. -#}
+<div class="status-card {{ status.state }}" data-status>
+  <span class="beacon" aria-hidden="true"></span>
+  <div class="status-words">
+    <strong data-status-heading>{{ status.heading }}</strong>
+    <p class="fine" data-status-detail>{{ status.detail }}</p>
+  </div>
+</div>
+
+<div class="grid stats">
+  <div class="stat">
+    <span class="stat-label">Last checked in</span>
+    <span class="stat-value" data-status-quiet>
+      {% if status.seconds_quiet is not none %}{{ status.quiet_for }} ago{% else %}unknown{% endif %}
+    </span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Running for</span>
+    <span class="stat-value" data-status-uptime>
+      {% if status.uptime_seconds is not none %}{{ status.uptime }}{% else %}unknown{% endif %}
+    </span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Servers</span>
+    <span class="stat-value" data-status-guilds>{{ "{:,}".format(status.guilds or 0) }}</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Response time</span>
+    <span class="stat-value" data-status-latency>
+      {% if status.latency_ms is not none %}{{ status.latency_ms }} ms{% else %}unknown{% endif %}
+    </span>
+  </div>
+</div>
+
+<div class="card parts">
+  <h2>What's checked</h2>
+  <div class="part">
+    <span class="pip {{ status.state }}"></span>
+    <div>
+      <strong>The bot</strong>
+      <span class="fine">Slash commands, logging, automod and the rest. It writes down that
+        it's alive every minute, and this page reads that.</span>
+    </div>
+  </div>
+  <div class="part">
+    <span class="pip up"></span>
+    <div>
+      <strong>This dashboard</strong>
+      <span class="fine">If you can read this, it's working.</span>
+    </div>
+  </div>
+</div>
+
+<p class="fine">A few quiet minutes usually means a restart or a deploy rather than a problem.
+  If it stays offline and your server needs it, the thing to check first is whether
+  {{ brand }} still has permission to read and post in the channels you pointed it at.</p>
+{% endblock %}

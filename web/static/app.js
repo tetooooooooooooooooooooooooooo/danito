@@ -166,6 +166,49 @@
     });
   });
 
+  /* ── the status page keeps itself current ────────────────────────── */
+  /* Somebody watching to see whether the bot has come back shouldn't have to keep reloading.
+     Everything is rendered server side first, so the page is right before this ever runs. */
+  var statusCard = document.querySelector("[data-status]");
+  if (statusCard) {
+    var put = function (name, text) {
+      var el = document.querySelector("[data-status-" + name + "]");
+      if (el && text !== null && text !== undefined) el.textContent = text;
+    };
+
+    var refresh = function () {
+      fetch("/status.json", { headers: { "Accept": "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          statusCard.className = "status-card " + data.state;
+          var pip = document.querySelector(".part .pip");
+          if (pip) pip.className = "pip " + data.state;
+          put("heading", data.heading);
+          put("detail", data.detail);
+          put("quiet", data.seconds_quiet === null || data.seconds_quiet === undefined
+              ? "unknown" : data.quiet_for + " ago");
+          put("uptime", data.uptime_seconds === null || data.uptime_seconds === undefined
+              ? "unknown" : data.uptime);
+          put("guilds", (data.guilds || 0).toLocaleString());
+          put("latency", data.latency_ms === null || data.latency_ms === undefined
+              ? "unknown" : data.latency_ms + " ms");
+        })
+        .catch(function () { /* a failed poll just means the next one tries again */ });
+    };
+
+    var timer = setInterval(refresh, 20000);
+    // No point polling a page nobody is looking at.
+    document.addEventListener("visibilitychange", function () {
+      if (document.hidden) {
+        clearInterval(timer);
+      } else {
+        refresh();
+        timer = setInterval(refresh, 20000);
+      }
+    });
+  }
+
   /* ── unsaved changes ─────────────────────────────────────────────── */
   /* Every card is its own form with its own Save, and tabs hide the ones you aren't looking
      at, so it is easy to change something, move on, and never find out it wasn't saved. Each

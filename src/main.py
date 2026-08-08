@@ -11,6 +11,11 @@ import datetime
 import asyncio
 
 
+# How often the bot writes down that it's alive. The status page calls it offline
+# after a few missed beats, so this also sets how quickly an outage shows up.
+HEARTBEAT_SECONDS = 60
+
+
 async def loop(bot):
     t = 10 * 60
 
@@ -314,6 +319,36 @@ class Bot(commands.Bot):
         except Exception as e:
             print(f"[dashboard] couldn't publish the guild list: {e}")
 
+    @tasks.loop(seconds=HEARTBEAT_SECONDS)
+    async def heartbeat(self):
+        """Write down that the bot is still alive, for the status page.
+
+        The dashboard is a separate process and can't see the bot at all, so "is it up" can
+        only be answered by the bot leaving a mark and the web deciding whether it's recent.
+        Written into the same runtime document as the guild list, on different fields.
+        """
+        try:
+            await self._db(
+                Database.get_bot_database(self.MongoClient)["runtime"].update_one,
+                {"_id": "bot"},
+                {"$set": {
+                    "last_seen": datetime.datetime.now(datetime.timezone.utc),
+                    "started_at": self.start_time,
+                    "guild_count": len(self.guilds),
+                    "member_count": sum(g.member_count or 0 for g in self.guilds),
+                    # None until the first heartbeat arrives, and inf if the socket is gone.
+                    "latency_ms": (round(self.latency * 1000)
+                                   if self.latency and self.latency == self.latency
+                                   and self.latency != float("inf") else None),
+                }},
+                True)
+        except Exception as e:
+            print(f"[status] heartbeat failed: {e}")
+
+    @heartbeat.before_loop
+    async def before_heartbeat(self):
+        await self.wait_until_ready()
+
     @tasks.loop(seconds=10)
     async def watch_dashboard_edits(self):
         """Settings are cached for five minutes, so without this a dashboard save would look
@@ -362,6 +397,7 @@ class Bot(commands.Bot):
             self._ready_once = True
             asyncio.ensure_future(loop(self))
             self.watch_dashboard_edits.start()
+            self.heartbeat.start()
 
             synced = await self.tree.sync()
             print(f"Loaded {len(synced)} slash commands.")
