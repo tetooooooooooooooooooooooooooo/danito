@@ -60,6 +60,7 @@
   ("goodbye",  "🚪", "Goodbye",        settings.goodbye_enabled),
   ("autorole", "🎫", "Autorole",       settings.autorole_enabled and settings.autorole_ids),
   ("panels",   "🎛️", "Role buttons",   panels|length),
+  ("automod",  "🛡️", "Automod",        (settings.automod or {}).get('enabled')),
   ("logging",  "📋", "Logs",           settings.logging_enabled or settings.modlog_channel
                                        or settings.medialog_enabled or settings.pinglog_enabled),
   ("survey",   "⭐", "Ratings survey", settings.discovery_channel),
@@ -224,6 +225,128 @@
           <button type="submit">Create panel</button>
         </form>
       </div>
+    </section>
+
+    <section class="pane" id="automod">
+      {% set am = settings.automod or {} %}
+      {% set amrules = am.rules or {} %}
+      <form class="card" method="post"
+            action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="section" value="automod">
+        {{ head("Automod", "Rules that act on messages without waiting for a moderator. Everything is off until you switch it on, and nothing here ever kicks or bans on its own.") }}
+
+        <label class="check">
+          <input type="checkbox" name="automod_enabled" {% if am.enabled %}checked{% endif %}>
+          Run automod
+        </label>
+
+        <div class="logtools">
+          <span class="fine">Rules</span>
+          <span class="spacer"></span>
+          <button type="button" class="tiny" data-am-all="0">All off</button>
+        </div>
+
+        <div class="logrows">
+          {% for key, icon, label, blurb, fields in automod_rules %}
+            {% set r = amrules.get(key) or {} %}
+            <div class="logrow amrow">
+              <label class="pick">
+                <input type="checkbox" name="am_on_{{ key }}" {% if r.on %}checked{% endif %}>
+                <span class="lg-icon" aria-hidden="true">{{ icon }}</span>
+                <span class="lg-text">
+                  <span class="lg-label">{{ label }}</span>
+                  <span class="lg-blurb">{{ blurb }}</span>
+                </span>
+              </label>
+
+              <div class="amset">
+                {% for name, flabel, low, high in fields %}
+                  <label class="num">{{ flabel }}
+                    <input type="number" name="am_{{ key }}_{{ name }}"
+                      min="{{ low }}" max="{{ high }}"
+                      value="{{ r.get(name, automod_defaults.get(key, {}).get(name, low)) }}">
+                  </label>
+                {% endfor %}
+                <select name="am_action_{{ key }}" aria-label="What to do for {{ label }}">
+                  {% for value, text in automod_actions %}
+                    <option value="{{ value }}"
+                      {% if (r.action or 'delete') == value %}selected{% endif %}>{{ text }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+
+            {# The two rules that need a list of their own get a box under the row. #}
+            {% if key == 'words' %}
+              <div class="logrow sub">
+                <label>Words to block
+                  <textarea name="am_words_list" rows="2"
+                    placeholder="one per line, or separated by commas">{{ (r.list or [])|join(', ') }}</textarea>
+                  <span class="lg-blurb">Up to {{ 100 }}. Matched as whole words only.</span>
+                </label>
+              </div>
+            {% elif key == 'links' %}
+              <div class="logrow sub">
+                <label>Sites to allow
+                  <textarea name="am_links_allow" rows="2"
+                    placeholder="youtube.com, tenor.com">{{ (r.allow or [])|join(', ') }}</textarea>
+                  <span class="lg-blurb">Subdomains count too, so one entry covers a whole
+                    site. Leave empty to block every link.</span>
+                </label>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <h3 class="sub-head">Never touched</h3>
+        <p class="fine">A rule that catches your own moderators costs more than the spam it
+          stopped, so these are checked before anything runs.</p>
+
+        <label class="check">
+          <input type="checkbox" name="automod_exempt_staff"
+            {% if am.get('exempt_staff', True) %}checked{% endif %}>
+          Anyone who can manage messages
+        </label>
+
+        <div class="row">
+          <label>Roles
+            {% set chosen_roles = (am.exempt_roles or [])|map('int')|list %}
+            <select name="automod_exempt_roles" multiple size="5">
+              {% for r in roles %}
+                <option value="{{ r.id }}"
+                  {% if r.id|int in chosen_roles %}selected{% endif %}>{{ r.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          <label>Channels
+            {% set chosen_chans = (am.exempt_channels or [])|map('int')|list %}
+            <select name="automod_exempt_channels" multiple size="5">
+              {% for c in channels %}
+                <option value="{{ c.id }}"
+                  {% if c.id|int in chosen_chans %}selected{% endif %}>#{{ c.name }}</option>
+              {% endfor %}
+            </select>
+          </label>
+        </div>
+        <p class="fine">Hold Ctrl, or Cmd on a Mac, to pick more than one.</p>
+
+        <div class="row">
+          <label>Timeout length, in minutes
+            <input type="number" name="automod_timeout" min="1" max="10080"
+              value="{{ am.get('timeout_minutes', 10) }}">
+          </label>
+          <label class="check standalone">
+            <input type="checkbox" name="automod_notify"
+              {% if am.get('notify', True) %}checked{% endif %}>
+            Say why in the channel
+          </label>
+        </div>
+        <p class="fine">The note deletes itself after a few seconds. Without it people repost
+          the same thing three times wondering where it went.</p>
+
+        <button type="submit">Save</button>
+      </form>
     </section>
 
     <section class="pane" id="logging">

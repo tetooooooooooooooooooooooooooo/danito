@@ -83,6 +83,7 @@ class Bot(commands.Bot):
             "Cogs.Logging",
             "Cogs.PingLog",
             "Cogs.Moderation",
+            "Cogs.AutoMod",
             "Cogs.Lifecycle",
             "Cogs.owner",
         ]

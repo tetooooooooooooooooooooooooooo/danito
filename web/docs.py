@@ -190,6 +190,50 @@ SECTIONS = [
         ],
     },
     {
+        "id": "automod",
+        "icon": "🛡️",
+        "title": "Automod",
+        "blurb": "Nine rules that act on messages without waiting for a moderator.",
+        "setup": [
+            "Open the dashboard, find Automod, and switch on the rules you want. Each one has "
+            "its own response and its own thresholds. Nothing is on until you turn it on.",
+            "From Discord, <code>/automod rule</code> switches one on or off and "
+            "<code>/automod status</code> shows what is running.",
+            "Set the exemptions before you switch anything on. Anyone who can manage messages "
+            "is skipped by default, and you can add roles and channels on top.",
+        ],
+        "notes": [
+            "The rules: banned words, Discord invites, links, mass mentions, message floods, "
+            "repeated messages, shouting, emoji spam and walls of text.",
+            "Three responses, and it never goes further on its own: delete the message, delete "
+            "it and record a warning, or delete it and time the person out. Kicking and "
+            "banning stay with a person.",
+            "Warnings and timeouts become numbered cases in the moderation log, the same as "
+            "one a moderator handed out, so <code>/modlogs</code> shows the whole picture "
+            "rather than half of it.",
+            "Banned words are matched as whole words. Blocking a short word will not start "
+            "eating the longer ones that contain it, which is the mistake that makes people "
+            "turn a word filter off again.",
+            "Invisible characters are stripped before matching, since padding a word with them "
+            "is the oldest way around a filter and reads identically to everybody else.",
+            "The link rule has an allow list. Subdomains of an allowed site count, so one "
+            "entry covers the whole thing.",
+            "Only one rule acts per message, so a message that trips three of them is dealt "
+            "with once rather than three times.",
+            "Somebody the bot could not moderate by hand, including the server owner and "
+            "anyone above it in the role list, is skipped. Acting there would half work: the "
+            "message would go and the timeout would quietly fail.",
+        ],
+        "commands": [
+            ("/automod on", "", "Start it, keeping the rules you already set.", MANAGE_SERVER),
+            ("/automod off", "", "Stop it. Your rules are kept.", MANAGE_SERVER),
+            ("/automod rule", "<rule> <on> [action]",
+             "Switch one rule on or off and choose what it does.", MANAGE_SERVER),
+            ("/automod status", "", "What is running, what it does, and who is exempt.",
+             MANAGE_SERVER),
+        ],
+    },
+    {
         "id": "moderation",
         "icon": "🔨",
         "title": "Moderation",

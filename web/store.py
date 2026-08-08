@@ -7,6 +7,7 @@ dashboard reads through every time and tells the bot when something changed.
 
 import datetime
 import os
+import re
 
 import certifi
 from bson import ObjectId
@@ -66,6 +67,54 @@ LOG_EVENTS = [
      "The server name, icon or owner changing."),
 ]
 LOG_EVENT_KEYS = [key for key, _, _, _ in LOG_EVENTS]
+
+# Mirrors Cogs/AutoMod.RULES, for the same reason the log events are mirrored: the two
+# processes share no code, and a typo means a rule the dashboard can switch on and the bot
+# never runs. (key, icon, label, blurb, [(setting, label, min, max)])
+AUTOMOD_RULES = [
+    ("words", "🚫", "Banned words",
+     "Words you don't want said. Matched whole, so blocking a short word won't eat longer "
+     "ones that contain it.", []),
+    ("invites", "✉️", "Discord invites",
+     "Links to other Discord servers.", []),
+    ("links", "🔗", "Links",
+     "Any link at all, apart from sites you allow below.", []),
+    ("mentions", "📣", "Mass mentions",
+     "Pinging a crowd in one message.", [("limit", "More than", 1, 50)]),
+    ("spam", "💬", "Message flood",
+     "Too many messages too quickly.",
+     [("count", "Messages", 2, 30), ("seconds", "In seconds", 1, 60)]),
+    ("duplicates", "♻️", "Repeated messages",
+     "The same message over and over.", [("count", "Repeats", 2, 20)]),
+    ("caps", "🔠", "Shouting",
+     "Messages mostly in capitals.",
+     [("percent", "Percent caps", 40, 100), ("min_length", "Min letters", 5, 200)]),
+    ("emoji", "😀", "Emoji spam",
+     "Walls of emoji.", [("limit", "More than", 1, 100)]),
+    ("newlines", "📜", "Wall of text",
+     "Messages stretched over many lines.", [("limit", "More than", 2, 100)]),
+]
+AUTOMOD_RULE_KEYS = [key for key, _, _, _, _ in AUTOMOD_RULES]
+AUTOMOD_ACTIONS = [
+    ("delete", "Delete the message"),
+    ("warn", "Delete and warn"),
+    ("timeout", "Delete and time them out"),
+]
+# Mirrors Cogs/AutoMod.DEFAULTS, so an unconfigured server sees sensible numbers in the boxes
+# rather than blanks. Only the thresholds are needed here; the bot owns the rest.
+AUTOMOD_DEFAULTS = {
+    "mentions": {"limit": 5},
+    "spam": {"count": 6, "seconds": 5},
+    "duplicates": {"count": 3},
+    "caps": {"percent": 70, "min_length": 12},
+    "emoji": {"limit": 8},
+    "newlines": {"limit": 15},
+}
+AUTOMOD_MAX_WORDS = 100
+AUTOMOD_MAX_WORD_LENGTH = 40
+AUTOMOD_MAX_DOMAINS = 50
+AUTOMOD_MAX_EXEMPT = 25
+AUTOMOD_TIMEOUT_RANGE = (1, 10080)          # a minute to a week, Discord's own ceiling
 
 MAX_AUTOROLES = 10
 MAX_PANELS = 10
@@ -145,6 +194,71 @@ def clean_log_events(form, valid_channels: set) -> dict:
             channel = cid if cid in valid_channels else None
         out[key] = {"on": f"log_on_{key}" in form, "channel": channel}
     return out
+
+
+def _clamp(raw, low, high, fallback):
+    try:
+        return max(low, min(high, int(raw)))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _word_list(raw, limit, length) -> list:
+    """A textarea or comma separated box into a clean list, deduplicated and capped."""
+    out = []
+    for piece in re.split(r"[,\n]", raw or ""):
+        piece = piece.strip().lower()
+        if piece and piece not in out:
+            out.append(piece[:length])
+    return out[:limit]
+
+
+def clean_automod(form, valid_channels: set, valid_roles: set, existing: dict) -> dict:
+    """Build the whole automod document from a submitted form.
+
+    Rebuilt in full rather than patched, so a rule the form doesn't mention is switched off
+    instead of lingering. Thresholds are clamped to the same ranges the inputs advertise, since
+    a number typed straight into the request has not been near those inputs.
+    """
+    rules = {}
+    for key, _, _, _, fields in AUTOMOD_RULES:
+        was = (existing.get("rules") or {}).get(key) or {}
+        action = form.get(f"am_action_{key}", "delete")
+        rule = {
+            "on": f"am_on_{key}" in form,
+            "action": action if action in dict(AUTOMOD_ACTIONS) else "delete",
+        }
+        for name, _label, low, high in fields:
+            rule[name] = _clamp(form.get(f"am_{key}_{name}"), low, high, was.get(name, low))
+        if key == "words":
+            rule["list"] = _word_list(form.get("am_words_list"),
+                                      AUTOMOD_MAX_WORDS, AUTOMOD_MAX_WORD_LENGTH)
+        if key == "links":
+            rule["allow"] = _word_list(form.get("am_links_allow"),
+                                       AUTOMOD_MAX_DOMAINS, AUTOMOD_MAX_WORD_LENGTH)
+        rules[key] = rule
+
+    def ids(field, allowed):
+        out = []
+        for raw in form.getlist(field):
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                continue
+            if value in allowed and value not in out:
+                out.append(value)
+        return out[:AUTOMOD_MAX_EXEMPT]
+
+    low, high = AUTOMOD_TIMEOUT_RANGE
+    return {
+        "enabled": "automod_enabled" in form,
+        "notify": "automod_notify" in form,
+        "exempt_staff": "automod_exempt_staff" in form,
+        "exempt_roles": ids("automod_exempt_roles", valid_roles),
+        "exempt_channels": ids("automod_exempt_channels", valid_channels),
+        "timeout_minutes": _clamp(form.get("automod_timeout"), low, high, 10),
+        "rules": rules,
+    }
 
 
 def save(guild_id: int, values: dict):

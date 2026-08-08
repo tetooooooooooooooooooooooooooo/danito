@@ -233,6 +233,9 @@ def guild_settings(guild_id: int):
         max_autoroles=store.MAX_AUTOROLES,
         max_panel_roles=store.MAX_PANEL_ROLES,
         log_events=store.LOG_EVENTS,
+        automod_rules=store.AUTOMOD_RULES,
+        automod_actions=store.AUTOMOD_ACTIONS,
+        automod_defaults=store.AUTOMOD_DEFAULTS,
     )
 
 
@@ -245,6 +248,18 @@ def save_guild_settings(guild_id: int):
     valid_channels = {int(c["id"]) for c in api.guild_channels(guild_id)}
     valid_roles = assignable_role_ids(guild_id)
     section = request.form.get("section", "")
+
+    # Automod, like logging, writes one nested document rather than a set of flat fields, so
+    # it has its own builder instead of going through the generic allow-list.
+    if section == "automod":
+        # Exemptions can name any role, not only ones the bot could hand out, since being
+        # exempt from a filter has nothing to do with whether the bot can assign it.
+        every_role = {int(r["id"]) for r in api.guild_roles(guild_id)}
+        existing = (store.settings(guild_id) or {}).get("automod") or {}
+        store.save(guild_id, {"automod": store.clean_automod(
+            request.form, valid_channels, every_role, existing)})
+        flash("Saved. The bot picks this up within a few seconds.")
+        return redirect(url_for("guild_settings", guild_id=guild_id) + "#automod")
 
     # Logging is handled apart from the table below: it writes one nested map of twelve events
     # rather than a set of flat fields, so it can't go through the generic allow-list.

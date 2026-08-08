@@ -247,9 +247,10 @@ def main():
     pane_ids = re.findall(r'<section class="pane" id="([a-z]+)"', body)
     tab_ids = re.findall(r'data-tab="([a-z]+)"', body)
     assert pane_ids == tab_ids, (pane_ids, tab_ids)
-    for expected in ("welcome", "goodbye", "autorole", "panels", "logging", "survey"):
+    for expected in ("welcome", "goodbye", "autorole", "panels", "automod", "logging",
+                     "survey"):
         assert expected in pane_ids, expected
-    assert len(pane_ids) == 6, pane_ids
+    assert len(pane_ids) == 7, pane_ids
     # All four logs share the one tab now, so three sections have no pane of their own. They
     # still have to be reachable, and saving one has to come back to the tab it lives in.
     for section in ("modlog", "medialog", "pinglog"):

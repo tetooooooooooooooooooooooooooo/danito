@@ -138,6 +138,16 @@
     });
   });
 
+  /* Automod only gets an "all off", deliberately. Switching every filter on at once is how a
+     server ends up deleting its own moderators' messages. */
+  document.querySelectorAll("[data-am-all]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      button.closest("form")
+        .querySelectorAll(".amrow input[type=checkbox]")
+        .forEach(function (box) { box.checked = false; });
+    });
+  });
+
   /* ── cards lit from wherever the cursor is ───────────────────────── */
   if (!still && matchMedia("(hover: hover)").matches) {
     document.querySelectorAll(".feature").forEach(function (card) {

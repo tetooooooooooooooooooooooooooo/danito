@@ -8,6 +8,8 @@ from discord.ext import commands
 CATEGORIES = {
     "Moderation": ("🔨", "Moderation",
                    "Ban, kick, timeout and warn, with every action saved as a numbered case."),
+    "AutoMod": ("🛡️", "Automod",
+                "Nine rules that act on messages by themselves, or none if you'd rather."),
     # MediaLog and PingLog still do the work, but all four logs are switched on and off from
     # the Logging cog now, so those two have no commands of their own to list.
     "Logging": ("📋", "Logs",
