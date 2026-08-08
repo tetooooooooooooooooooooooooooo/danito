@@ -2,9 +2,9 @@
 {% block content %}
 <div class="hero">
   <h1>Not set up yet</h1>
-  <p>The dashboard needs these environment variables before it can do anything:</p>
+  <p>The dashboard can't talk to Discord until these are sorted:</p>
   <ul class="plain">
-    {% for name in missing %}<li><code>{{ name }}</code></li>{% endfor %}
+    {% for problem in problems %}<li>{{ problem }}</li>{% endfor %}
   </ul>
   <p class="fine">Set them on the app, then reload this page.</p>
 </div>

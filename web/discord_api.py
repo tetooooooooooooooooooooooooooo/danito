@@ -19,10 +19,16 @@ TIMEOUT = 10
 
 MANAGE_GUILD = 0x20          # the permission bit that makes somebody a server admin here
 
-CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID", "")
-CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET", "")
-REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+def _env(name: str) -> str:
+    """Stripped, because a config var pasted with a trailing newline or space is invisible in
+    a dashboard and produces errors that point nowhere near the cause."""
+    return (os.environ.get(name) or "").strip().strip('"').strip("'")
+
+
+CLIENT_ID = _env("DISCORD_CLIENT_ID")
+CLIENT_SECRET = _env("DISCORD_CLIENT_SECRET")
+REDIRECT_URI = _env("DISCORD_REDIRECT_URI")
+BOT_TOKEN = _env("BOT_TOKEN")
 
 # Discord's guild list is rate limited, and a user reloading the picker shouldn't cost a call
 # each time. Short enough that leaving a server is reflected quickly.
@@ -35,15 +41,38 @@ class DiscordError(RuntimeError):
 
 
 def configured() -> list:
-    """Which required settings are missing, so the app can say so instead of failing oddly."""
-    missing = []
+    """What's wrong with the setup, in plain terms, so the app can say so itself.
+
+    Catching a malformed redirect here matters: handing it to Discord produces
+    "redirect_uri is not a well formed url", which names the symptom and gives no clue
+    which value is at fault or what it currently contains.
+    """
+    problems = []
     for name, value in (("DISCORD_CLIENT_ID", CLIENT_ID),
                         ("DISCORD_CLIENT_SECRET", CLIENT_SECRET),
                         ("DISCORD_REDIRECT_URI", REDIRECT_URI),
                         ("BOT_TOKEN", BOT_TOKEN)):
         if not value:
-            missing.append(name)
-    return missing
+            problems.append(f"{name} is not set.")
+
+    if REDIRECT_URI:
+        if not REDIRECT_URI.startswith(("http://", "https://")):
+            problems.append(
+                f"DISCORD_REDIRECT_URI must start with https:// (or http:// for localhost). "
+                f"It is currently {REDIRECT_URI!r}.")
+        elif not REDIRECT_URI.rstrip("/").endswith("/callback"):
+            problems.append(
+                f"DISCORD_REDIRECT_URI must end with /callback, which is the route that "
+                f"receives the login. It is currently {REDIRECT_URI!r}.")
+        elif " " in REDIRECT_URI:
+            problems.append(f"DISCORD_REDIRECT_URI contains a space: {REDIRECT_URI!r}.")
+
+    if CLIENT_ID and not CLIENT_ID.isdigit():
+        problems.append(
+            f"DISCORD_CLIENT_ID should be only digits. It is currently {CLIENT_ID!r}, which "
+            f"is usually the client secret pasted into the wrong variable.")
+
+    return problems
 
 
 def authorize_url(state: str) -> str:

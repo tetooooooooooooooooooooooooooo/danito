@@ -113,9 +113,9 @@ def inject():
 # ── auth ─────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
-    missing = api.configured()
-    if missing:
-        return render_template("misconfigured.html", missing=missing), 503
+    problems = api.configured()
+    if problems:
+        return render_template("misconfigured.html", problems=problems), 503
     if current_user():
         return redirect(url_for("servers"))
     return render_template("login.html")
