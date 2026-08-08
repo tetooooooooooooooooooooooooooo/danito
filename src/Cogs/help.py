@@ -18,6 +18,8 @@ CATEGORIES = {
               "Roles, activity, badges, tags and what people are playing."),
     "ImageSpamFilter": ("🛡️", "Spam Filter",
                         "Removes batches of images posted with spam-looking filenames."),
+    "Greetings": ("👋", "Greetings",
+                  "Welcome and goodbye messages, written by you."),
     "Members": ("📈", "Members", "How well the server holds on to the people who join."),
     "Utility": ("🔧", "Utility", "Small tools for server admins."),
     "Help": ("❓", "Help", "This menu."),

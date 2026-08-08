@@ -1,4 +1,4 @@
-"""Join and leave handling, and the retention data that comes out of it.
+"""Join and leave tracking, and the retention data that comes out of it.
 
 One handler for both events. This used to be split between main.py (welcome DM, departure
 record) and eventcog (cohort role), so every join was processed twice with two independent
@@ -43,14 +43,6 @@ DEFAULT_PERIOD = "daily"
 COLOR_INFO = 0x5865F2
 COLOR_WARN = 0xE67E22
 
-WELCOME_MESSAGE = (
-    "Hey!, {mention}!\n"
-    "We'd love to interest you in checking out our partnered social mmo game, Meown!\n\n"
-    "🔗 **playable at** https://meown.net\n"
-    "🔗 **Discord:** https://discord.gg/VPjxQgTgBh"
-)
-
-
 def _aware(dt: datetime.datetime) -> datetime.datetime:
     """pymongo returns naive UTC datetimes; comparing one against an aware 'now' raises."""
     return dt.replace(tzinfo=datetime.timezone.utc) if dt.tzinfo is None else dt
@@ -61,7 +53,7 @@ def _pct(part: int, whole: int) -> str:
 
 
 class Members(commands.Cog, name="Members"):
-    """Cohort roles, welcome DMs, and how well the server holds on to new people."""
+    """Cohort roles and how well the server holds on to the people who join."""
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -103,7 +95,7 @@ class Members(commands.Cog, name="Members"):
         cohort = str(datetime.date.today())
         await self._open_spell(member, cohort)
         await self._assign_cohort_role(member, cohort)
-        await self._welcome(member)
+        # Greeting the member is the Greetings cog's job, and only if the server set one up.
 
     async def _open_spell(self, member: discord.Member, cohort: str):
         """Record the start of a membership. Their join date doubles as the cohort key, so it
@@ -167,12 +159,6 @@ class Members(commands.Cog, name="Members"):
                   f"my role may be too low")
         except discord.HTTPException as e:
             print(f"[Members] add_roles failed: {e}")
-
-    async def _welcome(self, member: discord.Member):
-        try:
-            await member.send(WELCOME_MESSAGE.format(mention=member.mention))
-        except (discord.Forbidden, discord.HTTPException):
-            pass          # plenty of people have DMs closed; not worth logging every time
 
     # ── leaving ──────────────────────────────────────────────────────
     @commands.Cog.listener()

@@ -64,6 +64,7 @@ class Bot(commands.Bot):
         self.cogslist = [
             "Cogs.Ratings",
             "Cogs.Members",
+            "Cogs.Greetings",
             "Cogs.help",
             "Cogs.stats",
             "Cogs.utility",
