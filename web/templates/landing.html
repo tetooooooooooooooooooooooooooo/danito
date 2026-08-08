@@ -2,8 +2,8 @@
 {% block bodyclass %}landing-page{% endblock %}
 {% block title %}{{ brand }} · get your server into Discord Discovery{% endblock %}
 
-{% macro feature(icon, title, body) %}
-  <div class="feature">
+{% macro feature(icon, title, body, delay) %}
+  <div class="feature" data-reveal data-delay="{{ delay }}">
     <div class="icon">{{ icon }}</div>
     <h3>{{ title }}</h3>
     <p>{{ body }}</p>
@@ -11,26 +11,71 @@
 {% endmacro %}
 
 {% block content %}
-<section class="hero landing">
-  <span class="pill">Built for Server Discovery</span>
-  <h1>Get found by people who aren't in your server yet</h1>
-  <p>Discord Discovery puts servers in front of everyone browsing for one, and Discord decides
-     who gets listed partly on whether members stay. {{ brand }} works on that exact number:
-     one quiet nudge to each new member around a week in, then the figures to show you where
-     you stand.</p>
-  <div class="cta">
-    <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
-    <a class="button ghost" href="{{ url_for('login') }}">Log in with Discord</a>
+<section class="hero-grid">
+  <div class="hero-copy" data-reveal>
+    <span class="pill">Built for Server Discovery</span>
+    <h1>Get found by people who aren't in your server yet</h1>
+    <p>Discord Discovery puts servers in front of everyone browsing for one, and Discord
+       decides who gets listed partly on whether members stay. {{ brand }} works on that exact
+       number: one quiet nudge to each new member around a week in, then the figures to show
+       you where you stand.</p>
+    <div class="cta">
+      <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
+      <a class="button ghost" href="{{ url_for('login') }}">Log in with Discord</a>
+    </div>
+    <p class="fine">Free. Every feature is off until you turn it on.</p>
   </div>
-  <p class="fine">Free. Every feature is off until you turn it on.</p>
+
+  {# A working copy of what members actually see, so the pitch isn't taken on trust. #}
+  <div class="mock" data-demo data-reveal data-delay="120">
+    <div class="mock-bar">
+      <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+      <span class="mock-channel">#ratings</span>
+    </div>
+    <div class="mock-body">
+      <div class="mock-msg">
+        <div class="mock-avatar">N</div>
+        <div class="mock-content">
+          <div class="mock-name">{{ brand }} <span class="tag">APP</span></div>
+          <div class="mock-embed">
+            <strong>How's your experience been so far?</strong>
+            <p>Tap a number from 1 to 10. It only takes a second, and only the server staff
+               can see the results.</p>
+          </div>
+          <div class="mock-buttons">
+            {% for n in range(1, 11) %}<button class="mock-btn" type="button">{{ n }}</button>{% endfor %}
+          </div>
+          <div class="mock-reply"></div>
+        </div>
+      </div>
+      <div class="mock-foot">
+        <span><b data-votes>218</b> ratings collected</span>
+        <span class="try">Try it &uarr;</span>
+      </div>
+    </div>
+  </div>
 </section>
 
-<section class="spotlight">
+<section class="spotlight" data-reveal>
   <h2 class="section">Why retention is the number that matters</h2>
   <p class="lead">Getting listed in Discovery isn't about how many people joined. It's about how
      many stayed. Discord looks at whether your members are still around weeks later, so a
      server with a thousand people who drift off does worse than a smaller one that keeps
      them.</p>
+
+  <div class="chart" data-chart>
+    <div class="chart-head">Members still here, by how long ago they joined</div>
+    {% for label, pct in [("After 1 day", 96), ("After 7 days", 71), ("After 14 days", 58), ("After 30 days", 44)] %}
+      <div class="meter-row">
+        <span class="meter-label">{{ label }}</span>
+        <span class="meter"><span class="meter-fill" data-pct="{{ pct }}"></span></span>
+        <span class="meter-val">{{ pct }}%</span>
+      </div>
+    {% endfor %}
+    <p class="fine">An example of what <code>/retention</code> shows you. Real numbers start
+       the day you add it.</p>
+  </div>
+
   <ol class="steps">
     <li>
       <strong>Someone joins.</strong>
@@ -59,42 +104,43 @@
 </section>
 
 <section>
-  <h2 class="section">Everything else it does</h2>
+  <h2 class="section" data-reveal>Everything else it does</h2>
   <div class="features">
     {{ feature("📈", "Retention you can actually see",
        "Of the people who joined a week ago, how many are still here. Grouped by hour, day,
         week or month, per joining group, and honest about the figures it doesn't have enough
-        history for yet.") }}
+        history for yet.", 0) }}
     {{ feature("⭐", "Ask what people think",
        "A one tap survey from 1 to 10, in a channel you choose. Scores are saved per member,
-        so changing your mind replaces your old answer rather than stuffing the ballot.") }}
+        so changing your mind replaces your old answer rather than stuffing the ballot.", 60) }}
     {{ feature("🔨", "Moderation that remembers",
        "Ban, kick, timeout, purge and warn. Every action becomes a numbered case, so you can
         see whether somebody is a repeat offender instead of reacting to each incident on
-        its own.") }}
+        its own.", 120) }}
     {{ feature("🗄️", "Deleted media, kept",
        "When somebody deletes an image, video or voice memo, you get the file itself, not
-        just a filename. Along with who posted it, who deleted it and when.") }}
+        just a filename. Along with who posted it, who deleted it and when.", 0) }}
     {{ feature("👋", "Greet people in your words",
        "Welcome and goodbye messages you write, in a channel or by direct message, plain or
-        as an embed. Nothing is ever sent that you didn't write.") }}
+        as an embed. Nothing is ever sent that you didn't write.", 60) }}
     {{ feature("📊", "Know your server",
        "Which roles are most common, when your channels are busiest, who talks most, what
-        people are playing, and which profile badges your members carry.") }}
+        people are playing, and which profile badges your members carry.", 120) }}
     {{ feature("🛡️", "Quiet spam removal",
        "Batches of images posted with the giveaway filename patterns get removed on sight,
-        and the file is kept in your log so you can still see what it was.") }}
+        and the file is kept in your log so you can still see what it was.", 0) }}
     {{ feature("🔔", "Nothing happens invisibly",
        "The nudge deletes itself after two seconds, so it gets logged with how many members
-        it actually reached. You can tell it fired without taking it on trust.") }}
+        it actually reached. You can tell it fired without taking it on trust.", 60) }}
   </div>
 </section>
 
-<section class="closing">
+<section class="closing" data-reveal>
   <h2>Start keeping the members you already have</h2>
   <p>Add it, run one command, and the nudges begin. Everything else is optional.</p>
   <div class="cta">
     <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
+    <a class="button ghost" href="{{ url_for('documentation') }}">Read the docs</a>
   </div>
   <p class="fine">Discovery listing is Discord's decision and depends on their full criteria,
      including your server size and standing. {{ brand }} works on the retention side of it

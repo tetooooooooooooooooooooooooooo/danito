@@ -353,7 +353,202 @@ dl.faq dd {
 
 /* ── landing page ────────────────────────────────────────────────── */
 /* Wider than the settings pages: marketing copy in a 800px column looks like a memo. */
-body.landing-page main { max-width: 1000px; }
+body.landing-page main { max-width: 1060px; }
+
+.bar.scrolled { border-bottom-color: var(--line-bright); box-shadow: 0 8px 24px -20px #000; }
+
+/* Elements arrive as you reach them. Only hidden when the .js flag is set, so with scripting
+   off nothing is ever invisible.
+
+   Both rules are scoped to .js and the shown one comes second: `.js [data-reveal]` and
+   `[data-reveal].shown` have identical specificity, so whichever is written last wins. Getting
+   that backwards leaves the whole page blank. */
+@media (prefers-reduced-motion: no-preference) {
+  .js [data-reveal] {
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity .55s var(--ease), transform .55s var(--ease);
+  }
+  .js [data-reveal].shown { opacity: 1; transform: none; }
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 52px;
+  align-items: center;
+  padding: 64px 0 76px;
+}
+
+.hero-copy h1 {
+  font-size: clamp(30px, 4.4vw, 43px);
+  line-height: 1.12;
+  margin: 0 0 16px;
+  background: linear-gradient(118deg, #fff 20%, var(--mint-bright) 66%, var(--mint));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-copy p { color: var(--dim); font-size: 15.4px; margin-bottom: 26px; }
+.hero-copy .cta { justify-content: flex-start; }
+.hero-copy .fine { margin-top: 18px; }
+
+/* ── the survey demo ─────────────────────────────────────────────── */
+.mock {
+  border: 1px solid var(--line-bright);
+  border-radius: 15px;
+  overflow: hidden;
+  background: #16211d;
+  box-shadow: 0 30px 60px -34px #000, 0 0 0 1px rgba(61, 220, 151, .07);
+}
+
+.mock-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 14px;
+  background: #101a16;
+  border-bottom: 1px solid var(--line);
+}
+.dot { width: 9px; height: 9px; border-radius: 50%; }
+.dot.r { background: #f27272; } .dot.y { background: #f0b45f; } .dot.g { background: var(--mint); }
+.mock-channel { margin-left: 6px; color: var(--faint); font-size: 12.6px; }
+
+.mock-body { padding: 18px 16px 14px; }
+.mock-msg { display: flex; gap: 12px; }
+
+.mock-avatar {
+  width: 38px; height: 38px; flex: none;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: linear-gradient(140deg, var(--mint), var(--mint-deep));
+  color: #06251c;
+  font-weight: 700;
+}
+
+.mock-content { min-width: 0; flex: 1; }
+.mock-name { font-weight: 650; font-size: 14.4px; margin-bottom: 7px; }
+.tag {
+  margin-left: 5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--mint);
+  color: #06251c;
+  font-size: 9.6px;
+  font-weight: 700;
+  letter-spacing: .4px;
+  vertical-align: 1.5px;
+}
+
+.mock-embed {
+  border-left: 3px solid var(--mint);
+  border-radius: 0 6px 6px 0;
+  background: #101a16;
+  padding: 12px 14px;
+  margin-bottom: 11px;
+}
+.mock-embed strong { display: block; font-size: 14.4px; margin-bottom: 5px; }
+.mock-embed p { margin: 0; color: var(--dim); font-size: 13.2px; line-height: 1.5; }
+
+/* Five to a row, because that is Discord's limit on one action row: a 1 to 10 survey really
+   does arrive as two rows of five. minmax(0, 1fr) so the columns stay even at any width. */
+.mock-buttons {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.mock-btn {
+  padding: 7px 0;
+  background: #2b3b34;
+  color: var(--text);
+  border: 0;
+  border-radius: 6px;
+  font-size: 13.2px;
+  font-weight: 600;
+  box-shadow: none;
+  transition: background .14s var(--ease), transform .14s var(--ease);
+}
+.mock-btn:hover { background: #354a41; transform: translateY(-1px); filter: none; box-shadow: none; }
+.mock-btn.picked {
+  background: linear-gradient(135deg, var(--mint), var(--mint-deep));
+  color: #06251c;
+}
+
+.mock-reply {
+  margin-top: 11px;
+  padding: 9px 12px;
+  border-radius: 7px;
+  background: rgba(61, 220, 151, .09);
+  border: 1px solid rgba(61, 220, 151, .26);
+  color: #bdf4dd;
+  font-size: 13.2px;
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.mock-reply.show { animation: replyIn .3s var(--ease) forwards; }
+.mock-reply b { color: var(--mint-bright); }
+
+@keyframes replyIn { to { opacity: 1; transform: none; } }
+
+.mock-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 12.4px;
+}
+.mock-foot b { color: var(--mint-bright); }
+.try { color: var(--mint); font-weight: 600; }
+
+/* ── retention chart ─────────────────────────────────────────────── */
+.chart {
+  background: rgba(12, 19, 17, .5);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 20px 22px 16px;
+  margin: 0 0 30px;
+}
+.chart-head {
+  font-size: 11.6px;
+  font-weight: 700;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 15px;
+}
+.meter-row {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+.meter-label { font-size: 13px; color: var(--dim); }
+.meter { display: block; height: 9px; border-radius: 999px;
+  background: var(--surface-3); overflow: hidden; }
+.meter-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--mint-deep), var(--mint-bright));
+  transition: width 1.1s var(--ease);
+}
+.meter-val { font-size: 13px; font-weight: 650; color: var(--mint-bright); text-align: right; }
+.chart .fine { margin-top: 13px; }
+
+@media (max-width: 880px) {
+  .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 38px; padding: 44px 0 56px; }
+  .hero-copy .cta { justify-content: center; }
+  .hero-copy { text-align: center; }
+  .hero-copy p { margin-left: auto; margin-right: auto; max-width: 50ch; }
+  .meter-row { grid-template-columns: 92px minmax(0, 1fr) 38px; gap: 9px; }
+  .meter-label { font-size: 12.2px; }
+}
 
 .hero.landing { padding: 76px 0 64px; }
 
@@ -417,6 +612,8 @@ section { margin-bottom: 72px; }
 }
 
 .feature {
+  position: relative;
+  overflow: hidden;
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
   border: 1px solid var(--line);
   border-radius: var(--r);
@@ -424,6 +621,23 @@ section { margin-bottom: 72px; }
   transition: border-color .2s var(--ease), transform .2s var(--ease);
 }
 .feature:hover { border-color: var(--line-bright); transform: translateY(-2px); }
+
+/* A soft light that follows the pointer. --mx/--my are set by app.js on pointermove; with no
+   pointer, or no script, the layer simply never becomes visible. */
+.feature::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, 50%),
+              rgba(61, 220, 151, .1), transparent 62%);
+  transition: opacity .3s var(--ease);
+}
+.feature:hover::after { opacity: 1; }
+
+.feature > * { position: relative; z-index: 1; }
 
 .feature .icon {
   width: 42px; height: 42px;
