@@ -19,6 +19,37 @@
   </div>
 {% endmacro %}
 
+{# A role that the bot can't hand out is shown but not selectable, with the reason next to it.
+   Hiding it would leave people hunting for a role that is right there in Discord. #}
+{% macro role_list(name, chosen, buttons=false, limit=0, by_role={}) %}
+  <div class="rolelist">
+    {% for r in roles %}
+      {% set picked = r.id|int in chosen %}
+      <div class="rolerow {% if r.problem %}blocked{% endif %}">
+        <label class="pick">
+          <input type="checkbox" name="{{ name }}" value="{{ r.id }}"
+            {% if picked %}checked{% endif %} {% if r.problem %}disabled{% endif %}>
+          <span class="swatch" {% if r.colour %}style="background:{{ r.colour }}"{% endif %}></span>
+          <span class="rolename">{{ r.name }}</span>
+        </label>
+        {% if r.problem %}
+          <span class="why">{{ r.problem }}</span>
+        {% elif buttons %}
+          {% set button = by_role.get(r.id|int, {}) %}
+          <input type="text" name="label_{{ r.id }}" maxlength="80" class="mini"
+            placeholder="Button text" value="{{ button.label or '' }}">
+          <input type="text" name="emoji_{{ r.id }}" maxlength="64" class="mini emoji"
+            placeholder="Emoji" value="{{ button.emoji or '' }}">
+        {% endif %}
+      </div>
+    {% else %}
+      <p class="fine">I can't see any roles here. Check that the bot has View Channels and
+        that it is actually in this server.</p>
+    {% endfor %}
+  </div>
+  {% if limit %}<p class="fine">Up to {{ limit }}.</p>{% endif %}
+{% endmacro %}
+
 {% block content %}
 <p><a class="fine" href="{{ url_for('servers') }}">&larr; All servers</a></p>
 <h1>{{ guild.name }}</h1>
@@ -102,6 +133,92 @@
   <label>Channel {{ channel_select("pinglog_channel", settings.pinglog_channel) }}</label>
   <button type="submit">Save</button>
 </form>
+
+<form class="card" method="post" action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="autorole">
+  {% set chosen = (settings.autorole_ids or [])|map('int')|list %}
+  {{ head("autorole", "Autorole", "Roles handed out the moment somebody joins. If your server makes people accept rules first, they get them once they have.") }}
+  <label class="check">
+    <input type="checkbox" name="autorole_enabled" {% if settings.autorole_enabled %}checked{% endif %}>
+    Hand out roles on join
+  </label>
+  {{ role_list("autorole_ids", chosen, limit=max_autoroles) }}
+  <button type="submit">Save</button>
+</form>
+
+<div class="card" id="panels">
+  {{ head("panels", "Role buttons", "A message people click to give themselves roles. Pick the roles, and the bot posts it and keeps it up to date.") }}
+
+  {% for p in panels %}
+    {% set pid = p._id|string %}
+    {% set chosen = (p.roles or [])|map(attribute='role_id')|map('int')|list %}
+    <form class="panel" method="post"
+          action="{{ url_for('save_panel', guild_id=guild.id, panel_id=pid) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+
+      {% if p.publish_error %}
+        <div class="warn">{{ p.publish_error }}</div>
+      {% elif p.needs_publish %}
+        <div class="note">Posting the update now.</div>
+      {% elif p.message_id %}
+        <div class="note ok">Posted in
+          #{{ channel_names.get(p.channel_id|string, {}).get('name', 'a channel') }}.</div>
+      {% endif %}
+
+      <label>Heading
+        <input type="text" name="title" maxlength="200" required
+          value="{{ p.title or '' }}">
+      </label>
+      <label>Text underneath
+        <textarea name="description" rows="2" maxlength="1500">{{ p.description or '' }}</textarea>
+      </label>
+      <div class="row">
+        <label>Channel {{ channel_select("channel_id", p.channel_id) }}</label>
+        <label>People can have
+          <select name="mode">
+            <option value="toggle" {% if p.mode != 'single' %}selected{% endif %}>Any number of these roles</option>
+            <option value="single" {% if p.mode == 'single' %}selected{% endif %}>Only one of these roles</option>
+          </select>
+        </label>
+      </div>
+
+      <p class="fine">Tick a role to put a button on the message. Leave the button text blank
+        to use the role name.</p>
+      {{ role_list("role_ids", chosen, buttons=true, limit=max_panel_roles,
+                   by_role=p.by_role) }}
+
+      <div class="row end">
+        <button type="submit">Save panel</button>
+        <button type="submit" name="delete" value="1" class="danger"
+          onclick="return confirm('Delete this panel? The message in Discord goes too.')">Delete</button>
+      </div>
+    </form>
+  {% endfor %}
+
+  <form class="panel new" method="post" action="{{ url_for('create_panel', guild_id=guild.id) }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <h3>Add a panel</h3>
+    <label>Heading
+      <input type="text" name="title" maxlength="200" required placeholder="Pick your roles">
+    </label>
+    <label>Text underneath
+      <textarea name="description" rows="2" maxlength="1500"
+        placeholder="Optional. Explain what the roles are for."></textarea>
+    </label>
+    <div class="row">
+      <label>Channel {{ channel_select("channel_id", none) }}</label>
+      <label>People can have
+        <select name="mode">
+          <option value="toggle">Any number of these roles</option>
+          <option value="single">Only one of these roles</option>
+        </select>
+      </label>
+    </div>
+    <p class="fine">You pick the roles once it exists.</p>
+    <button type="submit">Create panel</button>
+  </form>
+</div>
 
 <div class="card muted">
   {{ head("survey", "Ratings survey", "The survey has to be posted into a channel as a message, so it's set up from Discord.") }}

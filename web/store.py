@@ -9,6 +9,8 @@ import datetime
 import os
 
 import certifi
+from bson import ObjectId
+from bson.errors import InvalidId
 from pymongo import MongoClient
 
 _client = None
@@ -29,8 +31,16 @@ ALLOWED_FIELDS = {
     "goodbye_channel": "channel_or_none",
     "goodbye_message": "text",
     "goodbye_embed": bool,
+    "autorole_enabled": bool,
+    "autorole_ids": "role_ids",
 }
 MAX_TEXT = 1500
+
+MAX_AUTOROLES = 10
+MAX_PANELS = 10
+MAX_PANEL_ROLES = 25          # Discord allows five rows of five buttons on one message
+MAX_LABEL = 80
+PANEL_MODES = ("toggle", "single")
 
 
 def db():
@@ -51,11 +61,13 @@ def bot_guild_ids() -> set:
     return set(doc.get("guild_ids") or [])
 
 
-def clean(field: str, raw, valid_channels: set):
+def clean(field: str, raw, valid_channels: set, valid_roles: set = frozenset()):
     """Coerce one submitted value, rejecting anything that isn't allowed.
 
-    Channel ids are checked against the guild's real channels, so a crafted post can't point
-    the bot at a channel in a different server.
+    Channel and role ids are checked against what the guild really has, so a crafted post can't
+    point the bot at a channel in a different server or hand out a role nobody chose. The role
+    set passed in holds only roles the bot can actually assign, which means the hierarchy rule
+    is enforced on save rather than discovered later when nothing happens.
     """
     kind = ALLOWED_FIELDS[field]
     if kind is bool:
@@ -70,6 +82,16 @@ def clean(field: str, raw, valid_channels: set):
         except (TypeError, ValueError):
             return None
         return cid if cid in valid_channels else None
+    if kind == "role_ids":
+        out = []
+        for item in (raw or []):
+            try:
+                rid = int(item)
+            except (TypeError, ValueError):
+                continue
+            if rid in valid_roles and rid not in out:
+                out.append(rid)
+        return out[:MAX_AUTOROLES]
     raise ValueError(field)
 
 
@@ -85,3 +107,87 @@ def mark_dirty(guild_id: int):
         {"_id": guild_id},
         {"$set": {"at": datetime.datetime.now(datetime.timezone.utc)}},
         upsert=True)
+
+
+# ── role panels ──────────────────────────────────────────────────────
+# The dashboard has no gateway connection, so it can't post to Discord itself. It writes what
+# the panel should look like and raises a flag; the bot's publish loop is what posts or edits
+# the message. Every read and write below is scoped by guild_id as well as by panel id, so a
+# guessed id from another server matches nothing.
+
+def _panels():
+    return db()["role_panels"]
+
+
+def _oid(panel_id):
+    try:
+        return ObjectId(panel_id)
+    except (InvalidId, TypeError):
+        return None
+
+
+def panels(guild_id: int) -> list:
+    return list(_panels().find({"guild_id": guild_id}).sort("created_at", 1).limit(MAX_PANELS))
+
+
+def panel(guild_id: int, panel_id) -> dict:
+    oid = _oid(panel_id)
+    if oid is None:
+        return {}
+    return _panels().find_one({"_id": oid, "guild_id": guild_id}) or {}
+
+
+def create_panel(guild_id: int, channel_id: int, title: str, description, mode: str) -> bool:
+    if _panels().count_documents({"guild_id": guild_id}) >= MAX_PANELS:
+        return False
+    _panels().insert_one({
+        "guild_id": guild_id,
+        "channel_id": channel_id,
+        "message_id": None,
+        "title": (title or "Pick your roles").strip()[:200],
+        "description": (description or "").strip()[:MAX_TEXT] or None,
+        "color": 0x3DDC97,
+        "mode": mode if mode in PANEL_MODES else "toggle",
+        "roles": [],
+        # Nothing to post until it has a button on it.
+        "needs_publish": False,
+        "publish_error": None,
+        "created_at": datetime.datetime.now(datetime.timezone.utc),
+    })
+    return True
+
+
+def save_panel(guild_id: int, panel_id, channel_id: int, title: str, description,
+               mode: str, roles: list) -> bool:
+    """Replace a panel's contents and queue it for the bot to publish."""
+    oid = _oid(panel_id)
+    if oid is None:
+        return False
+    result = _panels().update_one(
+        {"_id": oid, "guild_id": guild_id},
+        {"$set": {
+            "channel_id": channel_id,
+            "title": (title or "Pick your roles").strip()[:200],
+            "description": (description or "").strip()[:MAX_TEXT] or None,
+            "mode": mode if mode in PANEL_MODES else "toggle",
+            "roles": roles[:MAX_PANEL_ROLES],
+            # An empty panel has nothing to show, so don't ask the bot to post one.
+            "needs_publish": bool(roles),
+            "publish_error": None,
+        }})
+    return result.matched_count == 1
+
+
+def delete_panel(guild_id: int, panel_id) -> bool:
+    """Flag the panel for removal rather than dropping the document.
+
+    The message in Discord has to go too, and only the bot can delete it. Removing the record
+    here would leave a message whose buttons work forever and answer nobody.
+    """
+    oid = _oid(panel_id)
+    if oid is None:
+        return False
+    result = _panels().update_one(
+        {"_id": oid, "guild_id": guild_id},
+        {"$set": {"pending_delete": True, "needs_publish": False}})
+    return result.matched_count == 1

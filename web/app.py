@@ -212,11 +212,26 @@ def servers():
 @login_required
 def guild_settings(guild_id: int):
     guild = require_guild(guild_id)
+    roles = api.guild_roles(guild_id)
+    channels = api.guild_channels(guild_id)
+
+    panels = store.panels(guild_id)
+    for panel in panels:
+        # Keyed by role id so the template can fill each row's label and emoji boxes without
+        # searching the list again for every role in the server.
+        panel["by_role"] = {int(e["role_id"]): e for e in (panel.get("roles") or [])}
+
     return render_template(
         "settings.html",
         guild=guild,
         settings=store.settings(guild_id),
-        channels=api.guild_channels(guild_id),
+        channels=channels,
+        roles=roles,
+        panels=panels,
+        role_names={r["id"]: r for r in roles},
+        channel_names={c["id"]: c for c in channels},
+        max_autoroles=store.MAX_AUTOROLES,
+        max_panel_roles=store.MAX_PANEL_ROLES,
     )
 
 
@@ -227,6 +242,7 @@ def save_guild_settings(guild_id: int):
     require_guild(guild_id)
 
     valid_channels = {int(c["id"]) for c in api.guild_channels(guild_id)}
+    valid_roles = assignable_role_ids(guild_id)
     section = request.form.get("section", "")
 
     # Only the fields belonging to the submitted section are touched, so saving one card
@@ -237,6 +253,7 @@ def save_guild_settings(guild_id: int):
         "pinglog": ["pinglog_enabled", "pinglog_channel"],
         "welcome": ["welcome_enabled", "welcome_channel", "welcome_message", "welcome_embed"],
         "goodbye": ["goodbye_enabled", "goodbye_channel", "goodbye_message", "goodbye_embed"],
+        "autorole": ["autorole_enabled", "autorole_ids"],
     }
     fields = sections.get(section)
     if not fields:
@@ -244,10 +261,14 @@ def save_guild_settings(guild_id: int):
 
     values = {}
     for field in fields:
-        raw = request.form.get(field)
-        if store.ALLOWED_FIELDS[field] is bool:
+        kind = store.ALLOWED_FIELDS[field]
+        if kind is bool:
             raw = field in request.form          # a checkbox is absent when unticked
-        values[field] = store.clean(field, raw, valid_channels)
+        elif kind == "role_ids":
+            raw = request.form.getlist(field)    # a set of ticked boxes, not one value
+        else:
+            raw = request.form.get(field)
+        values[field] = store.clean(field, raw, valid_channels, valid_roles)
 
     # A feature that needs somewhere to post can't be on without one.
     if section in ("medialog", "pinglog") and not values.get(f"{section}_channel"):
@@ -256,10 +277,94 @@ def save_guild_settings(guild_id: int):
         values["goodbye_enabled"] = False
     if section in ("welcome", "goodbye") and not values.get(f"{section}_message"):
         values[f"{section}_enabled"] = False
+    # Nothing to hand out means nothing to switch on.
+    if section == "autorole" and not values.get("autorole_ids"):
+        values["autorole_enabled"] = False
 
     store.save(guild_id, values)
     flash("Saved. The bot picks this up within a few seconds.")
     return redirect(url_for("guild_settings", guild_id=guild_id) + f"#{section}")
+
+
+# ── role panels ──────────────────────────────────────────────────────
+def assignable_role_ids(guild_id: int) -> set:
+    """Only roles the bot could really give out. Enforced on save so a panel can't be built
+    from roles that would fail silently every time somebody clicked them."""
+    return {int(r["id"]) for r in api.guild_roles(guild_id) if not r["problem"]}
+
+
+def _panel_form(guild_id: int):
+    """The parts of a panel form that create and edit have in common."""
+    valid_channels = {int(c["id"]) for c in api.guild_channels(guild_id)}
+    channel_id = request.form.get("channel_id")
+    try:
+        channel_id = int(channel_id)
+    except (TypeError, ValueError):
+        abort(400, "Pick a channel for this panel.")
+    if channel_id not in valid_channels:
+        abort(400, "That channel isn't in this server.")
+
+    mode = request.form.get("mode", "toggle")
+    title = request.form.get("title", "")
+    description = request.form.get("description", "")
+    return channel_id, title, description, mode
+
+
+@app.route("/servers/<int:guild_id>/panels", methods=["POST"])
+@login_required
+def create_panel(guild_id: int):
+    check_csrf()
+    require_guild(guild_id)
+    channel_id, title, description, mode = _panel_form(guild_id)
+
+    if not store.create_panel(guild_id, channel_id, title, description, mode):
+        flash(f"That's the limit of {store.MAX_PANELS} panels. Delete one first.")
+    else:
+        flash("Panel created. Add some roles to it and it gets posted.")
+    return redirect(url_for("guild_settings", guild_id=guild_id) + "#panels")
+
+
+@app.route("/servers/<int:guild_id>/panels/<panel_id>", methods=["POST"])
+@login_required
+def save_panel(guild_id: int, panel_id: str):
+    check_csrf()
+    require_guild(guild_id)
+
+    if request.form.get("delete"):
+        if store.delete_panel(guild_id, panel_id):
+            flash("Panel deleted. The message disappears within a few seconds.")
+        else:
+            flash("That panel is already gone.")
+        return redirect(url_for("guild_settings", guild_id=guild_id) + "#panels")
+
+    channel_id, title, description, mode = _panel_form(guild_id)
+    # Names as well as ids: a button left without a label should read as the role it grants,
+    # not as a placeholder.
+    usable = {int(r["id"]): r["name"] for r in api.guild_roles(guild_id) if not r["problem"]}
+
+    # Each button is one ticked role plus its optional label and emoji, keyed by role id so a
+    # missing tick drops the whole button rather than leaving an orphaned label behind.
+    roles, seen = [], set()
+    for raw in request.form.getlist("role_ids"):
+        try:
+            role_id = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if role_id not in usable or role_id in seen:
+            continue
+        seen.add(role_id)
+        label = (request.form.get(f"label_{role_id}", "") or "").strip()
+        roles.append({
+            "role_id": role_id,
+            "label": (label or usable[role_id])[:store.MAX_LABEL],
+            "emoji": (request.form.get(f"emoji_{role_id}", "") or "").strip()[:64] or None,
+        })
+
+    if not store.save_panel(guild_id, panel_id, channel_id, title, description, mode, roles):
+        abort(404)
+    flash("Saved. The panel updates itself within a few seconds."
+          if roles else "Saved. Tick at least one role and it gets posted.")
+    return redirect(url_for("guild_settings", guild_id=guild_id) + "#panels")
 
 
 @app.errorhandler(400)

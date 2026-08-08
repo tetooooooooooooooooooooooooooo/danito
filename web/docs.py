@@ -9,6 +9,7 @@ change; the SECTIONS below are the single place to do it.
 # (permission needed, label) so the same wording is used everywhere.
 EVERYONE = "Anyone"
 MANAGE_SERVER = "Manage Server"
+MANAGE_ROLES = "Manage Roles"
 
 SETUP = [
     {
@@ -103,6 +104,76 @@ SECTIONS = [
              "Same, for when somebody leaves.", MANAGE_SERVER),
             ("/goodbye off", "", "Stop sending it.", MANAGE_SERVER),
             ("/goodbye show", "", "Current settings and a preview.", MANAGE_SERVER),
+        ],
+    },
+    {
+        "id": "autorole",
+        "icon": "🎫",
+        "title": "Autorole",
+        "blurb": "Roles handed out the moment somebody joins.",
+        "setup": [
+            "On the dashboard, open your server, find Autorole, tick the roles you want and "
+            "save. From Discord, run <code>/autorole add</code> once per role.",
+            "Drag the bot's own role above the roles you are handing out, in Server Settings "
+            "then Roles. Discord will not let any bot give out a role that sits above its own, "
+            "whatever permissions it has.",
+        ],
+        "notes": [
+            "If your server makes people accept rules before they can talk, the roles arrive "
+            "when they finish accepting rather than the second they join. That is Discord's "
+            "behaviour, not a delay on our side: roles given to somebody still on the rules "
+            "screen are thrown away.",
+            "Roles the bot cannot give out are shown on the dashboard but cannot be ticked, "
+            "with the reason next to them. That is nearly always the role order above.",
+            "Delete a role in Discord and it drops off the list by itself the next time "
+            "somebody joins.",
+            "Up to 10 roles. They are given in a single request, so a rush of joins will not "
+            "hit a rate limit.",
+        ],
+        "commands": [
+            ("/autorole add", "<role>", "Give this role to everybody who joins.", MANAGE_ROLES),
+            ("/autorole remove", "<role>", "Stop handing that one out.", MANAGE_ROLES),
+            ("/autorole list", "", "What new members get, and a warning next to anything that "
+             "is not working.", MANAGE_ROLES),
+            ("/autorole off", "", "Pause it. Your list is kept.", MANAGE_ROLES),
+            ("/autorole on", "", "Start again.", MANAGE_ROLES),
+        ],
+    },
+    {
+        "id": "rolebuttons",
+        "icon": "🎛️",
+        "title": "Role buttons",
+        "blurb": "A message people click to give themselves roles.",
+        "setup": [
+            "On the dashboard, open your server, go to Role buttons and add a panel. Give it a "
+            "heading, pick the channel, tick the roles, and save. The bot posts the message "
+            "within a few seconds.",
+            "From Discord, <code>/rolepanel create</code> makes an empty panel and "
+            "<code>/rolepanel addrole</code> puts a button on it. The message appears as soon "
+            "as the first role is added.",
+            "As with autorole, the bot's role has to sit above every role on the panel.",
+        ],
+        "notes": [
+            "Buttons rather than reactions. Reactions break when a custom emoji is deleted, "
+            "need extra permissions, and cannot tell somebody why their click did nothing. A "
+            "button replies privately, so only the person clicking sees the answer.",
+            "Set a panel to one role only and picking a second swaps it for the first. Useful "
+            "for a colour or a pronoun where holding several at once makes no sense.",
+            "25 buttons per message, which is Discord's limit of five rows of five. Make a "
+            "second panel if you need more.",
+            "Edit a panel and the existing message is edited in place, so links to it keep "
+            "working. Delete one and the message goes with it.",
+            "The buttons keep working across restarts and updates. Nothing is held in memory.",
+        ],
+        "commands": [
+            ("/rolepanel create", "<channel> <title> [description] [mode]",
+             "Start a new panel.", MANAGE_ROLES),
+            ("/rolepanel addrole", "<panel> <role> [label] [emoji]",
+             "Put a role button on it.", MANAGE_ROLES),
+            ("/rolepanel removerole", "<panel> <role>", "Take a button off.", MANAGE_ROLES),
+            ("/rolepanel list", "", "Every panel, its roles, and anything that went wrong.",
+             MANAGE_ROLES),
+            ("/rolepanel delete", "<panel>", "Remove the panel and its message.", MANAGE_ROLES),
         ],
     },
     {

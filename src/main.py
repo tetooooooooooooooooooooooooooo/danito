@@ -65,6 +65,8 @@ class Bot(commands.Bot):
             "Cogs.Ratings",
             "Cogs.Members",
             "Cogs.Greetings",
+            "Cogs.AutoRole",
+            "Cogs.RoleButtons",
             "Cogs.help",
             "Cogs.stats",
             "Cogs.utility",

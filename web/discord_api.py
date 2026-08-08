@@ -164,6 +164,58 @@ def guild_channels(guild_id: int) -> list:
     return text
 
 
+def guild_roles(guild_id: int) -> list:
+    """The guild's roles, each carrying whether the bot could actually hand it out.
+
+    Working this out here rather than letting the save fail is the point. Discord refuses an
+    assignment with a bare 403, so a dashboard that offers every role produces a setting that
+    looks saved and silently never fires. The two rules it enforces are that managed roles
+    belong to an integration, and that a bot cannot grant a role at or above its own highest.
+    """
+    try:
+        roles = _as_bot(f"/guilds/{guild_id}/roles")
+    except DiscordError:
+        return []
+
+    by_id = {r["id"]: r for r in roles}
+
+    # The bot's own highest position. Unknown (-1) means we couldn't read our membership, in
+    # which case say nothing about hierarchy rather than guess and grey out everything.
+    top = -1
+    try:
+        me = _as_bot(f"/guilds/{guild_id}/members/{CLIENT_ID}")
+        for role_id in me.get("roles", []):
+            held = by_id.get(role_id)
+            if held:
+                top = max(top, held.get("position", 0))
+    except DiscordError:
+        pass
+
+    out = []
+    for role in roles:
+        # @everyone always shares the guild's own id, and nobody needs to be given it.
+        if role.get("id") == str(guild_id):
+            continue
+        position = role.get("position", 0)
+        if role.get("managed"):
+            problem = "managed by an integration, so Discord won't let anyone assign it"
+        elif top >= 0 and position >= top:
+            problem = "sits above my highest role, so I can't hand it out"
+        else:
+            problem = None
+        colour = role.get("color") or 0
+        out.append({
+            "id": role["id"],
+            "name": role.get("name", "unnamed"),
+            "position": position,
+            "problem": problem,
+            "colour": f"#{colour:06x}" if colour else "",
+        })
+
+    out.sort(key=lambda r: r["position"], reverse=True)
+    return out
+
+
 def icon_url(guild: dict) -> str:
     if guild.get("icon"):
         return f"https://cdn.discordapp.com/icons/{guild['id']}/{guild['icon']}.png?size=64"

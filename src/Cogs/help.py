@@ -21,6 +21,9 @@ CATEGORIES = {
     "Greetings": ("👋", "Greetings",
                   "Welcome and goodbye messages, written by you."),
     "Members": ("📈", "Members", "How well the server holds on to the people who join."),
+    "AutoRole": ("🎫", "Autorole", "Roles handed out the moment somebody joins."),
+    "RoleButtons": ("🎛️", "Role Buttons",
+                    "Messages people click to give themselves roles."),
     "Utility": ("🔧", "Utility", "Small tools for server admins."),
     "Help": ("❓", "Help", "This menu."),
 }
