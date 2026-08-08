@@ -400,52 +400,52 @@ class Members(commands.Cog, name="Members"):
     # ── /discovery ───────────────────────────────────────────────────
     @staticmethod
     def _discovery_checks(guild: discord.Guild, retention) -> list:
-        """Every Discovery requirement a bot can actually see, as (state, label, what to do)."""
+        """Every Discovery requirement a bot can see, as (state, label, what to do about it).
+
+        Labels are short enough to scan down a column, and the fix is one line, because it is
+        only ever shown for the handful of things that aren't done yet.
+        """
         checks = []
 
-        community = "COMMUNITY" in guild.features
         checks.append((
-            "pass" if community else "fail", "Community enabled",
-            "Server Settings, then Enable Community. Nothing else here counts without it."))
+            "pass" if "COMMUNITY" in guild.features else "fail", "Community enabled",
+            "Server Settings, then Enable Community. Nothing else counts without it."))
 
         checks.append((
-            "pass" if guild.rules_channel else "fail", "Rules channel set",
-            "Part of the Community setup: point it at the channel holding your rules."))
+            "pass" if guild.rules_channel else "fail", "Rules channel",
+            "Set it during the Community setup."))
 
         checks.append((
-            "pass" if guild.public_updates_channel else "fail",
-            "Moderator updates channel set",
-            "Where Discord posts notices for your moderators. Also part of Community setup."))
+            "pass" if guild.public_updates_channel else "fail", "Moderator updates channel",
+            "Set it during the Community setup."))
 
         strict = guild.explicit_content_filter == discord.ContentFilter.all_members
         checks.append((
-            "pass" if strict else "fail", "Media scanned for everyone",
+            "pass" if strict else "fail", "Media scanning",
             "Safety Setup, then scan media from all members."))
 
         verified = guild.verification_level >= discord.VerificationLevel.medium
         checks.append((
             "pass" if verified else "warn",
-            f"Verification level is {guild.verification_level.name}",
-            "Medium or higher is what Discord expects of a Community server."))
+            f"Verification level ({guild.verification_level.name})",
+            "Medium or higher is what Discord expects. Change it in Safety Setup."))
 
         mfa = guild.mfa_level == discord.MFALevel.require_2fa
         checks.append((
-            "pass" if mfa else "fail", "Two factor required for moderators",
+            "pass" if mfa else "fail", "2FA for moderators",
             "Safety Setup, then require 2FA for moderator actions."))
 
         members = guild.member_count or len(guild.members)
         checks.append((
             "pass" if members >= DISCOVERY_MIN_MEMBERS else "fail",
             f"{members:,} members",
-            f"Discovery asks for {DISCOVERY_MIN_MEMBERS:,}. "
-            f"{max(DISCOVERY_MIN_MEMBERS - members, 0):,} to go."))
+            f"{max(DISCOVERY_MIN_MEMBERS - members, 0):,} more needed."))
 
         weeks = max((discord.utils.utcnow() - guild.created_at).days // 7, 0)
         checks.append((
             "pass" if weeks >= DISCOVERY_MIN_AGE_WEEKS else "fail",
             f"{weeks} weeks old",
-            f"Discovery asks for {DISCOVERY_MIN_AGE_WEEKS}. "
-            f"{max(DISCOVERY_MIN_AGE_WEEKS - weeks, 0)} to go, and nothing to do but wait."))
+            f"{max(DISCOVERY_MIN_AGE_WEEKS - weeks, 0)} more weeks. Nothing to do but wait."))
 
         checks.append((
             "pass" if guild.icon else "warn", "Server icon",
@@ -453,21 +453,21 @@ class Members(commands.Cog, name="Members"):
 
         checks.append((
             "pass" if (guild.description or "").strip() else "warn", "Server description",
-            "This is what people read in Discovery before deciding whether to join."))
+            "It's what people read in Discovery before deciding whether to join."))
 
         # Ours, not Discord's, and labelled that way wherever it appears.
         if retention is None:
             checks.append((
                 "unknown", "7 day retention",
-                "Not enough history yet. This needs a week of joins before it means anything."))
+                "Needs a week of joins before it means anything."))
         else:
             kept, of = retention
             rate = kept / of if of else 0
             checks.append((
                 "pass" if rate >= DISCOVERY_RETENTION_HINT else "warn",
-                f"7 day retention is {rate * 100:.0f}% ({kept} of {of})",
-                f"My own measurement, not Discord's. Under about "
-                f"{DISCOVERY_RETENTION_HINT * 100:.0f}% is worth looking into."))
+                f"7 day retention ({rate * 100:.0f}%)",
+                f"Mine, not Discord's. Under {DISCOVERY_RETENTION_HINT * 100:.0f}% is worth "
+                f"a look."))
 
         return checks
 
@@ -494,53 +494,55 @@ class Members(commands.Cog, name="Members"):
 
         checks = self._discovery_checks(guild, retention)
         blocking = [c for c in checks if c[0] == "fail"]
-        worth = [c for c in checks if c[0] == "warn"]
-        ready = [c for c in checks if c[0] == "pass"]
-        unknown = [c for c in checks if c[0] == "unknown"]
+        # Everything not yet done goes in one list, worst first, so there is a single place to
+        # look for "what do I actually do next" instead of three similar-looking sections.
+        todo = blocking + [c for c in checks if c[0] == "warn"] \
+            + [c for c in checks if c[0] == "unknown"]
+        done = [c for c in checks if c[0] == "pass"]
 
         listed = "DISCOVERABLE" in guild.features
         if listed:
-            color = COLOR_GOOD
-            headline = ("**This server is already in Discovery.** Everything below is what "
-                        "keeps it there.")
+            color, headline = COLOR_GOOD, "✅ **This server is already listed in Discovery.**"
         elif blocking:
             color = COLOR_WARN
             headline = (f"**{len(blocking)} thing{'' if len(blocking) == 1 else 's'} to sort "
                         f"out** before you can apply.")
         else:
             color = COLOR_GOOD
-            headline = ("**Everything I can check is in place.** Apply in Server Settings, "
-                        "then Discovery.")
+            headline = ("✅ **Ready to apply.** Server Settings, then Discovery.")
 
-        embed = discord.Embed(title="Discovery readiness", description=headline,
-                              color=color, timestamp=now)
+        embed = discord.Embed(
+            title="Discovery readiness",
+            description=f"{headline}\n-# {len(done)} of {len(checks)} checks passing",
+            color=color, timestamp=now)
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 
-        def block(items):
-            return "\n".join(f"{CHECK_ICONS[state]} **{label}**\n-# {detail}"
-                             for state, label, detail in items)
-
-        if blocking:
-            embed.add_field(name="Blocking", value=block(blocking)[:1024], inline=False)
-        if worth:
-            embed.add_field(name="Worth fixing", value=block(worth)[:1024], inline=False)
-        if unknown:
-            embed.add_field(name="Can't tell yet", value=block(unknown)[:1024], inline=False)
-        if ready:
+        if todo:
+            # The fix sits under its own item as subtext, so the list still reads as a list.
             embed.add_field(
-                name=f"Already fine ({len(ready)})",
-                value=" · ".join(label for _, label, _ in ready)[:1024], inline=False)
+                name=f"To do ({len(todo)})",
+                value="\n".join(f"{CHECK_ICONS[state]} **{label}**\n-# {detail}"
+                                for state, label, detail in todo)[:1024],
+                inline=False)
+
+        if done:
+            # One per line rather than run together, which is the difference between a list you
+            # can skim and a paragraph you have to read.
+            embed.add_field(
+                name=f"Done ({len(done)})",
+                value="\n".join(f"✅ {label}" for _, label, _ in done)[:1024],
+                inline=False)
 
         # The part that matters most, and the part a bot genuinely cannot answer.
         embed.add_field(
-            name="Only Discord can see these",
-            value=("How many visitors go on to talk, and how many of those come back the next "
-                   "week. Those two decide most of it and are not available to bots. Server "
-                   "Settings, then Server Insights, is where you'll find them."),
+            name="Not shown here",
+            value=("Discord also looks at how many visitors go on to talk, and how many of "
+                   "those come back the next week. Bots can't see either.\n"
+                   "-# Server Settings, then Server Insights."),
             inline=False)
-        embed.set_footer(text="Discord changes its criteria and has the final say. "
-                              "This is a checklist, not a verdict.")
+        embed.set_footer(text="A checklist, not a verdict. Discord has the final say and "
+                              "changes what it asks for.")
         await interaction.followup.send(embed=embed, ephemeral=True)
 
 

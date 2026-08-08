@@ -11,7 +11,7 @@ ROOT = _pathlib.Path(__file__).resolve().parents[1]
 SRC_DIR = str(ROOT / "src")
 WEB_DIR = str(ROOT / "web")
 
-import asyncio, datetime, sys, types
+import asyncio, datetime, re, sys, types
 sys.path.insert(0, SRC_DIR)
 
 
@@ -118,10 +118,10 @@ async def main():
     print("\n=== each requirement is actually checked ===")
     cases = [
         ("Community enabled", dict(community=False), "fail"),
-        ("Rules channel set", dict(rules=False), "fail"),
-        ("Moderator updates channel set", dict(updates=False), "fail"),
-        ("Media scanned for everyone", dict(filter_all=False), "fail"),
-        ("Two factor required", dict(mfa=discord.MFALevel.disabled), "fail"),
+        ("Rules channel", dict(rules=False), "fail"),
+        ("Moderator updates channel", dict(updates=False), "fail"),
+        ("Media scanning", dict(filter_all=False), "fail"),
+        ("2FA for moderators", dict(mfa=discord.MFALevel.disabled), "fail"),
         ("Verification level", dict(verification=discord.VerificationLevel.low), "warn"),
         ("Server icon", dict(icon=False), "warn"),
         ("Server description", dict(description="   "), "warn"),
@@ -138,38 +138,38 @@ async def main():
     checks = cog._discovery_checks(make_guild(members=120), (9, 10))
     state, label, detail = next(c for c in checks if c[1].endswith("members"))
     assert state == "fail" and "120" in label
-    assert f"{M.DISCOVERY_MIN_MEMBERS - 120:,} to go" in detail, detail
+    assert f"{M.DISCOVERY_MIN_MEMBERS - 120:,} more needed" in detail, detail
     print(f"  {label} -> {detail}")
 
     checks = cog._discovery_checks(make_guild(weeks=3), (9, 10))
     state, label, detail = next(c for c in checks if c[1].endswith("weeks old"))
     assert state == "fail" and "3 weeks" in label
-    assert f"{M.DISCOVERY_MIN_AGE_WEEKS - 3} to go" in detail, detail
+    assert f"{M.DISCOVERY_MIN_AGE_WEEKS - 3} more weeks" in detail, detail
     print(f"  {label} -> {detail}")
 
     print("\n=== a brand new server doesn't produce negative numbers ===")
     checks = cog._discovery_checks(make_guild(members=0, weeks=0), None)
     for _, label, detail in checks:
-        assert "-" not in detail.replace("Two factor", ""), (label, detail)
+        assert not re.search(r"-\d", detail), (label, detail)
     print("  no '-4 to go' anywhere OK")
 
     print("\n=== our retention figure is labelled as ours ===")
     state, label, detail = next(
         c for c in cog._discovery_checks(make_guild(), (2, 10)) if "retention" in c[1])
     assert state == "warn", state
-    assert "20%" in label, label
+    assert "(20%)" in label, label
     assert "not Discord's" in detail, detail
     print(f"  {label} -> {detail[:56]}")
 
     state, label, detail = next(
         c for c in cog._discovery_checks(make_guild(), (9, 10)) if "retention" in c[1])
-    assert state == "pass" and "90%" in label
+    assert state == "pass" and "(90%)" in label
     print(f"  {label} -> pass OK")
 
     state, label, detail = next(
         c for c in cog._discovery_checks(make_guild(), None) if "retention" in c[1])
     assert state == "unknown", state
-    assert "Not enough history" in detail
+    assert "Needs a week of joins" in detail
     print("  with no history it says so rather than guessing OK")
 
     print("\n=== the command groups them and never claims to decide ===")
@@ -183,9 +183,9 @@ async def main():
     assert i.response.deferred
     embed = i.followup.calls[0][1]["embed"]
     names = [f.name for f in embed.fields]
-    assert any(n.startswith("Blocking") for n in names), names
-    assert any(n.startswith("Worth fixing") for n in names), names
-    assert "Only Discord can see these" in names, names
+    assert any(n.startswith("To do") for n in names), names
+    assert any(n.startswith("Done") for n in names), names
+    assert "Not shown here" in names, names
     assert "to sort out" in embed.description
     assert "not a verdict" in embed.footer.text
     body = "\n".join(f.value for f in embed.fields)
@@ -196,15 +196,15 @@ async def main():
     i = interaction(make_guild())
     await cog.discovery.callback(cog, i)
     embed = i.followup.calls[0][1]["embed"]
-    assert "Everything I can check" in embed.description, embed.description
-    assert not any(f.name.startswith("Blocking") for f in embed.fields)
-    assert any(f.name.startswith("Already fine") for f in embed.fields)
+    assert "checks passing" in embed.description, embed.description
+    assert "Ready to apply" in embed.description
+    assert any(f.name.startswith("Done") for f in embed.fields)
     print(f"  {embed.description}")
 
     print("\n=== a server already listed says so ===")
     i = interaction(make_guild(listed=True))
     await cog.discovery.callback(cog, i)
-    assert "already in Discovery" in i.followup.calls[0][1]["embed"].description
+    assert "already listed in Discovery" in i.followup.calls[0][1]["embed"].description
     print("  recognised OK")
 
     print("\n=== a database blip doesn't take the command down ===")
@@ -215,7 +215,7 @@ async def main():
     await cog.discovery.callback(cog, i)
     assert len(i.followup.calls) == 1, "it should still answer"
     body = "\n".join(f.value for f in i.followup.calls[0][1]["embed"].fields)
-    assert "Not enough history" in body, "and fall back to saying it can't tell"
+    assert "Needs a week of joins" in body, "and fall back to saying it can't tell"
     print("  answered without the retention figure OK")
 
     print("\n=== every field stays inside Discord's limits ===")
