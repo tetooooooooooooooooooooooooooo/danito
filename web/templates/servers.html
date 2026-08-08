@@ -1,46 +1,90 @@
 {% extends "base.html" %}
+{% block bodyclass %}servers-page{% endblock %}
+{% block title %}Your servers · {{ brand }}{% endblock %}
+
+{% macro server_icon(g) %}
+  {% set icon = api.icon_url(g) %}
+  {% if icon %}
+    <img class="gicon" src="{{ icon }}" alt="" width="52" height="52" loading="lazy">
+  {% else %}
+    <div class="gicon blank">{{ g.name[:1] | upper }}</div>
+  {% endif %}
+{% endmacro %}
+
 {% block content %}
-<h1>Your servers</h1>
+<header class="page-head">
+  <div>
+    <h1>Your servers</h1>
+    <p class="fine">
+      {% if joined %}
+        {{ brand }} is in {{ joined|length }} of the {{ total }}
+        server{{ '' if total == 1 else 's' }} you manage.
+      {% else %}
+        You manage {{ total }} server{{ '' if total == 1 else 's' }}.
+      {% endif %}
+    </p>
+  </div>
+  <a class="button" rel="noopener" href="{{ invite_url() }}">Add to a server</a>
+</header>
 
 {% if joined %}
   <div class="grid">
     {% for g in joined %}
-      <a class="card server" href="{{ url_for('guild_settings', guild_id=g.id) }}">
-        {% set icon = api.icon_url(g) %}
-        {% if icon %}
-          <img src="{{ icon }}" alt="" width="48" height="48">
-        {% else %}
-          <div class="blank">{{ g.name[:1] | upper }}</div>
-        {% endif %}
-        <div>
-          <strong>{{ g.name }}</strong>
-          <span class="fine">Configure</span>
+      <a class="server-card" href="{{ url_for('guild_settings', guild_id=g.id) }}">
+        <div class="sc-top">
+          {{ server_icon(g) }}
+          <div class="sc-name">
+            <strong>{{ g.name }}</strong>
+            {% if g.owner %}<span class="chip owner">Owner</span>{% endif %}
+          </div>
         </div>
+
+        {# What's switched on, so the page says something rather than repeating the name. #}
+        {% if g.features %}
+          <div class="pills">
+            {% for f in g.features[:4] %}<span class="pill-sm">{{ f }}</span>{% endfor %}
+            {% if g.features|length > 4 %}
+              <span class="pill-sm more">+{{ g.features|length - 4 }}</span>
+            {% endif %}
+          </div>
+        {% else %}
+          <div class="pills">
+            <span class="pill-sm off">Nothing set up yet</span>
+          </div>
+        {% endif %}
+
+        <span class="sc-go">
+          {{ "Configure" if g.features else "Set it up" }}
+          <span class="arrow" aria-hidden="true">&rarr;</span>
+        </span>
       </a>
     {% endfor %}
   </div>
 {% else %}
-  <p>The bot isn't in any server you manage yet.</p>
+  <div class="card empty">
+    <div class="empty-icon" aria-hidden="true">🌱</div>
+    <h2>No servers yet</h2>
+    <p class="fine">{{ brand }} isn't in any server you manage. Add it to one and it shows up
+      here, ready to configure.</p>
+    <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
+  </div>
 {% endif %}
 
 {% if absent %}
-  <h2>Not added yet</h2>
-  <p class="fine">Servers you manage that the bot isn't in.</p>
+  <h2 class="section-head">Not added yet</h2>
+  <p class="fine">Servers you manage that {{ brand }} isn't in.</p>
   <div class="grid">
     {% for g in absent %}
-      <div class="card server muted">
-        {% set icon = api.icon_url(g) %}
-        {% if icon %}
-          <img src="{{ icon }}" alt="" width="48" height="48">
-        {% else %}
-          <div class="blank">{{ g.name[:1] | upper }}</div>
-        {% endif %}
-        <div>
-          <strong>{{ g.name }}</strong>
-          <a class="fine" rel="noopener" target="_blank" href="{{ invite_url(g.id) }}">
-            Add the bot
-          </a>
+      <div class="server-card absent">
+        <div class="sc-top">
+          {{ server_icon(g) }}
+          <div class="sc-name">
+            <strong>{{ g.name }}</strong>
+            {% if g.owner %}<span class="chip owner">Owner</span>{% endif %}
+          </div>
         </div>
+        <a class="button small block" rel="noopener" target="_blank"
+           href="{{ invite_url(g.id) }}">Add {{ brand }}</a>
       </div>
     {% endfor %}
   </div>

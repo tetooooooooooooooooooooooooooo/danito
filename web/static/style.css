@@ -764,7 +764,12 @@ button.link:hover {
 }
 
 /* ── cards ───────────────────────────────────────────────────────── */
-.grid { display: grid; gap: 13px; grid-template-columns: repeat(auto-fill, minmax(238px, 1fr)); }
+.grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(262px, 1fr));
+  align-items: stretch;
+}
 
 .card {
   position: relative;
@@ -788,35 +793,151 @@ button.link:hover {
   opacity: .8;
 }
 
-.card.server {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 0;
-  padding: 16px;
-  text-decoration: none;
-}
-.card.server:hover {
-  border-color: var(--line-bright);
-  transform: translateY(-2px);
-  box-shadow: 0 14px 30px -18px rgba(0, 0, 0, .9), 0 0 0 1px var(--mint-glow);
-}
-.card.server img { border-radius: 12px; }
-.card.server strong { display: block; letter-spacing: -.2px; }
-.card.server .fine { margin-top: 1px; }
-
 .card.muted { opacity: .66; }
 .card.muted:hover { border-color: var(--line); transform: none; box-shadow: none; }
 .card.muted::before { opacity: .3; }
 
-.blank {
-  width: 48px; height: 48px; flex: none;
-  border-radius: 12px;
-  background: linear-gradient(140deg, var(--surface-3), var(--surface-2));
+/* ── the server picker ───────────────────────────────────────────── */
+body.servers-page main { max-width: 1000px; }
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-bottom: 26px;
+}
+.page-head h1 { margin: 0; }
+.page-head .fine { margin-top: 7px; }
+
+.section-head { margin: 40px 0 0; font-size: 15px; }
+.section-head + .fine { margin: 6px 0 14px; }
+
+.server-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  /* A 1fr track is min-width: auto, so without this a long server name would stretch its
+     whole column instead of truncating. */
+  min-width: 0;
+  border-radius: var(--r);
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  transition: border-color .2s var(--ease), transform .2s var(--ease),
+              box-shadow .25s var(--ease);
+}
+
+/* The mint hairline only lights up on the ones you can actually open. */
+.server-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--mint-glow) 22%,
+                              var(--mint-glow) 78%, transparent);
+  opacity: .55;
+  transition: opacity .2s var(--ease);
+}
+
+a.server-card:hover {
+  border-color: var(--line-bright);
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px -20px rgba(0, 0, 0, .9), 0 0 0 1px var(--mint-glow);
+}
+a.server-card:hover::before { opacity: 1; }
+a.server-card:focus-visible { outline: 2px solid var(--mint-bright); outline-offset: 2px; }
+
+.server-card.absent { opacity: .82; }
+.server-card.absent::before { opacity: .18; }
+
+.sc-top { display: flex; align-items: center; gap: 13px; min-width: 0; }
+
+.gicon {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 15px;
   border: 1px solid var(--line-bright);
-  display: grid; place-items: center;
+}
+.gicon.blank {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(140deg, var(--surface-3), var(--surface-2));
   font-weight: 700;
+  font-size: 21px;
   color: var(--mint);
+}
+
+.sc-name { min-width: 0; display: flex; flex-direction: column; gap: 5px; align-items: start; }
+.sc-name strong {
+  display: block;
+  letter-spacing: -.2px;
+  font-size: 15.5px;
+  /* Long server names truncate instead of stretching the grid column. */
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .6px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 999px;
+}
+.chip.owner {
+  color: var(--mint-bright);
+  background: rgba(61, 220, 151, .12);
+  border: 1px solid rgba(61, 220, 151, .3);
+}
+
+/* What's switched on. Without this the cards say nothing but the name. */
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+
+.pill-sm {
+  font-size: 11.8px;
+  font-weight: 500;
+  padding: 3.5px 9px;
+  border-radius: 999px;
+  color: #b9f4da;
+  background: rgba(61, 220, 151, .1);
+  border: 1px solid rgba(61, 220, 151, .24);
+}
+.pill-sm.more { color: var(--dim); background: var(--surface-3); border-color: var(--line-bright); }
+.pill-sm.off { color: var(--faint); background: none; border-style: dashed; border-color: var(--line-bright); }
+
+.sc-go {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-top: 13px;
+  border-top: 1px solid var(--line);
+  color: var(--mint);
+  font-size: 13.6px;
+  font-weight: 600;
+}
+.sc-go .arrow { transition: transform .2s var(--ease); }
+a.server-card:hover .sc-go .arrow { transform: translateX(4px); }
+
+.button.block { display: block; text-align: center; margin-top: auto; }
+
+.empty { text-align: center; padding: 46px 26px; }
+.empty-icon { font-size: 34px; margin-bottom: 12px; }
+.empty h2 { margin-bottom: 9px; }
+.empty .fine { max-width: 42ch; margin: 0 auto 20px; }
+
+@media (max-width: 560px) {
+  .page-head { align-items: stretch; }
+  .page-head .button { width: 100%; text-align: center; }
 }
 
 .head { margin-bottom: 18px; }
