@@ -86,32 +86,6 @@ def settings(guild_id: int) -> dict:
     return db()["servers"].find_one({"guild_id": guild_id}) or {}
 
 
-def settings_many(guild_ids) -> dict:
-    """Settings for several guilds at once, keyed by id.
-
-    One query rather than one per card. Somebody who administers a dozen servers would
-    otherwise pay a round trip each just to render the picker.
-    """
-    ids = [int(g) for g in guild_ids]
-    if not ids:
-        return {}
-    found = db()["servers"].find({"guild_id": {"$in": ids}})
-    return {int(doc["guild_id"]): doc for doc in found if doc.get("guild_id") is not None}
-
-
-def panel_counts(guild_ids) -> dict:
-    """How many role panels each guild has, for the same reason."""
-    ids = [int(g) for g in guild_ids]
-    if not ids:
-        return {}
-    counts = {}
-    for doc in db()["role_panels"].find({"guild_id": {"$in": ids}}):
-        gid = doc.get("guild_id")
-        if gid is not None:
-            counts[int(gid)] = counts.get(int(gid), 0) + 1
-    return counts
-
-
 def bot_guild_ids() -> set:
     """Published by the bot, so the picker only offers servers it is actually in."""
     doc = db()["runtime"].find_one({"_id": "bot"}) or {}

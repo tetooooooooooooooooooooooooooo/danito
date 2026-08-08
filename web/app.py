@@ -191,25 +191,6 @@ def logout():
 
 
 # ── servers ──────────────────────────────────────────────────────────
-# What each card shows as switched on, in the order they're worth knowing about. Each entry is
-# (label, does this settings document count as having it on).
-FEATURES = [
-    ("Ratings", lambda c, panels: bool(c.get("discovery_channel"))),
-    ("Server log", lambda c, panels: bool(c.get("logging_enabled"))),
-    ("Welcome", lambda c, panels: bool(c.get("welcome_enabled"))),
-    ("Goodbye", lambda c, panels: bool(c.get("goodbye_enabled"))),
-    ("Autorole", lambda c, panels: bool(c.get("autorole_enabled") and c.get("autorole_ids"))),
-    ("Role buttons", lambda c, panels: panels > 0),
-    ("Mod log", lambda c, panels: bool(c.get("modlog_channel"))),
-    ("Deleted media", lambda c, panels: bool(c.get("medialog_enabled"))),
-    ("Reminders", lambda c, panels: bool(c.get("pinglog_enabled"))),
-]
-
-
-def active_features(cfg: dict, panels: int) -> list:
-    return [label for label, on in FEATURES if on(cfg or {}, panels)]
-
-
 @app.route("/servers")
 @login_required
 def servers():
@@ -224,17 +205,7 @@ def servers():
     joined, absent = [], []
     for g in sorted(allowed, key=lambda x: x["name"].lower()):
         (joined if int(g["id"]) in present else absent).append(g)
-
-    # Two queries for the whole page rather than two per card.
-    ids = [int(g["id"]) for g in joined]
-    configs = store.settings_many(ids)
-    panels = store.panel_counts(ids)
-    for g in joined:
-        gid = int(g["id"])
-        g["features"] = active_features(configs.get(gid, {}), panels.get(gid, 0))
-
-    return render_template("servers.html", joined=joined, absent=absent,
-                           total=len(allowed))
+    return render_template("servers.html", joined=joined, absent=absent)
 
 
 @app.route("/servers/<int:guild_id>")
