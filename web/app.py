@@ -232,6 +232,7 @@ def guild_settings(guild_id: int):
         channel_names={c["id"]: c for c in channels},
         max_autoroles=store.MAX_AUTOROLES,
         max_panel_roles=store.MAX_PANEL_ROLES,
+        log_events=store.LOG_EVENTS,
     )
 
 
@@ -244,6 +245,24 @@ def save_guild_settings(guild_id: int):
     valid_channels = {int(c["id"]) for c in api.guild_channels(guild_id)}
     valid_roles = assignable_role_ids(guild_id)
     section = request.form.get("section", "")
+
+    # Logging is handled apart from the table below: it writes one nested map of twelve events
+    # rather than a set of flat fields, so it can't go through the generic allow-list.
+    if section == "logging":
+        events = store.clean_log_events(request.form, valid_channels)
+        values = {
+            "logging_enabled": "logging_enabled" in request.form,
+            "log_channel": store.clean("log_channel", request.form.get("log_channel"),
+                                       valid_channels),
+            "log_events": events,
+        }
+        # Every event needs somewhere to go: its own channel, or the shared one. With neither,
+        # nothing would be recorded and the page would still claim logging was on.
+        if not values["log_channel"] and not any(e["channel"] for e in events.values() if e["on"]):
+            values["logging_enabled"] = False
+        store.save(guild_id, values)
+        flash("Saved. The bot picks this up within a few seconds.")
+        return redirect(url_for("guild_settings", guild_id=guild_id) + "#logging")
 
     # Only the fields belonging to the submitted section are touched, so saving one card
     # can't blank the others.

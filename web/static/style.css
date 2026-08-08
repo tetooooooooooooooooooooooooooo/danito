@@ -1093,6 +1093,67 @@ label.pick input:focus-visible { outline: 2px solid var(--mint-bright); outline-
   min-width: 0;
 }
 
+/* ── the server log ──────────────────────────────────────────────── */
+.logtools { display: flex; align-items: center; gap: 10px; margin: 22px 0 8px; }
+.logtools .spacer { flex: 1; }
+.logtools .fine { margin: 0; font-weight: 600; color: var(--text); }
+
+button.tiny {
+  padding: 5px 11px;
+  font-size: 12.4px;
+  font-weight: 500;
+  background: var(--surface-3);
+  color: var(--dim);
+  border: 1px solid var(--line-bright);
+  box-shadow: none;
+}
+button.tiny:hover {
+  background: var(--surface);
+  color: var(--text);
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
+
+.logrows {
+  border: 1px solid var(--line-bright);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.logrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--line);
+}
+.logrow:last-child { border-bottom: 0; }
+.logrow:hover { background: var(--surface); }
+
+/* The dropdown is the exception, not the point, so it stays narrow and quiet next to the
+   name. Somebody who never wants to split their log should be able to ignore this column. */
+.logrow select {
+  flex: none;
+  width: 168px;
+  margin-top: 0;
+  padding: 6px 30px 6px 10px;
+  font-size: 13px;
+  background-position: calc(100% - 14px) 50%, calc(100% - 9px) 50%;
+}
+
+.lg-icon { flex: none; width: 20px; text-align: center; }
+.lg-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.lg-label { font-size: 14px; font-weight: 500; }
+.lg-blurb { font-size: 12.4px; color: var(--faint); font-weight: 400; line-height: 1.4; }
+
+@media (max-width: 620px) {
+  .logrow { flex-wrap: wrap; }
+  .logrow label.pick { flex-basis: 100%; }
+  .logrow select { width: 100%; flex: 1; }
+}
+
 /* ── text inputs and panels ──────────────────────────────────────── */
 input[type="text"] {
   display: block;

@@ -60,6 +60,7 @@
   ("goodbye",  "🚪", "Goodbye",        settings.goodbye_enabled),
   ("autorole", "🎫", "Autorole",       settings.autorole_enabled and settings.autorole_ids),
   ("panels",   "🎛️", "Role buttons",   panels|length),
+  ("logging",  "📋", "Server log",     settings.logging_enabled),
   ("medialog", "🗄️", "Deleted media",  settings.medialog_enabled),
   ("modlog",   "🔨", "Moderation log", settings.modlog_channel),
   ("pinglog",  "🔔", "Nudge tracking", settings.pinglog_enabled),
@@ -225,6 +226,63 @@
           <button type="submit">Create panel</button>
         </form>
       </div>
+    </section>
+
+    <section class="pane" id="logging">
+      {% set events = settings.log_events or {} %}
+      <form class="card" method="post"
+            action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input type="hidden" name="section" value="logging">
+        {{ head("Server log", "A record of what happens in the server. Pick one channel for everything, and only split it up if you want to.") }}
+
+        <label class="check">
+          <input type="checkbox" name="logging_enabled"
+            {% if settings.logging_enabled %}checked{% endif %}>
+          Keep a server log
+        </label>
+
+        <label>Send everything to
+          {{ channel_select("log_channel", settings.log_channel) }}
+        </label>
+        <p class="fine">That's the whole setup for most servers. Everything below goes here
+          unless you give it a channel of its own.</p>
+
+        <div class="logtools">
+          <span class="fine">What to record</span>
+          <span class="spacer"></span>
+          <button type="button" class="tiny" data-log-all="1">All on</button>
+          <button type="button" class="tiny" data-log-all="0">All off</button>
+        </div>
+
+        <div class="logrows">
+          {% for key, icon, label, blurb in log_events %}
+            {% set current = events.get(key) or {} %}
+            <div class="logrow">
+              <label class="pick">
+                <input type="checkbox" name="log_on_{{ key }}"
+                  {% if current.on %}checked{% endif %}>
+                <span class="lg-icon" aria-hidden="true">{{ icon }}</span>
+                <span class="lg-text">
+                  <span class="lg-label">{{ label }}</span>
+                  <span class="lg-blurb">{{ blurb }}</span>
+                </span>
+              </label>
+              <select name="log_ch_{{ key }}" aria-label="Channel for {{ label }}">
+                <option value="">Same as above</option>
+                {% for c in channels %}
+                  <option value="{{ c.id }}"
+                    {% if current.channel and current.channel|string == c.id %}selected{% endif %}>
+                    #{{ c.name }}
+                  </option>
+                {% endfor %}
+              </select>
+            </div>
+          {% endfor %}
+        </div>
+
+        <button type="submit">Save</button>
+      </form>
     </section>
 
     <section class="pane" id="medialog">

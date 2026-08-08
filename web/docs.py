@@ -228,6 +228,49 @@ SECTIONS = [
         ],
     },
     {
+        "id": "logging",
+        "icon": "📋",
+        "title": "Server log",
+        "blurb": "A record of what happens in the server, in one channel or in as many as you "
+                 "want.",
+        "setup": [
+            "Run <code>/logging channel</code> and pick where the log goes. Everything is "
+            "switched on at once, so that is the whole setup for most servers.",
+            "If you want a particular kind of log kept apart, open the dashboard, find Server "
+            "log, and give that one its own channel. Anything left on <em>Same as above</em> "
+            "keeps going to the main channel.",
+            "From Discord, <code>/logging event</code> does the same thing one at a time, and "
+            "<code>/logging status</code> shows you what is being recorded and where.",
+        ],
+        "notes": [
+            "Twelve kinds of event: deleted messages, edited messages, bulk deletions, people "
+            "joining and leaving, bans, unbans, nickname changes, role changes, channels, "
+            "roles, and server settings.",
+            "Your log channels are never logged themselves. Without that, deleting an entry "
+            "would write another one about the deletion.",
+            "Deleted images and videos stay with the media log, which keeps the file itself. "
+            "When both are on, a deleted picture is reported once with the picture rather than "
+            "twice.",
+            "Bans say who did it and why, which comes from the audit log, so the bot needs View "
+            "Audit Log to fill that in. Everything else works without it.",
+            "Editing a message only counts when the text actually changed. Discord fires an "
+            "edit whenever it turns a link into a preview, and logging those would bury the "
+            "real ones.",
+            "Channel and role changes cover creating, deleting and renaming. Permission "
+            "changes are left out on purpose: they fire constantly and produce a log nobody "
+            "reads.",
+        ],
+        "commands": [
+            ("/logging channel", "[channel]",
+             "Send every kind of log here, and switch them all on. Leave the channel out to "
+             "turn logging off.", MANAGE_SERVER),
+            ("/logging event", "<event> <on> [channel]",
+             "Switch one kind on or off, or send it somewhere of its own.", MANAGE_SERVER),
+            ("/logging status", "", "What is being recorded, and where each kind goes.",
+             MANAGE_SERVER),
+        ],
+    },
+    {
         "id": "medialog",
         "icon": "🗄️",
         "title": "Deleted media logging",

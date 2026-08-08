@@ -33,8 +33,37 @@ ALLOWED_FIELDS = {
     "goodbye_embed": bool,
     "autorole_enabled": bool,
     "autorole_ids": "role_ids",
+    "logging_enabled": bool,
+    "log_channel": "channel_or_none",
 }
 MAX_TEXT = 1500
+
+# Mirrors Cogs/Logging.EVENTS. The two processes share no code, so the keys are written out
+# twice; a test asserts they still agree, because a typo here means an event the dashboard can
+# switch on and the bot never sends.
+LOG_EVENTS = [
+    ("message_delete",   "🗑️", "Deleted messages",
+     "The text of a message somebody removed."),
+    ("message_edit",     "✏️", "Edited messages",
+     "What it said before and after."),
+    ("message_purge",    "🧹", "Bulk deletions",
+     "When a moderator clears a batch of messages."),
+    ("member_join",      "📥", "People joining",
+     "Who arrived, and how old their account is."),
+    ("member_leave",     "📤", "People leaving",
+     "Who left, how long they stayed, and what roles they had."),
+    ("member_ban",       "🔨", "Bans",
+     "Who was banned, by whom and why."),
+    ("member_unban",     "🕊️", "Unbans", "Who was let back in."),
+    ("member_nickname",  "🏷️", "Nickname changes", "Before and after."),
+    ("member_roles",     "🎭", "Role changes",
+     "Roles given and taken away, however that happened."),
+    ("channel_changes",  "📁", "Channels", "Channels added, removed or renamed."),
+    ("role_changes",     "🎟️", "Roles", "Roles added, removed or renamed."),
+    ("server_changes",   "⚙️", "Server settings",
+     "The server name, icon or owner changing."),
+]
+LOG_EVENT_KEYS = [key for key, _, _, _ in LOG_EVENTS]
 
 MAX_AUTOROLES = 10
 MAX_PANELS = 10
@@ -93,6 +122,27 @@ def clean(field: str, raw, valid_channels: set, valid_roles: set = frozenset()):
                 out.append(rid)
         return out[:MAX_AUTOROLES]
     raise ValueError(field)
+
+
+def clean_log_events(form, valid_channels: set) -> dict:
+    """Build the whole event map from a submitted form.
+
+    Written out in full every time rather than patched, so a key the form doesn't mention is
+    dropped instead of lingering. A channel that isn't in this guild becomes None, which falls
+    back to the shared log channel rather than silently sending nothing.
+    """
+    out = {}
+    for key in LOG_EVENT_KEYS:
+        channel = None
+        raw = form.get(f"log_ch_{key}", "")
+        if raw:
+            try:
+                cid = int(raw)
+            except (TypeError, ValueError):
+                cid = None
+            channel = cid if cid in valid_channels else None
+        out[key] = {"on": f"log_on_{key}" in form, "channel": channel}
+    return out
 
 
 def save(guild_id: int, values: dict):

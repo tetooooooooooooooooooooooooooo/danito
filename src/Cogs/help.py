@@ -10,6 +10,8 @@ CATEGORIES = {
                    "Ban, kick, timeout and warn, with every action saved as a numbered case."),
     "MediaLog": ("🗄️", "Media Logging",
                  "Logs deleted images, videos and voice memos with the file attached."),
+    "Logging": ("📋", "Server Log",
+                "Deletes, edits, joins, bans, roles and more, wherever you want them."),
     "Ping Tracking": ("🔔", "Nudge Tracking",
                       "Records each survey nudge and how many members it reached."),
     "Server Ratings": ("⭐", "Server Ratings",

@@ -127,6 +127,17 @@
     open(location.hash.slice(1));
   }
 
+  /* ── all on / all off for the log events ─────────────────────────── */
+  /* Twelve toggles is a lot of clicking to get to "record everything", which is what most
+     people want. The buttons only exist when this script runs, so nothing is lost without it. */
+  document.querySelectorAll("[data-log-all]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var on = button.getAttribute("data-log-all") === "1";
+      var rows = button.closest("form").querySelectorAll(".logrow input[type=checkbox]");
+      rows.forEach(function (box) { box.checked = on; });
+    });
+  });
+
   /* ── cards lit from wherever the cursor is ───────────────────────── */
   if (!still && matchMedia("(hover: hover)").matches) {
     document.querySelectorAll(".feature").forEach(function (card) {

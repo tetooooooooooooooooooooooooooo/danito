@@ -49,6 +49,9 @@ class Bot(commands.Bot):
         intents.members = True
         intents.guild_messages = True
         intents.message_content = True
+        # Bans and unbans arrive on their own intent. Not privileged, and it carries almost no
+        # traffic, but without it the ban and unban logs never fire at all.
+        intents.moderation = True
         intents.presences = os.environ.get("PRESENCE_INTENT", "1") != "0"
 
         # Larger message cache so a deleted message still carries its author/content even
@@ -72,6 +75,7 @@ class Bot(commands.Bot):
             "Cogs.utility",
             "Cogs.ImageSpamFilter",
             "Cogs.MediaLog",
+            "Cogs.Logging",
             "Cogs.PingLog",
             "Cogs.Moderation",
             "Cogs.owner",
