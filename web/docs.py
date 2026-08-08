@@ -313,6 +313,7 @@ SECTIONS = [
             "Membership records expire by themselves after 180 days whether or not the bot is "
             "still in the server, because retention only ever looks back 30 days.",
             "If you want everything gone sooner than 30 days, ask and it will be done.",
+            "The full <a href=\"https://tetooooooooooooooooooooooooooo.github.io/soundcord-tos/privacy.html\" rel=\"noopener\">privacy policy</a> and <a href=\"https://tetooooooooooooooooooooooooooo.github.io/soundcord-tos/\" rel=\"noopener\">terms of service</a> say the same thing at greater length, including exactly what is stored per feature and how long each part is kept.",
         ],
         "commands": [],
     },

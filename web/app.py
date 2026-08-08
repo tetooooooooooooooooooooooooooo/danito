@@ -41,6 +41,18 @@ BRAND = os.environ.get("DASHBOARD_BRAND", "Newt")
 # The permissions the invite asks for, in one place rather than repeated in each template.
 INVITE_PERMISSIONS = "1374389534294"
 
+# The terms and privacy policy live outside this app, on their own static site, so they stay
+# up whether or not the dashboard is. Discord wants both reachable from anywhere the bot is
+# offered, which is why the footer carrying them is on every page rather than only when
+# somebody is signed in.
+# `or` rather than a get() default: .env.example lists these empty, and an empty string would
+# otherwise win over the default and produce a link that goes nowhere.
+TERMS_URL = (os.environ.get("TERMS_URL") or
+             "https://tetooooooooooooooooooooooooooo.github.io/soundcord-tos/").strip()
+PRIVACY_URL = (os.environ.get("PRIVACY_URL") or
+               "https://tetooooooooooooooooooooooooooo.github.io/soundcord-tos/privacy.html"
+               ).strip()
+
 
 def invite_url(guild_id=None) -> str:
     url = (f"https://discord.com/oauth2/authorize?client_id={api.CLIENT_ID}"
@@ -118,7 +130,8 @@ def require_guild(guild_id: int) -> dict:
 @app.context_processor
 def inject():
     return {"user": current_user(), "csrf_token": csrf_token, "api": api,
-            "brand": BRAND, "invite_url": invite_url}
+            "brand": BRAND, "invite_url": invite_url,
+            "terms_url": TERMS_URL, "privacy_url": PRIVACY_URL}
 
 
 # ── auth ─────────────────────────────────────────────────────────────

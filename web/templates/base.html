@@ -47,8 +47,18 @@
     {% block content %}{% endblock %}
   </main>
 
-  {# Only meaningful once there's something to change. #}
-  {% if user %}<footer>Changes made here reach the bot within a few seconds.</footer>{% endif %}
+  {# On every page, signed in or not: somebody deciding whether to add the bot should be able
+     to read what it does with their data without handing over an account first. #}
+  <footer>
+    {% if user %}<p>Changes made here reach the bot within a few seconds.</p>{% endif %}
+    <nav class="foot-links">
+      <a href="{{ url_for('documentation') }}">Docs</a>
+      <a href="{{ url_for('status') }}">Status</a>
+      <a href="{{ terms_url }}" rel="noopener">Terms of Service</a>
+      <a href="{{ privacy_url }}" rel="noopener">Privacy Policy</a>
+    </nav>
+    <p>© 2026 {{ brand }} · Not affiliated with Discord Inc.</p>
+  </footer>
   <script src="{{ url_for('static', filename='app.js') }}" defer></script>
 </body>
 </html>

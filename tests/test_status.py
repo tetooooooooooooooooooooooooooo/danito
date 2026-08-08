@@ -163,6 +163,18 @@ def main():
         assert '/status"' in c.get(path).data.decode(), path
     print("  in the header on the landing page, the docs and itself OK")
 
+    print("\n=== so are the terms and the privacy policy ===")
+    # Discord wants both reachable from anywhere the bot is offered, and somebody deciding
+    # whether to add it shouldn't have to sign in to read what it does with their data.
+    for path in ("/", "/docs", "/status"):
+        body = c.get(path).data.decode()
+        assert dashboard.TERMS_URL in body, path
+        assert dashboard.PRIVACY_URL in body, path
+        assert "Terms of Service" in body and "Privacy Policy" in body, path
+    assert dashboard.TERMS_URL.startswith("https://"), dashboard.TERMS_URL
+    assert dashboard.PRIVACY_URL.startswith("https://"), dashboard.PRIVACY_URL
+    print("  both in the footer of every public page, while logged out OK")
+
     print("\n=== the wording covers every state ===")
     assert set(dashboard.STATUS_WORDS) == {"up", "wobbly", "down", "unknown"}
     for state, (heading, detail) in dashboard.STATUS_WORDS.items():

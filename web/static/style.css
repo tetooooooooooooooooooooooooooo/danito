@@ -1477,6 +1477,26 @@ footer {
   font-size: 12.6px;
   padding: 0 22px 48px;
 }
+footer p { margin: 0; }
+
+/* Wraps rather than scrolls, since this is the one thing on the page that has to stay
+   reachable on a narrow screen. */
+.foot-links {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin: 14px 0 10px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.foot-links a {
+  color: var(--dim);
+  text-decoration: none;
+  font-size: 13px;
+  transition: color .16s var(--ease);
+}
+.foot-links a:hover { color: var(--mint); }
 
 /* ── small screens ───────────────────────────────────────────────── */
 @media (max-width: 560px) {
