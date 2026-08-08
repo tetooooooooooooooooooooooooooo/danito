@@ -163,11 +163,22 @@ class Greetings(commands.Cog, name="Greetings"):
                                    ("Embed Links", perms.embed_links)) if not ok]
         return ", ".join(missing) or None
 
-    async def _preview(self, interaction: discord.Interaction, text: str,
-                       as_embed: bool, color: int) -> dict:
-        """Rendered against whoever ran the command, so they can see the real thing."""
+    async def _send_preview(self, interaction: discord.Interaction, header: str, text: str,
+                            as_embed: bool, color: int, followup: bool = False):
+        """Show the real rendered greeting, using whoever ran the command as the stand-in.
+
+        The header and the preview have to be combined carefully: a plain-text greeting *is*
+        the content, so it can't be passed alongside a header as a second content argument.
+        """
         content, embed = self._build(text, interaction.user, interaction.guild, as_embed, color)
-        return {"content": content, "embed": embed}
+        if embed is not None:
+            payload = {"content": header, "embed": embed}
+        else:
+            payload = {"content": f"{header}\n\n{content}"}
+
+        send = interaction.followup.send if followup else interaction.response.send_message
+        # none() so the preview renders the mention without actually pinging the admin.
+        await send(ephemeral=True, allowed_mentions=discord.AllowedMentions.none(), **payload)
 
     # ── /welcome ─────────────────────────────────────────────────────
     @welcome.command(name="set", description="Write the message new members get")
@@ -196,10 +207,10 @@ class Greetings(commands.Cog, name="Greetings"):
         })
 
         where = channel.mention if channel else "a direct message"
-        preview = await self._preview(interaction, message, embed, COLOR_WELCOME)
-        await interaction.response.send_message(
+        await self._send_preview(
+            interaction,
             f"Welcome messages are on, going to {where}. Here's how it'll look:",
-            ephemeral=True, **preview)
+            message, embed, COLOR_WELCOME)
 
     @welcome.command(name="off", description="Stop greeting new members")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -239,10 +250,10 @@ class Greetings(commands.Cog, name="Greetings"):
             "goodbye_channel": channel.id,
             "goodbye_embed": embed,
         })
-        preview = await self._preview(interaction, message, embed, COLOR_GOODBYE)
-        await interaction.response.send_message(
+        await self._send_preview(
+            interaction,
             f"Goodbye messages are on, going to {channel.mention}. Here's how it'll look:",
-            ephemeral=True, **preview)
+            message, embed, COLOR_GOODBYE)
 
     @goodbye.command(name="off", description="Stop posting when someone leaves")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -288,13 +299,10 @@ class Greetings(commands.Cog, name="Greetings"):
                 value="The channel this was pointed at is gone, so nothing is being sent.",
                 inline=False)
 
-        payload = {"embed": embed}
-        await interaction.response.send_message(ephemeral=True, **payload)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         if text:
-            preview = await self._preview(interaction, text, cfg.get(f"{kind}_embed", False),
-                                          color)
-            await interaction.followup.send(content=preview["content"],
-                                            embed=preview["embed"], ephemeral=True)
+            await self._send_preview(interaction, "Here's how it looks:", text,
+                                     cfg.get(f"{kind}_embed", False), color, followup=True)
 
 
 async def setup(bot: commands.Bot):
