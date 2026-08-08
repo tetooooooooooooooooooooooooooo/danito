@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="hero">
+  <h1>Not set up yet</h1>
+  <p>The dashboard needs these environment variables before it can do anything:</p>
+  <ul class="plain">
+    {% for name in missing %}<li><code>{{ name }}</code></li>{% endfor %}
+  </ul>
+  <p class="fine">Set them on the app, then reload this page.</p>
+</div>
+{% endblock %}

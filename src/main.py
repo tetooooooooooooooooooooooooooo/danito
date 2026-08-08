@@ -287,6 +287,49 @@ class Bot(commands.Bot):
 
         return summary
 
+    # ── talking to the dashboard ─────────────────────────────────────
+    async def publish_guilds(self):
+        """Write which guilds the bot is in, so the dashboard can show a server picker without
+        asking Discord. The two processes only share MongoDB."""
+        try:
+            await self._db(
+                Database.get_bot_database(self.MongoClient)["runtime"].update_one,
+                {"_id": "bot"},
+                {"$set": {"guild_ids": [g.id for g in self.guilds],
+                          "updated_at": datetime.datetime.now(datetime.timezone.utc)}},
+                True)
+        except Exception as e:
+            print(f"[dashboard] couldn't publish the guild list: {e}")
+
+    @tasks.loop(seconds=10)
+    async def watch_dashboard_edits(self):
+        """Settings are cached for five minutes, so without this a dashboard save would look
+        like it did nothing for up to five minutes. The dashboard flags the guild it changed
+        and this drops the cached copy, which costs one small query every ten seconds however
+        many servers there are."""
+        try:
+            collection = Database.get_bot_database(self.MongoClient)["config_dirty"]
+            flagged = await self._db(lambda: list(collection.find({}, {"_id": 1})))
+            if not flagged:
+                return
+            ids = [d["_id"] for d in flagged]
+            for guild_id in ids:
+                GuildConfig.invalidate(guild_id)
+            await self._db(collection.delete_many, {"_id": {"$in": ids}})
+            print(f"[dashboard] picked up changes for {len(ids)} server(s)")
+        except Exception as e:
+            print(f"[dashboard] change poll failed: {e}")
+
+    @watch_dashboard_edits.before_loop
+    async def before_watch(self):
+        await self.wait_until_ready()
+
+    async def on_guild_join(self, guild):
+        await self.publish_guilds()
+
+    async def on_guild_remove(self, guild):
+        await self.publish_guilds()
+
     async def setup_hook(self):
         await GuildConfig.ensure_indexes(self)
         for ext in self.cogslist:
@@ -297,6 +340,7 @@ class Bot(commands.Bot):
 
     async def on_ready(self):
         print("Bot is ready!")
+        await self.publish_guilds()
 
         # on_ready can fire again after a gateway resume/reconnect, not just on first boot.
         # Global command sync is unnecessary (and rate-limited) to repeat on every one of
@@ -304,6 +348,7 @@ class Bot(commands.Bot):
         if not self._ready_once:
             self._ready_once = True
             asyncio.ensure_future(loop(self))
+            self.watch_dashboard_edits.start()
 
             synced = await self.tree.sync()
             print(f"Loaded {len(synced)} slash commands.")

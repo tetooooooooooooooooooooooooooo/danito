@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Your servers</h1>
+
+{% if joined %}
+  <div class="grid">
+    {% for g in joined %}
+      <a class="card server" href="{{ url_for('guild_settings', guild_id=g.id) }}">
+        {% set icon = api.icon_url(g) %}
+        {% if icon %}
+          <img src="{{ icon }}" alt="" width="48" height="48">
+        {% else %}
+          <div class="blank">{{ g.name[:1] | upper }}</div>
+        {% endif %}
+        <div>
+          <strong>{{ g.name }}</strong>
+          <span class="fine">Configure</span>
+        </div>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p>The bot isn't in any server you manage yet.</p>
+{% endif %}
+
+{% if absent %}
+  <h2>Not added yet</h2>
+  <p class="fine">Servers you manage that the bot isn't in.</p>
+  <div class="grid">
+    {% for g in absent %}
+      <div class="card server muted">
+        {% set icon = api.icon_url(g) %}
+        {% if icon %}
+          <img src="{{ icon }}" alt="" width="48" height="48">
+        {% else %}
+          <div class="blank">{{ g.name[:1] | upper }}</div>
+        {% endif %}
+        <div>
+          <strong>{{ g.name }}</strong>
+          <a class="fine" rel="noopener" target="_blank"
+             href="https://discord.com/oauth2/authorize?client_id={{ client_id }}&scope=bot+applications.commands&permissions=1374389534294&guild_id={{ g.id }}">
+            Add the bot
+          </a>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

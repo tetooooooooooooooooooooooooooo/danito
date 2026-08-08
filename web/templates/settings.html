@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ guild.name }} · soundcord{% endblock %}
+
+{% macro channel_select(name, current) %}
+  <select name="{{ name }}">
+    <option value="">Not set</option>
+    {% for c in channels %}
+      <option value="{{ c.id }}" {% if current and current|string == c.id %}selected{% endif %}>
+        #{{ c.name }}
+      </option>
+    {% endfor %}
+  </select>
+{% endmacro %}
+
+{% macro head(id, title, blurb) %}
+  <div class="head">
+    <h2 id="{{ id }}">{{ title }}</h2>
+    <p class="fine">{{ blurb }}</p>
+  </div>
+{% endmacro %}
+
+{% block content %}
+<p><a class="fine" href="{{ url_for('servers') }}">&larr; All servers</a></p>
+<h1>{{ guild.name }}</h1>
+
+{% if not channels %}
+  <div class="warn">I can't see any channels here. Check that the bot has View Channel,
+    otherwise the dropdowns below will be empty.</div>
+{% endif %}
+
+<form class="card" method="post" action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="welcome">
+  {{ head("welcome", "Welcome message", "Sent when somebody joins. Leave the channel unset to send it as a direct message instead.") }}
+  <label class="check">
+    <input type="checkbox" name="welcome_enabled" {% if settings.welcome_enabled %}checked{% endif %}>
+    Send a welcome
+  </label>
+  <label>Channel {{ channel_select("welcome_channel", settings.welcome_channel) }}</label>
+  <label>Message
+    <textarea name="welcome_message" rows="4" maxlength="1500"
+      placeholder="Welcome {user} to {server}!">{{ settings.welcome_message or "" }}</textarea>
+  </label>
+  <label class="check">
+    <input type="checkbox" name="welcome_embed" {% if settings.welcome_embed %}checked{% endif %}>
+    Send as an embed
+  </label>
+  <p class="fine">You can use
+    <code>{user}</code> <code>{username}</code> <code>{tag}</code>
+    <code>{server}</code> <code>{count}</code> <code>{ordinal}</code>.</p>
+  <button type="submit">Save</button>
+</form>
+
+<form class="card" method="post" action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="goodbye">
+  {{ head("goodbye", "Goodbye message", "Posted when somebody leaves. Needs a channel, since the bot can't message someone who's gone.") }}
+  <label class="check">
+    <input type="checkbox" name="goodbye_enabled" {% if settings.goodbye_enabled %}checked{% endif %}>
+    Post a goodbye
+  </label>
+  <label>Channel {{ channel_select("goodbye_channel", settings.goodbye_channel) }}</label>
+  <label>Message
+    <textarea name="goodbye_message" rows="3" maxlength="1500"
+      placeholder="{username} has left.">{{ settings.goodbye_message or "" }}</textarea>
+  </label>
+  <label class="check">
+    <input type="checkbox" name="goodbye_embed" {% if settings.goodbye_embed %}checked{% endif %}>
+    Send as an embed
+  </label>
+  <button type="submit">Save</button>
+</form>
+
+<form class="card" method="post" action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="medialog">
+  {{ head("medialog", "Deleted media log", "Logs deleted images, videos and voice memos, with the file attached.") }}
+  <label class="check">
+    <input type="checkbox" name="medialog_enabled" {% if settings.medialog_enabled %}checked{% endif %}>
+    Log deleted media
+  </label>
+  <label>Channel {{ channel_select("medialog_channel", settings.medialog_channel) }}</label>
+  <button type="submit">Save</button>
+</form>
+
+<form class="card" method="post" action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="modlog">
+  {{ head("modlog", "Moderation log", "Where bans, kicks, timeouts and warnings are recorded as numbered cases.") }}
+  <label>Channel {{ channel_select("modlog_channel", settings.modlog_channel) }}</label>
+  <button type="submit">Save</button>
+</form>
+
+<form class="card" method="post" action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="section" value="pinglog">
+  {{ head("pinglog", "Nudge tracking", "Records each survey nudge and how many members it reached.") }}
+  <label class="check">
+    <input type="checkbox" name="pinglog_enabled" {% if settings.pinglog_enabled %}checked{% endif %}>
+    Log nudges
+  </label>
+  <label>Channel {{ channel_select("pinglog_channel", settings.pinglog_channel) }}</label>
+  <button type="submit">Save</button>
+</form>
+
+<div class="card muted">
+  {{ head("survey", "Ratings survey", "The survey has to be posted into a channel as a message, so it's set up from Discord.") }}
+  <p class="fine">Run <code>/setchannel</code> in the channel you want it in.
+    {% if settings.discovery_channel %}
+      Currently posted in <code>#{{ settings.discovery_channel }}</code>.
+    {% else %}
+      Not set up yet.
+    {% endif %}
+  </p>
+</div>
+{% endblock %}
