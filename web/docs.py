@@ -228,6 +228,31 @@ SECTIONS = [
         ],
     },
     {
+        "id": "data",
+        "icon": "🧹",
+        "title": "Your data",
+        "blurb": "What is stored, and what happens to it when you remove the bot.",
+        "setup": [
+            "Nothing to set up. This is here so you know what you are agreeing to.",
+        ],
+        "notes": [
+            "What is kept: your settings, a record of who joined and left so retention can be "
+            "worked out, the rating each member gave, moderation cases, role panels, and the "
+            "log of survey reminders. No message content is stored. Deleted media is held in "
+            "memory for a few hours so it can be re-posted, and never written to a database.",
+            "Remove the bot from your server and all of it is deleted after 30 days. The delay "
+            "is deliberate: bots get kicked by accident, or removed and re-added while "
+            "somebody sorts out permissions, and wiping a server's whole history the instant "
+            "that happens would be its own kind of problem.",
+            "Add the bot back within those 30 days and nothing was lost. Your settings, cases "
+            "and history are exactly where you left them.",
+            "Membership records expire by themselves after 180 days whether or not the bot is "
+            "still in the server, because retention only ever looks back 30 days.",
+            "If you want everything gone sooner than 30 days, ask and it will be done.",
+        ],
+        "commands": [],
+    },
+    {
         "id": "logging",
         "icon": "📋",
         "title": "Server log",

@@ -72,8 +72,11 @@
           </ul>
         {% endif %}
 
-        <h3>Commands</h3>
-        {{ command_table(s.commands) }}
+        {# Not every section has commands. "Your data" is just something to know. #}
+        {% if s.commands %}
+          <h3>Commands</h3>
+          {{ command_table(s.commands) }}
+        {% endif %}
       </section>
     {% endfor %}
 
