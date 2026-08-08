@@ -243,9 +243,12 @@ SECTIONS = [
             "<code>/logging status</code> shows you what is being recorded and where.",
         ],
         "notes": [
-            "Twelve kinds of event: deleted messages, edited messages, bulk deletions, people "
-            "joining and leaving, bans, unbans, nickname changes, role changes, channels, "
-            "roles, and server settings.",
+            "Thirteen kinds of event: deleted messages, edited messages, bulk deletions, "
+            "people joining and leaving, bans, unbans, nickname changes, role changes, voice "
+            "channels, channels, roles, and server settings.",
+            "The voice log covers joining, leaving and moving between voice channels. Muting, "
+            "deafening, streaming and turning a camera on are left out, and so are bots: a "
+            "music bot rejoins on every track and would bury everybody else.",
             "Your log channels are never logged themselves. Without that, deleting an entry "
             "would write another one about the deletion.",
             "Deleted images and videos stay with the media log, which keeps the file itself. "

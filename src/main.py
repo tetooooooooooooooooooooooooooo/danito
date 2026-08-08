@@ -52,6 +52,11 @@ class Bot(commands.Bot):
         # Bans and unbans arrive on their own intent. Not privileged, and it carries almost no
         # traffic, but without it the ban and unban logs never fire at all.
         intents.moderation = True
+        # Voice movement, for the voice log. Also not privileged, but unlike moderation it is
+        # genuinely chatty: Discord sends an update for every mute, deafen, stream and camera
+        # toggle as well as every join and leave. The log throws away everything except actual
+        # movement, so the cost is gateway traffic rather than noise in anybody's channel.
+        intents.voice_states = True
         intents.presences = os.environ.get("PRESENCE_INTENT", "1") != "0"
 
         # Larger message cache so a deleted message still carries its author/content even

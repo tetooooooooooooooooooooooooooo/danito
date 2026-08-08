@@ -38,6 +38,7 @@ EVENTS = [
     ("member_unban",     "🕊️", "Unbans"),
     ("member_nickname",  "🏷️", "Nickname changes"),
     ("member_roles",     "🎭", "Role changes"),
+    ("voice_activity",   "🔊", "Voice channels"),
     ("channel_changes",  "📁", "Channels added, removed or renamed"),
     ("role_changes",     "🎟️", "Roles added, removed or renamed"),
     ("server_changes",   "⚙️", "Server settings"),
@@ -303,6 +304,35 @@ class Logging(commands.Cog, name="Logging"):
                                 value=_trim(", ".join(r.mention for r in lost), 500),
                                 inline=False)
             await self._send(after.guild, "member_roles", self._stamp(embed, after))
+
+    # ── voice ────────────────────────────────────────────────────────
+    @commands.Cog.listener()
+    async def on_voice_state_update(self, member: discord.Member, before, after):
+        # This fires for muting, deafening, starting a stream and turning on a camera as well
+        # as for actually going somewhere. Only movement is worth a log line; without this the
+        # channel fills with entries for somebody toggling their own mic.
+        if before.channel == after.channel:
+            return
+        # Music bots rejoin on every track. Logging them would drown out the people.
+        if member.bot:
+            return
+        if await self._wanted(member.guild, "voice_activity") is None:
+            return
+
+        if before.channel is None:
+            embed = discord.Embed(title="Joined voice", color=GREEN,
+                                  description=f"{member.mention} joined "
+                                              f"**{after.channel.name}**")
+        elif after.channel is None:
+            embed = discord.Embed(title="Left voice", color=GREY,
+                                  description=f"{member.mention} left "
+                                              f"**{before.channel.name}**")
+        else:
+            embed = discord.Embed(title="Moved voice channel", color=BLURPLE,
+                                  description=f"{member.mention} moved from "
+                                              f"**{before.channel.name}** to "
+                                              f"**{after.channel.name}**")
+        await self._send(member.guild, "voice_activity", self._stamp(embed, member))
 
     # ── the server itself ────────────────────────────────────────────
     @commands.Cog.listener()

@@ -58,6 +58,8 @@ LOG_EVENTS = [
     ("member_nickname",  "🏷️", "Nickname changes", "Before and after."),
     ("member_roles",     "🎭", "Role changes",
      "Roles given and taken away, however that happened."),
+    ("voice_activity",   "🔊", "Voice channels",
+     "Joining, leaving and moving between voice channels. Bots are left out."),
     ("channel_changes",  "📁", "Channels", "Channels added, removed or renamed."),
     ("role_changes",     "🎟️", "Roles", "Roles added, removed or renamed."),
     ("server_changes",   "⚙️", "Server settings",
