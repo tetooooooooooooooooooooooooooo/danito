@@ -490,6 +490,28 @@ SECTIONS = [
             ("/help", "", "A browsable list of everything.", EVERYONE),
         ],
     },
+    {
+        "id": "premium",
+        "icon": "✦",
+        "title": "Premium",
+        "blurb": "What is paid for, what is not, and why the answer to the second one is "
+                 "everything above.",
+        "setup": [],
+        "notes": [
+            "Every command and every feature documented on this page is free, on every "
+            "server, with nothing that expires and no limit on how much you use it. None of "
+            "it moves behind a payment later. That is the point of saying so here rather "
+            "than only on the pricing page.",
+            "Premium is a set of extras on top, billed monthly or yearly. It is not open "
+            "yet, and the extras are still being decided, so <a href=\"/premium\">the pricing "
+            "page</a> shows the prices and says as much rather than taking money for "
+            "something that does not exist.",
+            "Nothing about Premium changes how the bot behaves in a server that has not paid "
+            "for it. There is no nag, no locked command that appears in the picker and then "
+            "refuses, and no trial that runs out.",
+        ],
+        "commands": [],
+    },
 ]
 
 TROUBLESHOOTING = [

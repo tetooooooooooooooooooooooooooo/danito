@@ -24,8 +24,9 @@ from dotenv import load_dotenv
 # matters when running locally from a .env file.
 load_dotenv()
 
-from flask import (Flask, abort, flash, redirect, render_template, request,  # noqa: E402
-                   session, url_for)
+from flask import (Flask, Response, abort, flash, redirect, render_template,  # noqa: E402
+                   request, session, url_for)
+from werkzeug.exceptions import HTTPException                                # noqa: E402
 
 import discord_api as api                                                    # noqa: E402
 import changelog                                                             # noqa: E402
@@ -170,7 +171,10 @@ def index():
         return render_template("misconfigured.html", problems=problems), 503
     if current_user():
         return redirect(url_for("servers"))
-    return render_template("landing.html")
+    # The prices are on the landing page as well as on /premium. Somebody who reads the whole
+    # pitch and never learns there is a paid tier is a worse outcome than one who sees the
+    # number early and decides it is fine.
+    return render_template("landing.html", plans=premium_plans(), premium_on_sale=on_sale())
 
 
 @app.route("/docs")
@@ -418,19 +422,25 @@ def premium_plans() -> list:
     ]
 
 
+def on_sale() -> bool:
+    """Whether there is anywhere to send somebody who wants to pay.
+
+    With no checkout link the pages show the prices but drop the buy buttons, rather than
+    offering one that leads nowhere.
+    """
+    return bool(PREMIUM_CHECKOUT_MONTHLY or PREMIUM_CHECKOUT_YEARLY)
+
+
 @app.route("/premium")
 def premium():
     """Public, like the docs: somebody deciding whether this is worth paying for should be
     able to read the prices without signing in first."""
-    plans = premium_plans()
-    return render_template("premium.html", plans=plans,
+    return render_template("premium.html", plans=premium_plans(),
                            features=PREMIUM_FEATURES, free=PREMIUM_FREE,
                            # The free column prices itself at zero, in the same currency as
                            # the paid ones, so the three read as one row rather than three.
                            currency=PREMIUM_CURRENCY,
-                           # With no checkout link there is nothing to send anybody to, so the
-                           # page drops the buy buttons rather than showing dead ones.
-                           on_sale=any(p["checkout"] for p in plans))
+                           on_sale=on_sale())
 
 
 @app.route("/added")
@@ -443,6 +453,35 @@ def added():
     guild_id = request.args.get("guild_id") or ""
     guild_id = guild_id if guild_id.isdigit() else ""
     return render_template("added.html", guild_id=guild_id)
+
+
+# ── crawlers ─────────────────────────────────────────────────────────
+# The pages worth indexing, in the order they matter. Everything else is either behind a
+# login, a redirect somewhere else, or a form post, and none of that belongs in a search
+# result. Endpoint names rather than paths so a renamed route can't leave a dead entry here.
+PUBLIC_PAGES = ["index", "documentation", "premium", "support", "status", "whats_new"]
+
+# Crawling these achieves nothing and costs a Discord round trip each time. /callback and
+# /added take query parameters that mean nothing without the request that produced them.
+PRIVATE_PATHS = ["/servers", "/login", "/callback", "/logout", "/added"]
+
+
+@app.route("/robots.txt")
+def robots():
+    lines = ["User-agent: *"]
+    lines += [f"Disallow: {path}" for path in PRIVATE_PATHS]
+    lines += ["Allow: /", "", f"Sitemap: {absolute(url_for('sitemap'))}", ""]
+    return Response("\n".join(lines), mimetype="text/plain")
+
+
+@app.route("/sitemap.xml")
+def sitemap():
+    urls = "".join(f"<url><loc>{absolute(url_for(name))}</loc></url>"
+                   for name in PUBLIC_PAGES)
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+           f'{urls}</urlset>')
+    return Response(xml, mimetype="application/xml")
 
 
 @app.route("/changelog")
@@ -734,6 +773,29 @@ def handle(err):
         404: "That server isn't available to you.",
     }
     return render_template("error.html", message=messages.get(err.code, "Something went wrong.")), err.code
+
+
+@app.errorhandler(500)
+@app.errorhandler(Exception)
+def handle_crash(err):
+    """Anything that got all the way out without being caught.
+
+    Registered on Exception as well as 500 so a bug lands here rather than on Flask's own
+    debug page, which leaks the traceback and looks nothing like the rest of the site. HTTP
+    errors that already have their own handler are passed back untouched, or this would
+    swallow every 404 as well.
+
+    The exception is re-raised into the log first, since a page that says sorry and tells
+    nobody is how a fault stays unfixed.
+    """
+    if isinstance(err, HTTPException) and err.code != 500:
+        return err
+    app.logger.exception("unhandled error at %s", request.path, exc_info=err)
+    return render_template(
+        "error.html",
+        message="Something broke at our end, not yours. It's been logged. Try again in a "
+                "moment, and if it keeps happening a ticket is the quickest way to get it "
+                "looked at."), 500
 
 
 if __name__ == "__main__":

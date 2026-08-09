@@ -140,6 +140,27 @@
   </div>
 </section>
 
+{#- Somebody who reads the whole pitch and only meets a price on the next page has been led
+    on. The number goes here, next to the word free, and says which is which. -#}
+<section class="costs" data-reveal>
+  <h2 class="section">What it costs</h2>
+  <div class="cost-row">
+    <div class="cost free">
+      <span class="cost-label">Everything above</span>
+      <strong>Free</strong>
+      <p>All of it, on every server, with nothing that expires. It stays that way.</p>
+    </div>
+    <div class="cost paid">
+      <span class="cost-label">Premium, for the extras</span>
+      <strong>{{ plans[0].price }}<span>{{ " " ~ plans[0].cadence }}</span></strong>
+      <p>Or {{ plans[1].price }} {{ plans[1].cadence }}.
+        {%- if not premium_on_sale %} Not open yet, and nothing you use now moves into it.
+        {%- else %} Nothing you use now moves into it.{% endif %}</p>
+      <a class="fine" href="{{ url_for('premium') }}">See what Premium adds &rarr;</a>
+    </div>
+  </div>
+</section>
+
 <section class="closing" data-reveal>
   <h2>Start keeping the members you already have</h2>
   <p>Add it, run one command, and the reminders begin. Everything else is optional.</p>

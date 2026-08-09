@@ -799,6 +799,43 @@ section { margin-bottom: 72px; }
 }
 .steps strong { display: block; color: var(--text); margin-bottom: 3px; font-weight: 620; }
 
+/* ── what it costs, on the landing page ──────────────────────────── */
+/* Deliberately two panels rather than the full pricing table from /premium. The job here is
+   to say the number out loud before somebody has invested any more reading, not to sell. */
+.cost-row {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+}
+
+.cost {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 24px 22px;
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+}
+.cost.paid {
+  border-color: var(--line-bright);
+  background:
+    radial-gradient(420px 200px at 50% 0%, rgba(61, 220, 151, .09), transparent 70%),
+    linear-gradient(180deg, var(--surface), var(--surface-2));
+}
+
+.cost-label {
+  display: block;
+  color: var(--faint);
+  font-size: 12.4px;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  margin-bottom: 9px;
+}
+.cost.paid .cost-label { color: var(--mint-bright); }
+
+.cost strong { font-size: 30px; letter-spacing: -1px; line-height: 1; }
+.cost strong span { font-size: 13.5px; letter-spacing: 0; color: var(--dim); font-weight: 500; }
+.cost p { color: var(--dim); font-size: 14px; margin: 12px 0 0; line-height: 1.6; }
+.cost a.fine { display: inline-block; color: var(--mint); margin-top: 12px; }
+
 .closing { text-align: center; margin-bottom: 40px; }
 .closing h2 { font-size: 24px; letter-spacing: -.4px; margin-bottom: 10px; }
 .closing p { color: var(--dim); margin-bottom: 22px; }
