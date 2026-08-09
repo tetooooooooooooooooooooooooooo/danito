@@ -4,16 +4,26 @@ from discord.ext import commands, tasks
 import os
 from dotenv import load_dotenv
 import Database
+import ErrorLog
 import GuildConfig
 from pymongo import MongoClient
 import certifi
 import datetime
 import asyncio
+import traceback
 
 
 # How often the bot writes down that it's alive. The status page calls it offline
 # after a few missed beats, so this also sets how quickly an outage shows up.
 HEARTBEAT_SECONDS = 60
+
+
+def _as_id(raw):
+    """A snowflake from the environment, or None. A typo becomes off rather than a crash."""
+    try:
+        return int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
 
 
 async def loop(bot):
@@ -109,11 +119,24 @@ class Bot(commands.Bot):
         self.log_channel_id = 1465493782245146886
 
         self._ready_once = False
+        # Cogs that wouldn't load. Collected during setup and reported once the
+        # gateway is up, because there is no channel to post to before that.
+        self._failed_cogs = []
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
 
         # Optional: the guild that owner-only /admin commands are registered to, so they
         # stay invisible everywhere else. Unset means they register globally instead.
         self.owner_guild_id = os.environ.get("OWNER_GUILD_ID")
+
+        # Where the bot's own crashes get posted. Unset means they only go to the Heroku log,
+        # which is exactly how it behaved before. The guild is checked as well as the channel,
+        # because a traceback carries ids and message content and a mistyped channel id would
+        # otherwise put all of that in somebody else's server.
+        self.errors = ErrorLog.ErrorLog(
+            self,
+            channel_id=_as_id(os.environ.get("ERROR_CHANNEL_ID")),
+            guild_id=_as_id(os.environ.get("ERROR_GUILD_ID")
+                            or os.environ.get("OWNER_GUILD_ID")))
 
     async def _db(self, fn, *args, **kwargs):
         """pymongo is synchronous, so keep it off the event loop."""
@@ -139,17 +162,14 @@ class Bot(commands.Bot):
             message = "❌ You can't use this command."
         else:
             message = "❌ Something went wrong running that command."
-            print(f"[COMMAND ERROR] {interaction.command and interaction.command.qualified_name}: "
-                  f"{type(error).__name__}: {error}")
-            await self.send_log(
-                title=f"Command Error: /{interaction.command.qualified_name if interaction.command else '?'}",
-                description=f"```py\n{type(error).__name__}: {str(error)[:500]}\n```",
-                fields={
-                    "User": f"{interaction.user} ({interaction.user.id})",
-                    "Guild": f"{interaction.guild} ({interaction.guild.id})" if interaction.guild else "DM",
-                },
-                color=0xe74c3c,
-            )
+            name = interaction.command.qualified_name if interaction.command else "?"
+            print(f"[COMMAND ERROR] {name}: {type(error).__name__}: {error}")
+            await self.errors.report(
+                f"/{name}", error,
+                {"User": f"{interaction.user} ({interaction.user.id})",
+                 "Guild": (f"{interaction.guild.name} ({interaction.guild.id})"
+                           if interaction.guild else "a direct message"),
+                 "Channel": getattr(interaction.channel, "mention", None)})
 
         try:
             if interaction.response.is_done():
@@ -384,6 +404,30 @@ class Bot(commands.Bot):
     async def on_guild_remove(self, guild):
         await self.publish_guilds()
 
+    async def on_error(self, event_method: str, *args, **kwargs):
+        """Every exception raised inside an event listener lands here.
+
+        discord.py calls this directly rather than dispatching it, so it has to be a method on
+        the client. Without it, a failure in on_member_join or the automod message handler is
+        printed to stdout and nowhere else, which is the class of bug most worth knowing about
+        because it happens to real people rather than to somebody running a command.
+        """
+        import sys
+        exc = sys.exc_info()[1]
+        traceback.print_exc()
+        if exc is None:
+            return
+
+        # Whichever argument is a guild, member or message tells you where it happened. Worth
+        # the digging: "on_message failed" without a server name is not actionable.
+        context = {"Event": event_method}
+        for arg in args:
+            guild = getattr(arg, "guild", None)
+            if guild is not None:
+                context["Guild"] = f"{guild.name} ({guild.id})"
+                break
+        await self.errors.report(event_method, exc, context)
+
     async def setup_hook(self):
         await GuildConfig.ensure_indexes(self)
         for ext in self.cogslist:
@@ -391,10 +435,21 @@ class Bot(commands.Bot):
                 await self.load_extension(ext)
             except Exception as e:
                 print(f"Failed to load {ext}: {e}")
+                # Reported once the gateway is up, since there is no channel to post to yet.
+                self._failed_cogs.append((ext, e))
 
     async def on_ready(self):
         print("Bot is ready!")
         await self.publish_guilds()
+
+        # A cog that wouldn't load is the loudest possible failure and the easiest to miss:
+        # everything else carries on, and the only sign is a line in a log nobody reads.
+        # Reported here rather than at load time because there is no channel to post to until
+        # the gateway is up.
+        while self._failed_cogs:
+            extension, error = self._failed_cogs.pop(0)
+            await self.errors.report(f"loading {extension}", error,
+                                     {"Effect": "That cog's commands are missing entirely."})
 
         # on_ready can fire again after a gateway resume/reconnect, not just on first boot.
         # Global command sync is unnecessary (and rate-limited) to repeat on every one of
