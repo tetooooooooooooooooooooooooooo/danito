@@ -86,11 +86,7 @@
 ] %}
 
 <p><a class="fine" href="{{ url_for('servers') }}">&larr; All servers</a></p>
-<header class="page-head split">
-  <h1>{{ guild.name }}</h1>
-  <a class="button ghost small" href="{{ url_for('guild_insights', guild_id=guild.id) }}">
-    Insights</a>
-</header>
+<h1>{{ guild.name }}</h1>
 
 {% if not channels %}
   <div class="warn">I can't see any channels here. Check that the bot has View Channel,
@@ -129,6 +125,13 @@
         {% if on %}<span class="dot" title="Switched on"></span>{% endif %}
       </a>
     {% endfor %}
+    {#- Not a tab: it is a different page. No data-tab, so the tab script leaves it alone,
+        and the rule above it says it leads away rather than opening a sixth pane. -#}
+    <a class="leaves" href="{{ url_for('guild_insights', guild_id=guild.id) }}">
+      <span class="ti" aria-hidden="true">📈</span>
+      <span class="tl">Insights</span>
+      <span class="arrow" aria-hidden="true">&rarr;</span>
+    </a>
   </nav>
 
   <div class="panes">

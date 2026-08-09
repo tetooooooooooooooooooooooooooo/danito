@@ -272,6 +272,17 @@ def main():
     assert "Manage Server" not in html.unescape(c.get("/servers/111/insights").data.decode())
     print("  the permission notice appears only while it's needed OK")
 
+    print("\n=== it's reachable from the settings sidebar ===")
+    body = c.get("/servers/111").data.decode()
+    assert '/servers/111/insights' in body, "no way in from the settings page"
+    # It sits in the tab list but is not a tab. The script switches panes for anything with
+    # data-tab, so marking this one would leave a sixth entry that swallows the click and
+    # shows nothing. Below Ratings, which is the last real tab.
+    assert 'data-tab="insights"' not in body, "it's a page, not a pane"
+    assert body.index('data-tab="survey"') < body.index('/servers/111/insights'), \
+        "it belongs under Ratings, not above the tabs"
+    print("  in the sidebar under Ratings, and not registered as a tab OK")
+
     print("\n=== and it's behind the same check as the settings page ===")
     anon = dashboard.app.test_client()
     r = anon.get("/servers/111/insights")

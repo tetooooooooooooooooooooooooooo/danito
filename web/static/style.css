@@ -1100,6 +1100,24 @@ body.settings-page main { max-width: 1060px; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The one item in this list that leaves the page. Separated by a rule and given an arrow, so
+   it does not read as a sixth tab that simply refuses to look selected. */
+.sidenav a.leaves {
+  margin-top: 10px;
+  padding-top: 15px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 var(--r-sm) var(--r-sm);
+}
+.sidenav a.leaves:hover { background: var(--surface); color: var(--mint-bright); }
+.sidenav a.leaves:hover .arrow { transform: translateX(2px); }
+.sidenav .arrow {
+  flex: none;
+  color: var(--faint);
+  font-size: 13px;
+  transition: transform .16s var(--ease);
+}
+.sidenav a.leaves:hover .arrow { color: var(--mint); }
+
 /* Says which features are actually doing something without opening every tab. */
 .sidenav .dot {
   flex: none;
