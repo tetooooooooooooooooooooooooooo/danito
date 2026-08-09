@@ -26,6 +26,10 @@ from discord import app_commands
 from discord.ext import commands
 
 import Database
+# The sentinel Invites writes for a join through the vanity url, imported rather than
+# repeated. Two copies of a magic string is how one of them quietly stops matching, and the
+# only symptom here would be a card showing `vanity` as though it were an invite code.
+from Cogs.Invites import VANITY
 
 COLOR = 0x3DDC97
 COLOR_LOVE = 0xE85D9C
@@ -142,6 +146,50 @@ def verdict(score: int) -> tuple:
     return VERDICTS[-1][1:]
 
 
+# The badge names are the ones /stats badges already uses, so the same flag is called the same
+# thing wherever it turns up. Imported rather than copied for exactly that reason.
+BADGES = {
+    "staff": "Discord Staff", "partner": "Partner", "hypesquad": "HypeSquad Events",
+    "bug_hunter": "Bug Hunter", "bug_hunter_level_2": "Bug Hunter L2",
+    "hypesquad_bravery": "Bravery", "hypesquad_brilliance": "Brilliance",
+    "hypesquad_balance": "Balance", "early_supporter": "Early Supporter",
+    "verified_bot_developer": "Early Verified Bot Dev",
+    "discord_certified_moderator": "Mod Programs Alumni",
+    "active_developer": "Active Developer",
+}
+
+# Permissions worth naming. Everything else is either implied by these or nobody asks about
+# it, and a list of forty is not information.
+NOTABLE = [
+    ("administrator", "Administrator"), ("manage_guild", "Manage Server"),
+    ("manage_roles", "Manage Roles"), ("manage_channels", "Manage Channels"),
+    ("manage_messages", "Manage Messages"), ("ban_members", "Ban"),
+    ("kick_members", "Kick"), ("moderate_members", "Timeout"),
+    ("mention_everyone", "Mention Everyone"), ("manage_webhooks", "Manage Webhooks"),
+]
+
+STATUS_WORDS = {"online": "🟢 Online", "idle": "🟡 Idle",
+                "dnd": "🔴 Do not disturb", "offline": "⚫ Offline"}
+
+VERIFICATION = {"none": "None", "low": "Low, verified email",
+                "medium": "Medium, registered 5 minutes",
+                "high": "High, member 10 minutes", "highest": "Highest, verified phone"}
+
+CONTENT_FILTER = {"disabled": "Off", "no_role": "Members without roles",
+                  "all_members": "Everyone"}
+
+
+def stamp(when, style: str = "D") -> str:
+    """Discord renders these in the reader's own timezone, which is the whole point of using
+    them instead of writing a date out."""
+    return f"<t:{int(when.timestamp())}:{style}>" if when else "unknown"
+
+
+def meter(done: int, total: int, width: int = 10) -> str:
+    filled = 0 if total <= 0 else min(width, round(done / total * width))
+    return "▰" * filled + "▱" * (width - filled)
+
+
 class Fun(commands.Cog, name="Fun"):
     """Profiles, polls and a wedding chapel."""
 
@@ -181,55 +229,143 @@ class Fun(commands.Cog, name="Fun"):
         member = member or interaction.user
         await interaction.response.defer()
 
-        created = int(member.created_at.timestamp())
-        embed = discord.Embed(
-            title=member.display_name,
-            colour=member.colour if member.colour.value else COLOR,
-            description=f"{member.mention} · `{member.id}`")
-        embed.set_thumbnail(url=member.display_avatar.url)
-        embed.add_field(name="Account made", value=f"<t:{created}:D>\n<t:{created}:R>")
+        # Discord's name situation: `name` is the unique handle, `global_name` is what they
+        # chose to be called everywhere, and a nickname overrides both here. Showing the
+        # handle matters because it is the only one that is actually theirs.
+        titles = [f"**{member.display_name}**", f"`@{member.name}`"]
+        if member.nick:
+            titles.append(f"nicknamed here, otherwise {member.global_name or member.name}")
 
+        embed = discord.Embed(
+            colour=member.colour if member.colour.value else COLOR,
+            description=f"{member.mention}\n" + " · ".join(titles[:2])
+                        + (f"\n-# {titles[2]}" if len(titles) > 2 else ""))
+        embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.set_footer(text=f"ID {member.id}")
+
+        # ── when ────────────────────────────────────────────────────
+        age = (discord.utils.utcnow() - member.created_at).days
+        embed.add_field(name="Account made",
+                        value=f"{stamp(member.created_at)}\n{stamp(member.created_at, 'R')}\n"
+                              f"-# {age:,} days old")
         if member.joined_at:
-            joined = int(member.joined_at.timestamp())
-            embed.add_field(name="Joined here", value=f"<t:{joined}:D>\n<t:{joined}:R>")
+            here = (discord.utils.utcnow() - member.joined_at).days
+            embed.add_field(name="Joined here",
+                            value=f"{stamp(member.joined_at)}\n"
+                                  f"{stamp(member.joined_at, 'R')}\n-# {here:,} days ago")
             # Where they sit in the queue, which is the bit people actually want to know.
             order = sorted((m for m in interaction.guild.members if m.joined_at),
                            key=lambda m: m.joined_at)
-            embed.add_field(name="Member number", value=f"#{order.index(member) + 1}")
+            try:
+                place = order.index(member) + 1
+                embed.add_field(name="Member number",
+                                value=f"**#{place:,}**\n-# of {len(order):,} here")
+            except ValueError:
+                pass
 
-        # Roles highest first, and @everyone left out because everyone has it.
-        roles = [r.mention for r in reversed(member.roles) if not r.is_default()]
+        # ── what they are here ──────────────────────────────────────
+        roles = [r for r in reversed(member.roles) if not r.is_default()]
+        shown = " ".join(r.mention for r in roles[:20])
         embed.add_field(
             name=f"Roles ({len(roles)})",
-            value=" ".join(roles[:15]) + (" …" if len(roles) > 15 else "") if roles else "None",
+            value=(shown + (f" and {len(roles) - 20} more" if len(roles) > 20 else ""))
+                  if roles else "None yet",
             inline=False)
 
-        extras = []
-        if member.premium_since:
-            extras.append(f"Boosting since <t:{int(member.premium_since.timestamp())}:R>")
-        if member.bot:
-            extras.append("Is a bot")
+        if roles:
+            top = roles[0]
+            embed.add_field(name="Top role",
+                            value=f"{top.mention}\n-# "
+                                  f"{'#%06x' % top.colour.value if top.colour.value else 'no colour'}")
+
+        perms = [label for attr, label in NOTABLE
+                 if getattr(member.guild_permissions, attr, False)]
+        if perms:
+            # Administrator makes the rest true by definition, so listing them alongside it
+            # says nothing and hides the one that matters.
+            if "Administrator" in perms:
+                perms = ["Administrator"]
+            embed.add_field(name="Can", value=", ".join(perms[:8]), inline=False)
+
+        badges = [label for attr, label in BADGES.items()
+                  if getattr(member.public_flags, attr, False)]
+        if badges:
+            embed.add_field(name="Badges", value=", ".join(badges), inline=False)
+
+        # ── flags worth noticing ────────────────────────────────────
+        notes = []
         if member.id == interaction.guild.owner_id:
-            extras.append("Owns this server")
+            notes.append("👑 Owns this server")
+        if member.bot:
+            notes.append("🤖 Is a bot")
+        if member.premium_since:
+            notes.append(f"💎 Boosting since {stamp(member.premium_since, 'R')}")
+        if member.is_timed_out():
+            notes.append(f"🔇 Timed out until {stamp(member.timed_out_until, 'R')}")
+        if self.bot.intents.presences:
+            notes.append(STATUS_WORDS.get(str(member.status), str(member.status).title()))
+            playing = next((a for a in member.activities
+                            if getattr(a, "name", None) and a.type is not
+                            discord.ActivityType.custom), None)
+            if playing:
+                notes.append(f"🎮 {playing.type.name.title()} {playing.name}")
 
-        # The two things only this bot can add. Both are quiet when there is nothing to say.
+        # ── the parts only this bot knows ───────────────────────────
         try:
-            rated = await self._run(self._db["ratings"].find_one,
-                                    {"guild_id": interaction.guild.id, "user_id": member.id})
-            if rated and isinstance(rated.get("rating"), int):
-                extras.append(f"Rated this server **{rated['rating']}/10**")
-            wed = await self._marriage(interaction.guild.id, member.id)
-            if wed:
-                other = next((p for p in wed["partners"] if p != member.id), None)
-                partner = interaction.guild.get_member(other)
-                extras.append(f"Married to {partner.mention if partner else 'somebody who left'}"
-                              f" since <t:{int(wed['since'].timestamp())}:D>")
+            notes += await self._member_history(interaction, member)
         except Exception as e:
-            print(f"[Fun] userinfo extras failed: {e}")
+            print(f"[Fun] userinfo history failed: {e}")
 
-        if extras:
-            embed.add_field(name="Also", value="\n".join(extras), inline=False)
+        if notes:
+            embed.add_field(name="Also", value="\n".join(notes), inline=False)
         await interaction.followup.send(embed=embed)
+
+    async def _member_history(self, interaction: discord.Interaction,
+                              member: discord.Member) -> list:
+        """What this bot knows about somebody that Discord doesn't.
+
+        Kept apart because it is the only part that touches the database, and because it is
+        the only part that has to think about who is allowed to see it.
+        """
+        guild_id = interaction.guild.id
+        notes = []
+
+        rated = await self._run(self._db["ratings"].find_one,
+                                {"guild_id": guild_id, "user_id": member.id})
+        if rated and isinstance(rated.get("rating"), int):
+            notes.append(f"⭐ Rated this server **{rated['rating']}/10**")
+
+        wed = await self._marriage(guild_id, member.id)
+        if wed:
+            other = next((p for p in wed["partners"] if p != member.id), None)
+            partner = interaction.guild.get_member(other)
+            notes.append(f"💍 Married to {partner.mention if partner else 'somebody who left'}"
+                         f", {stamp(wed['since'], 'R')}")
+
+        # Membership spells: how they got here, and whether this is their first time.
+        spells = await self._run(
+            lambda: list(self._db["memberships"]
+                         .find({"guild_id": guild_id, "user_id": member.id})
+                         .sort("joined_at", -1).limit(20)))
+        if len(spells) > 1:
+            notes.append(f"🔁 Has joined **{len(spells)}** times")
+        if spells and spells[0].get("invite_code"):
+            code = spells[0]["invite_code"]
+            by = spells[0].get("inviter_name")
+            notes.append(f"🔗 Came through `{'the vanity url' if code == VANITY else code}`"
+                         + (f", made by **{by}**" if by else ""))
+
+        # Warnings are nobody else's business. Shown only to somebody who could already look
+        # them up with /warnings, which is the same bar the moderation commands use.
+        if interaction.user.guild_permissions.moderate_members:
+            cases = await self._run(
+                self._db["mod_cases"].count_documents,
+                {"guild_id": guild_id, "user_id": member.id})
+            if cases:
+                notes.append(f"📁 **{cases}** moderation case{'' if cases == 1 else 's'} "
+                             f"-# only you can see this")
+        return notes
 
     # ── what the server is ───────────────────────────────────────────
     @app_commands.command(name="serverinfo", description="Everything the bot knows about here")
@@ -240,46 +376,131 @@ class Fun(commands.Cog, name="Fun"):
         await interaction.response.defer()
 
         humans = sum(1 for m in guild.members if not m.bot)
-        created = int(guild.created_at.timestamp())
+        bots = guild.member_count - humans
 
-        embed = discord.Embed(title=guild.name, colour=COLOR,
-                              description=guild.description or None)
+        embed = discord.Embed(colour=COLOR, description=guild.description or None)
+        embed.set_author(name=guild.name,
+                         icon_url=guild.icon.url if guild.icon else None)
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
-        embed.add_field(name="Made", value=f"<t:{created}:D>\n<t:{created}:R>")
+        # The banner is the one thing that makes this card look like the server rather than
+        # like every other server.
+        if guild.banner:
+            embed.set_image(url=guild.banner.url)
+        embed.set_footer(text=f"ID {guild.id}")
+
+        # ── the basics ──────────────────────────────────────────────
+        age = (discord.utils.utcnow() - guild.created_at).days
+        embed.add_field(name="Made",
+                        value=f"{stamp(guild.created_at)}\n{stamp(guild.created_at, 'R')}\n"
+                              f"-# {age:,} days old")
         embed.add_field(name="Owner", value=f"<@{guild.owner_id}>")
         embed.add_field(name="Members",
-                        value=f"{guild.member_count}\n{humans} people, "
-                              f"{guild.member_count - humans} bots")
-        embed.add_field(name="Channels",
-                        value=f"{len(guild.text_channels)} text\n"
-                              f"{len(guild.voice_channels)} voice\n"
-                              f"{len(guild.categories)} categories")
-        embed.add_field(name="Roles", value=str(len(guild.roles) - 1))
-        embed.add_field(name="Boosts",
-                        value=f"{guild.premium_subscription_count or 0}\nLevel "
-                              f"{guild.premium_tier}")
+                        value=f"**{guild.member_count:,}**\n"
+                              f"-# {humans:,} {'person' if humans == 1 else 'people'}\n"
+                              f"-# {bots:,} bot{'' if bots == 1 else 's'}")
 
-        # The features people care about, named the way Discord's own settings name them.
+        # ── the furniture ───────────────────────────────────────────
+        threads = len(getattr(guild, "threads", []) or [])
+        channels = [f"{len(guild.text_channels)} text", f"{len(guild.voice_channels)} voice"]
+        if getattr(guild, "stage_channels", None):
+            channels.append(f"{len(guild.stage_channels)} stage")
+        if getattr(guild, "forums", None):
+            channels.append(f"{len(guild.forums)} forum")
+        if threads:
+            channels.append(f"{threads} threads")
+        embed.add_field(
+            name=f"Channels ({len(guild.channels) - len(guild.categories)})",
+            value="\n".join(f"-# {line}" for line in channels)
+                  + f"\n-# in {len(guild.categories)} "
+                    f"categor{'y' if len(guild.categories) == 1 else 'ies'}")
+        embed.add_field(name="Roles", value=f"**{len(guild.roles) - 1}**\n-# not counting "
+                                            f"@everyone")
+        embed.add_field(
+            name="Emoji and stickers",
+            value=f"**{len(guild.emojis)}** emoji\n-# of {guild.emoji_limit} allowed\n"
+                  f"**{len(guild.stickers)}** "
+                  f"sticker{'' if len(guild.stickers) == 1 else 's'}")
+
+        # ── boosts, with how far off the next level ─────────────────
+        # The numbers Discord asks for. Worth spelling out because the tier alone doesn't say
+        # how close you are, which is the only thing anybody wants to know about boosts.
+        needed = {0: 2, 1: 7, 2: 14}.get(guild.premium_tier)
+        boosts = guild.premium_subscription_count or 0
+        if needed:
+            embed.add_field(
+                name=f"Boosts · level {guild.premium_tier}",
+                value=f"{meter(boosts, needed)}\n**{boosts}** of {needed} "
+                      f"for level {guild.premium_tier + 1}", inline=False)
+        else:
+            embed.add_field(name=f"Boosts · level {guild.premium_tier}",
+                            value=f"**{boosts}**, which is the top level")
+
+        # ── how locked down it is ───────────────────────────────────
+        safety = [f"Verification: {VERIFICATION.get(str(guild.verification_level), '?')}",
+                  f"Media scanning: "
+                  f"{CONTENT_FILTER.get(str(guild.explicit_content_filter), '?')}",
+                  f"Two factor for moderators: {'on' if guild.mfa_level else 'off'}"]
+        embed.add_field(name="Safety", value="\n".join(f"-# {s}" for s in safety),
+                        inline=False)
+
+        # ── what Discord has switched on ────────────────────────────
         wanted = {"COMMUNITY": "Community", "DISCOVERABLE": "In Discovery",
-                  "VANITY_URL": "Vanity url", "PARTNERED": "Partnered", "VERIFIED": "Verified"}
+                  "VANITY_URL": "Vanity url", "PARTNERED": "Partnered",
+                  "VERIFIED": "Verified", "WELCOME_SCREEN_ENABLED": "Welcome screen",
+                  "MEMBER_VERIFICATION_GATE_ENABLED": "Rules gate",
+                  "ANIMATED_ICON": "Animated icon", "BANNER": "Banner",
+                  "INVITE_SPLASH": "Invite splash"}
         on = [label for flag, label in wanted.items() if flag in guild.features]
-        if on:
-            embed.add_field(name="Switched on", value=", ".join(on), inline=False)
+        if guild.vanity_url_code:
+            on.append(f"discord.gg/{guild.vanity_url_code}")
+        embed.add_field(name="Switched on", value=", ".join(on) if on else "Nothing special",
+                        inline=False)
 
-        # The bot's own angle, and the reason it is here at all.
+        # ── the bot's own angle, and the reason it is here ──────────
         try:
-            week = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=7)
-            joined = await self._run(
-                self._db["memberships"].count_documents,
-                {"guild_id": guild.id, "joined_at": {"$gte": week}})
-            if joined:
-                embed.add_field(name="Joined this week", value=str(joined), inline=False)
+            embed.add_field(name="Since I've been watching",
+                            value="\n".join(await self._server_history(guild)), inline=False)
         except Exception as e:
-            print(f"[Fun] serverinfo joins failed: {e}")
+            print(f"[Fun] serverinfo history failed: {e}")
 
-        embed.set_footer(text=f"ID {guild.id}")
         await interaction.followup.send(embed=embed)
+
+    async def _server_history(self, guild: discord.Guild) -> list:
+        """Joins, leaves and the week's best invite, off the records this bot already keeps."""
+        now = datetime.datetime.now(datetime.timezone.utc)
+        week = now - datetime.timedelta(days=7)
+        spells = await self._run(
+            lambda: list(self._db["memberships"].find({"guild_id": guild.id})
+                         .sort("joined_at", -1).limit(20000)))
+        if not spells:
+            return ["-# Nothing yet. The count starts the first time somebody joins."]
+
+        recent = [s for s in spells if (s.get("joined_at") or now).replace(
+            tzinfo=datetime.timezone.utc) >= week] if spells else []
+        left = sum(1 for s in spells if s.get("left_at"))
+        lines = [f"**{len(spells):,}** joins recorded, **{len(spells) - left:,}** still here",
+                 f"**{len(recent)}** joined in the last 7 days"]
+
+        # Which invite is bringing people right now, which is the one thing an owner would
+        # act on today.
+        counts = {}
+        for spell in recent:
+            code = spell.get("invite_code")
+            if code:
+                counts[code] = counts.get(code, 0) + 1
+        if counts:
+            code, n = max(counts.items(), key=lambda kv: kv[1])
+            lines.append(f"Best invite this week: `{'the vanity url' if code == VANITY else code}`"
+                         f" with **{n}**")
+
+        rated = await self._run(
+            lambda: list(self._db["ratings"].find({"guild_id": guild.id}).limit(20000)))
+        scores = [r["rating"] for r in rated if isinstance(r.get("rating"), int)]
+        if scores:
+            lines.append(f"Rated **{sum(scores) / len(scores):.1f}/10** by "
+                         f"**{len(scores)}** {'person' if len(scores) == 1 else 'people'}")
+        return lines
 
     # ── would you rather ─────────────────────────────────────────────
     @app_commands.command(name="wouldyourather", description="A question, and two buttons")

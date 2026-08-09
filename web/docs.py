@@ -498,9 +498,14 @@ SECTIONS = [
                  "everything else here measures.",
         "setup": [],
         "notes": [
-            "<code>/userinfo</code> shows what Discord knows plus the two things only this "
-            "bot does: the score that member gave the server, and who they are married to "
-            "here. Both are left out when there is nothing to say.",
+            "<code>/userinfo</code> shows what Discord knows plus what only this bot does: "
+            "the score that member gave the server, which invite they arrived through and "
+            "who made it, how many separate times they have joined, and who they are married "
+            "to here. Every one of those is left out when there is nothing to say, so a "
+            "brand new member gets a short card rather than a wall of blanks.",
+            "Warning counts appear on <code>/userinfo</code> only for people who could "
+            "already look them up with <code>/warnings</code>. Somebody's moderation history "
+            "is not a thing the whole channel gets to read.",
             "<code>/marry</code> posts a proposal with buttons, and only the person being "
             "asked can answer it. Nobody can be married to two people in the same server, "
             "and that is checked again when the proposal is accepted rather than only when "
@@ -512,9 +517,13 @@ SECTIONS = [
             "along with everything else if the bot is removed.",
         ],
         "commands": [
-            ("/userinfo", "[member]", "Profile, roles, join position, rating and marriage.",
+            ("/userinfo", "[member]", "Names, dates, join position, roles, permissions, "
+                                      "badges, and what this bot knows: their rating, who "
+                                      "invited them, and how many times they've joined.",
              EVERYONE),
-            ("/serverinfo", "", "Members, channels, boosts, and who joined this week.",
+            ("/serverinfo", "", "Channels, roles, emoji, boost progress, verification and "
+                                "content settings, plus joins, leavers and the invite "
+                                "bringing the most people this week.",
              EVERYONE),
             ("/wouldyourather", "", "A question with two buttons, and the split once people "
                                     "vote.", EVERYONE),

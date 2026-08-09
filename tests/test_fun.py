@@ -16,6 +16,17 @@ import asyncio, datetime, sys, types
 sys.path.insert(0, SRC_DIR)
 
 
+class _Cursor(list):
+    def sort(self, key, direction=1):
+        # Two part key so a document missing the field never gets compared against one that
+        # has it, which is a TypeError in Python and merely a null in Mongo.
+        return _Cursor(sorted(self, key=lambda d: (d.get(key) is not None, d.get(key)),
+                              reverse=direction < 0))
+
+    def limit(self, n):
+        return _Cursor(self[:n])
+
+
 class FakeColl:
     def __init__(self, name):
         self.name = name
@@ -35,6 +46,9 @@ class FakeColl:
             elif doc.get(key) != value:
                 return False
         return True
+
+    def find(self, query=None, *a, **k):
+        return _Cursor(d for d in self.docs if self._match(d, query or {}))
 
     def find_one(self, query, *a, **k):
         return next((d for d in self.docs if self._match(d, query)), None)
@@ -121,23 +135,48 @@ class Reply:
                 out.append(str(item["content"]))
             embed = item.get("embed")
             if embed is not None:
-                out.append(f"{embed.title or ''} {embed.description or ''}")
+                author = embed.author.name if embed.author else ""
+                footer = embed.footer.text if embed.footer else ""
+                out.append(f"{author} {embed.title or ''} {embed.description or ''} {footer}")
                 for field in embed.fields:
                     out.append(f"{field.name} {field.value}")
         return "\n".join(out)
 
 
-def member(uid, name="someone", bot=False, joined=True):
+def role(name, value=0, default=False):
     return types.SimpleNamespace(
-        id=uid, bot=bot, display_name=name, name=name,
+        name=name, mention=f"@{name}", colour=types.SimpleNamespace(value=value),
+        is_default=lambda: default)
+
+
+def permissions(**granted):
+    """Everything false unless named, which is how a fresh member actually is."""
+    attrs = {attr: False for attr, _ in sys.modules["Cogs.Fun"].NOTABLE}
+    attrs.update(granted)
+    return types.SimpleNamespace(**attrs)
+
+
+def member(uid, name="someone", bot=False, joined=True, roles=None, nick=None,
+           perms=None, badges=(), boosting=False, timed_out=False):
+    return types.SimpleNamespace(
+        id=uid, bot=bot, display_name=nick or name, name=name.lower(), global_name=name,
+        nick=nick,
         mention=f"<@{uid}>",
         colour=types.SimpleNamespace(value=0),
         display_avatar=types.SimpleNamespace(url="http://x/a.png"),
         created_at=datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
         joined_at=(datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)
                    if joined else None),
-        premium_since=None,
-        roles=[types.SimpleNamespace(mention="@everyone", is_default=lambda: True)])
+        premium_since=(datetime.datetime(2025, 1, 1, tzinfo=datetime.timezone.utc)
+                       if boosting else None),
+        roles=[role("everyone", default=True)] + list(roles or []),
+        guild_permissions=perms or permissions(),
+        public_flags=types.SimpleNamespace(**{b: b in badges
+                                              for b in sys.modules["Cogs.Fun"].BADGES}),
+        is_timed_out=lambda: timed_out,
+        timed_out_until=(datetime.datetime(2030, 1, 1, tzinfo=datetime.timezone.utc)
+                         if timed_out else None),
+        status="online", activities=[])
 
 
 class FakeInteraction:
@@ -152,14 +191,22 @@ class FakeInteraction:
             id=message_id,
             embeds=[discord.Embed(title="Would you rather…", description="a or b")])
         self.channel_id = 9
+        members = list(guild_members) or [user]
         self.guild = types.SimpleNamespace(
-            id=GUILD, name="Test Server", owner_id=1, description=None,
-            member_count=3, members=list(guild_members) or [user],
+            id=GUILD, name="Test Server", owner_id=1,
+            description="A server for testing things",
+            member_count=len(members), members=members,
             created_at=datetime.datetime(2021, 6, 1, tzinfo=datetime.timezone.utc),
-            icon=None, features=["COMMUNITY", "VANITY_URL"],
+            icon=types.SimpleNamespace(url="http://x/icon.png"), banner=None,
+            features=["COMMUNITY", "VANITY_URL", "WELCOME_SCREEN_ENABLED"],
             text_channels=[1, 2], voice_channels=[3], categories=[4],
+            stage_channels=[], forums=[5], threads=[6, 7],
+            channels=[1, 2, 3, 4, 5],
             roles=[1, 2, 3], premium_subscription_count=2, premium_tier=1,
-            get_member=lambda uid: next((m for m in guild_members if m.id == uid), None))
+            emojis=[1, 2, 3], stickers=[1], emoji_limit=50,
+            verification_level="medium", explicit_content_filter="all_members",
+            mfa_level=1, vanity_url_code="testing",
+            get_member=lambda uid: next((m for m in members if m.id == uid), None))
         self._original = types.SimpleNamespace(id=message_id or 777)
 
     async def original_response(self):
@@ -391,36 +438,105 @@ async def main():
     assert gone.response.sent[0]["ephemeral"] is True
     print("  told quietly rather than the button doing nothing OK")
 
-    print("\n=== userinfo, including the two things only this bot knows ===")
+    print("\n=== userinfo says who they are, three different ways ===")
     DB["ratings"].docs.append({"guild_id": GUILD, "user_id": 1, "rating": 9})
     DB["marriages"].docs.append({"guild_id": GUILD, "partners": [1, 2],
                                  "since": datetime.datetime.now(datetime.timezone.utc)})
-    i = FakeInteraction(alex, guild_members=everyone)
-    await cog.userinfo.callback(cog, i, alex)
-    body = i.text
+    DB["memberships"].docs.extend([
+        {"guild_id": GUILD, "user_id": 1, "invite_code": "reddit2024",
+         "inviter_name": "marcus",
+         "joined_at": datetime.datetime.now(datetime.timezone.utc)},
+        {"guild_id": GUILD, "user_id": 1, "invite_code": None, "inviter_name": None,
+         "joined_at": datetime.datetime.now(datetime.timezone.utc)
+                      - datetime.timedelta(days=200), "left_at":
+             datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=100)},
+    ])
+    boss = member(1, "Alex", nick="Big Al", boosting=True,
+                  roles=[role("Admins", value=0xFF0000)],
+                  perms=permissions(administrator=True, ban_members=True),
+                  badges=("active_developer", "early_supporter"))
+    i = FakeInteraction(boss, guild_members=[boss, sam, kit, robot])
+    await cog.userinfo.callback(cog, i, boss)
+    body = i.text + "\n" + "\n".join(
+        f"{f.name} {f.value}" for f in i.followup.sent[0]["embed"].fields)
     assert i.response.deferred, "it reads the database, so it defers first"
-    assert "Alex" in body and "9/10" in body, body
-    assert "Married to <@2>" in body, body
+    # The nickname, the handle and the real name are three different things.
+    assert "Big Al" in body and "@alex" in body, body
+    assert "days old" in body and "days ago" in body, "account age and time here"
     assert "Member number" in body
-    print("  name, rating, marriage and member number OK")
+    print("  nickname, handle, ages and join position OK")
 
-    print("\n=== and it works for somebody with none of that ===")
+    print("\n=== and everything it can add on top ===")
+    for expected in ("Administrator", "Active Developer", "Early Supporter", "@Admins",
+                     "Boosting since", "Owns this server",
+                     "9/10", "Married to <@2>",
+                     "reddit2024", "marcus", "joined **2** times"):
+        assert expected in body, (expected, body)
+    # Administrator makes every other permission true, so listing them alongside says nothing.
+    assert "Ban" not in body.split("Can")[1].split("Badges")[0], body
+    print("  permissions, badges, roles, boost, rating, marriage, invite and rejoins OK")
+
+    print("\n=== warnings are only shown to somebody who could already look them up ===")
+    DB["mod_cases"].docs.append({"guild_id": GUILD, "user_id": 2, "case_id": 1})
+    nosy = FakeInteraction(kit, guild_members=everyone)          # no permissions
+    await cog.userinfo.callback(cog, nosy, sam)
+    assert "moderation case" not in nosy.text, nosy.text
+
+    mod = member(3, "Kit", perms=permissions(moderate_members=True))
+    allowed = FakeInteraction(mod, guild_members=[alex, sam, mod, robot])
+    await cog.userinfo.callback(cog, allowed, sam)
+    seen = "\n".join(f"{f.name} {f.value}"
+                     for f in allowed.followup.sent[0]["embed"].fields)
+    assert "**1** moderation case" in seen, seen
+    assert "only you can see this" in seen, "and it says the rest of the room can't"
+    print("  hidden from everyone else, shown to a moderator OK")
+
+    print("\n=== and it holds up for somebody with nothing on record ===")
     i = FakeInteraction(alex, guild_members=everyone)
     await cog.userinfo.callback(cog, i, kit)
-    assert "Kit" in i.text and "/10" not in i.text
-    print("  no rating, no marriage, no crash OK")
+    body = i.text + "\n".join(f"{f.name} {f.value}"
+                              for f in i.followup.sent[0]["embed"].fields)
+    assert "Kit" in body and "/10" not in body and "Married" not in body
+    assert "None yet" in body, "no roles has to say so rather than being blank"
+    print("  no rating, no marriage, no roles, no crash OK")
 
-    print("\n=== serverinfo ===")
-    DB["memberships"].docs.append({
-        "guild_id": GUILD,
-        "joined_at": datetime.datetime.now(datetime.timezone.utc)})
+    print("\n=== serverinfo covers the furniture and the rules ===")
     i = FakeInteraction(alex, guild_members=everyone)
     await cog.serverinfo.callback(cog, i)
-    body = i.text
-    for expected in ("Test Server", "Members", "Channels", "Roles", "Community",
-                     "Joined this week"):
+    body = "\n".join(f"{f.name} {f.value}"
+                     for f in i.followup.sent[0]["embed"].fields) + i.text
+    for expected in ("Test Server", "Owner", "Members", "2 text", "1 voice", "1 forum",
+                     "2 threads", "1 category", "Roles", "emoji", "stickers",
+                     "Verification: Medium", "Media scanning: Everyone",
+                     "Two factor for moderators: on",
+                     "Community", "Welcome screen", "discord.gg/testing"):
         assert expected in body, (expected, body)
-    print("  counts, features and this week's joins OK")
+    # Singulars, because "1 bots" and "1 categories" are the kind of thing people notice.
+    assert "1 bots" not in body and "1 categories" not in body, body
+    print("  channels, emoji, safety levels, features and the vanity url OK")
+
+    print("\n=== the boost meter shows how far off the next level is ===")
+    assert "of 7 for level 2" in body, body
+    assert "▰" in body and "▱" in body
+    print("  a bar plus the number needed, not just the tier OK")
+
+    print("\n=== and it reports what this bot has watched happen ===")
+    for expected in ("joins recorded", "still here", "last 7 days",
+                     "Best invite this week", "reddit2024", "Rated **9.0/10**"):
+        assert expected in body, (expected, body)
+    print("  joins, leavers, the week's best invite and the average rating OK")
+
+    print("\n=== a server it has never seen a join in says so ===")
+    kept = DB["memberships"].docs
+    DB.c["memberships"] = FakeColl("memberships")
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.serverinfo.callback(cog, i)
+    body = "\n".join(f"{f.name} {f.value}"
+                     for f in i.followup.sent[0]["embed"].fields)
+    assert "Nothing yet" in body, body
+    assert "joins recorded" not in body
+    DB.c["memberships"].docs = kept
+    print("  an explanation rather than a row of zeroes OK")
 
     print("\n=== every collection it touches is per guild ===")
     # Both are named in Lifecycle so a server removing the bot takes them with it. The
