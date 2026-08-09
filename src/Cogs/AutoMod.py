@@ -421,7 +421,108 @@ class AutoMod(commands.Cog, name="AutoMod"):
         except Exception as e:
             print(f"[AutoMod] couldn't record the case in {guild.id}: {e}")
 
+    # ── the age gate ─────────────────────────────────────────────────
+    # Not a message rule: it acts on arrival, before anybody has said anything. Raids are
+    # nearly always accounts made minutes earlier, so an age floor turns most of one away
+    # without a single filter firing.
+    async def check_new_member(self, member: discord.Member) -> bool:
+        """True when the member was turned away, so the join handler stops there.
+
+        Called by Members.on_member_join rather than listening for the join here. One handler
+        per event is deliberate: two cogs reacting to the same join is how it ended up being
+        processed twice before.
+        """
+        if member.bot or member.guild.me is None:
+            return False
+
+        cfg = await GuildConfig.get(self.bot, member.guild.id)
+        gate = ((cfg.get("automod") or {}).get("minage") or {})
+        days = int(gate.get("days") or 0)
+        if not gate.get("on") or days <= 0:
+            return False
+
+        age = discord.utils.utcnow() - member.created_at
+        if age.days >= days:
+            return False
+
+        action = gate.get("action") if gate.get("action") in ("kick", "ban") else "kick"
+        hours = int(age.total_seconds() // 3600)
+        made = f"{hours} hours old" if hours < 48 else f"{age.days} days old"
+        reason = f"Account is {made}, and this server asks for {days} days"
+
+        # Told before they are removed, or a kick just looks like a silent rejection with no
+        # way to know it was about the account rather than about them. Only for a kick: a ban
+        # is not an invitation to come back.
+        if gate.get("tell", True) and action == "kick":
+            try:
+                await member.send(
+                    f"You were removed from **{member.guild.name}** automatically: it only "
+                    f"accepts accounts at least **{days} days** old, and yours is {made}. "
+                    f"You're welcome to join again after that.")
+            except discord.HTTPException:
+                pass                    # plenty of people have DMs closed
+
+        perms = member.guild.me.guild_permissions
+        try:
+            if action == "ban" and perms.ban_members:
+                await member.guild.ban(member, reason=f"AutoMod: {reason}",
+                                       delete_message_seconds=0)
+            elif perms.kick_members:
+                await member.kick(reason=f"AutoMod: {reason}")
+                action = "kick"
+            else:
+                print(f"[AutoMod] no permission to turn away {member.id} in {member.guild.id}")
+                return False
+        except discord.Forbidden:
+            print(f"[AutoMod] refused when turning away {member.id} in {member.guild.id}")
+            return False
+        except discord.HTTPException as e:
+            print(f"[AutoMod] couldn't turn away {member.id} in {member.guild.id}: {e}")
+            return False
+
+        await self._record_case(member.guild, member, action, reason, None)
+        return True
+
     # ── commands ─────────────────────────────────────────────────────
+    @automod.command(name="minage",
+                     description="Turn away accounts younger than a number of days")
+    @app_commands.describe(days="1 to 365. Zero switches it off.",
+                           action="What to do with them. Kick lets them return later.")
+    @app_commands.choices(action=[
+        app_commands.Choice(name="kick, and tell them why", value="kick"),
+        app_commands.Choice(name="ban", value="ban"),
+    ])
+    @app_commands.checks.has_permissions(manage_guild=True)
+    @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    async def minage(self, interaction: discord.Interaction, days: int,
+                     action: app_commands.Choice[str] = None):
+        if not 0 <= days <= 365:
+            await interaction.response.send_message(
+                "Pick a number of days between 0 and 365. Zero switches it off.",
+                ephemeral=True)
+            return
+
+        picked = action.value if action else "kick"
+        await GuildConfig.update(self.bot, interaction.guild.id, {
+            "automod.minage": {"on": days > 0, "days": days or 7, "action": picked,
+                               "tell": True}})
+
+        if not days:
+            await interaction.response.send_message(
+                "Off. Every account can join again whatever its age.", ephemeral=True)
+            return
+
+        missing = ("Ban Members" if picked == "ban" else "Kick Members")
+        allowed = (interaction.guild.me.guild_permissions.ban_members if picked == "ban"
+                   else interaction.guild.me.guild_permissions.kick_members)
+        await interaction.response.send_message(
+            f"Accounts newer than **{days} day{'' if days == 1 else 's'}** will be "
+            f"{'banned' if picked == 'ban' else 'kicked, and told why'} when they join."
+            + ("" if allowed else f"\n\n⚠️ I don't have **{missing}** here, so nothing will "
+                                  f"actually happen until you grant it."),
+            ephemeral=True)
+
     @automod.command(name="on", description="Switch automod on")
     @app_commands.checks.has_permissions(manage_guild=True)
     async def on(self, interaction: discord.Interaction):

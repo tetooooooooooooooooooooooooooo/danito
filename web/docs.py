@@ -205,6 +205,16 @@ SECTIONS = [
         "notes": [
             "The rules: banned words, Discord invites, links, mass mentions, message floods, "
             "repeated messages, shouting, emoji spam and walls of text.",
+            "There is also an account age gate, which is the one thing here that acts before "
+            "anybody has said a word. A raid is nearly always accounts registered minutes "
+            "earlier, so turning away anything newer than a few days stops most of one "
+            "without a single filter having to fire. A kick is the sensible setting: it comes "
+            "with a direct message saying how old the account has to be, so a real person who "
+            "arrived early can come back. A ban sends nothing, because a ban is not an "
+            "invitation to return.",
+            "Somebody turned away by that gate is not counted as a join. They were never a "
+            "member, and counting them would put raid accounts into your retention figures "
+            "and make the server look like it loses everybody.",
             "Five responses: delete the message, delete and warn, delete and time them out, "
             "delete and kick, delete and ban.",
             "Kicking and banning cannot be undone by clicking something, so there is a limit "
@@ -237,6 +247,9 @@ SECTIONS = [
             ("/automod rule", "<rule> <on> [action]",
              "Switch one rule on or off and choose what it does.", MANAGE_SERVER),
             ("/automod status", "", "What is running, what it does, and who is exempt.",
+             MANAGE_SERVER),
+            ("/automod minage", "<days> [action]",
+             "Turn away accounts younger than this many days. Zero switches it off.",
              MANAGE_SERVER),
         ],
     },

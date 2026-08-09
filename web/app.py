@@ -639,6 +639,9 @@ def guild_settings(guild_id: int):
         automod_rules=store.AUTOMOD_RULES,
         automod_actions=store.AUTOMOD_ACTIONS,
         automod_defaults=store.AUTOMOD_DEFAULTS,
+        minage_range=store.MINAGE_RANGE,
+        minage_default=store.MINAGE_DEFAULT,
+        minage_actions=store.MINAGE_ACTIONS,
     )
 
 

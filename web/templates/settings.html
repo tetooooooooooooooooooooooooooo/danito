@@ -386,6 +386,44 @@
           </div>
         </div>
 
+        {%- set age = am.get('minage') or {} %}
+        <h3 class="sub-head">Who gets in</h3>
+        <div class="logrow amrow" data-reveals>
+          <label class="check">
+            <input type="checkbox" name="minage_on" {% if age.get('on') %}checked{% endif %}>
+            <span class="lg-name">🔞 Minimum account age</span>
+          </label>
+          <p class="lg-blurb fine">Turn away accounts made in the last few days. A raid is
+            nearly always accounts registered minutes earlier, so this stops most of one
+            before a single filter has to fire.</p>
+          <div class="amsub when-on">
+            <div class="row">
+              <label>At least this many days old
+                <input type="number" name="minage_days"
+                  min="{{ minage_range[0] }}" max="{{ minage_range[1] }}"
+                  value="{{ age.get('days', minage_default) }}">
+              </label>
+              <label>And if they're newer
+                <select name="minage_action">
+                  {% for value, label in minage_actions %}
+                    <option value="{{ value }}"
+                      {% if age.get('action', 'kick') == value %}selected{% endif %}>
+                      {{ label }}</option>
+                  {% endfor %}
+                </select>
+              </label>
+            </div>
+            <label class="check">
+              <input type="checkbox" name="minage_tell"
+                {% if age.get('tell', True) %}checked{% endif %}>
+              <span>Tell them why in a direct message</span>
+            </label>
+            <p class="fine">Only sent on a kick. Without it a rejection looks like it was
+              about them rather than about how old the account is, and they've no way to know
+              they can come back. A ban isn't an invitation to return, so nothing is sent.</p>
+          </div>
+        </div>
+
         <h3 class="sub-head">When it acts</h3>
         <label class="check">
           <input type="checkbox" name="automod_notify"

@@ -107,6 +107,12 @@ class Members(commands.Cog, name="Members"):
     async def on_member_join(self, member: discord.Member):
         if member.bot:
             return
+        # The age gate runs before anything is written down. Somebody turned away at the door
+        # was never a member, so counting them would put raid accounts into the retention
+        # figures and make a server look like it loses everybody.
+        if await self._turned_away(member):
+            return
+
         cohort = str(datetime.date.today())
         # Started first and finished last. The lookup has to begin immediately, because it
         # works by comparing invite use counts against the moment before this person arrived
@@ -119,6 +125,18 @@ class Members(commands.Cog, name="Members"):
         await self._assign_cohort_role(member, cohort)
         await self._attach_invite(spell_id, await lookup)
         # Greeting the member is the Greetings cog's job, and only if the server set one up.
+
+    async def _turned_away(self, member: discord.Member) -> bool:
+        """Whether the account age gate removed them. Same shape as the invite lookup: asked
+        for rather than imported, so AutoMod failing to load costs the gate and nothing else."""
+        cog = self.bot.get_cog("AutoMod")
+        if cog is None:
+            return False
+        try:
+            return await cog.check_new_member(member)
+        except Exception as e:
+            print(f"[Members] age gate failed for {member.guild.id}: {e}")
+            return False
 
     async def _resolve_invite(self, guild: discord.Guild) -> tuple:
         """Which invite this join came through, or blanks if it can't be known.

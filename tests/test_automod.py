@@ -135,7 +135,9 @@ def reset():
 def make_guild(can_timeout=True, can_kick=True, can_ban=True):
     g = types.SimpleNamespace(id=GUILD, name="Cool Server", owner_id=OWNER_ID)
     g.kicked, g.banned = [], []
-    async def ban(member, reason=None): g.banned.append(member.id)
+    # **kwargs because the real signature takes delete_message_seconds too, and a fake that
+    # is narrower than the thing it stands in for fails on correct code.
+    async def ban(member, reason=None, **kwargs): g.banned.append(member.id)
     g.ban = ban
     g.me = types.SimpleNamespace(
         id=BOT_ID, top_role=BOT_TOP,
@@ -456,6 +458,100 @@ async def main():
     assert out["rules"]["caps"]["on"] is False, "a rule not in the form is off, not missing"
     assert set(out["rules"]) == set(store.AUTOMOD_RULE_KEYS)
     print("  deduplicated, lowercased, clamped, unknown ids and actions dropped OK")
+
+    print("\n=== the account age gate ===")
+    import datetime as _dt
+
+    def joiner(days_old, uid=700, bot=False):
+        m = FakeMember(uid=uid)
+        m.bot = bot
+        m.created_at = _dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(days=days_old)
+        m.dms = []
+        async def send(content=None, **kw): m.dms.append(content)
+        m.send = send
+        return m
+
+    def gate(**kw):
+        doc = {"on": True, "days": 7, "action": "kick", "tell": True}
+        doc.update(kw)
+        automod(minage=doc, rules={})
+
+    reset()
+    GUILD_OBJ.kicked.clear(); GUILD_OBJ.banned.clear()
+    gate()
+    fresh = joiner(2)
+    assert await cog.check_new_member(fresh) is True
+    assert GUILD_OBJ.kicked == [700], GUILD_OBJ.kicked
+    assert fresh.dms and "7 days" in fresh.dms[0], fresh.dms
+    print("  a two day old account is kicked, and told why OK")
+
+    print("\n=== and an old enough one is left completely alone ===")
+    GUILD_OBJ.kicked.clear()
+    settled = joiner(30, uid=701)
+    assert await cog.check_new_member(settled) is False
+    assert not GUILD_OBJ.kicked and not settled.dms
+    # The boundary itself counts as old enough, or "at least 7 days" would mean 8.
+    exactly = joiner(7, uid=702)
+    assert await cog.check_new_member(exactly) is False
+    assert not GUILD_OBJ.kicked
+    print("  30 days and exactly 7 days both get in OK")
+
+    print("\n=== switched off, or set to zero, means nobody is touched ===")
+    for setting in ({"on": False}, {"days": 0}):
+        GUILD_OBJ.kicked.clear()
+        gate(**setting)
+        assert await cog.check_new_member(joiner(0, uid=703)) is False
+        assert not GUILD_OBJ.kicked, setting
+    # And a server with no automod document at all.
+    DB["servers"].docs.clear(); GuildConfig._cache.clear()
+    assert await cog.check_new_member(joiner(0, uid=704)) is False
+    print("  off, zero and unconfigured all let a brand new account through OK")
+
+    print("\n=== a ban is a ban, and gets no direct message ===")
+    reset()
+    GUILD_OBJ.kicked.clear(); GUILD_OBJ.banned.clear()
+    gate(action="ban")
+    banned = joiner(1, uid=705)
+    assert await cog.check_new_member(banned) is True
+    assert GUILD_OBJ.banned == [705] and not GUILD_OBJ.kicked
+    assert not banned.dms, "a ban is not an invitation to come back"
+    print("  banned, and nothing sent OK")
+
+    print("\n=== without the permission it does nothing rather than half a thing ===")
+    GUILD_OBJ_SAVED = GUILD_OBJ
+    globals()["GUILD_OBJ"] = make_guild(can_kick=False, can_ban=False)
+    reset()
+    gate()
+    powerless = joiner(1, uid=706)
+    powerless.guild = GUILD_OBJ
+    assert await cog.check_new_member(powerless) is False, \
+        "it has to report not-removed, or the join would go unrecorded as well"
+    assert not GUILD_OBJ.kicked
+    globals()["GUILD_OBJ"] = GUILD_OBJ_SAVED
+    print("  no Kick Members, no removal, and the join still counts OK")
+
+    print("\n=== bots are never turned away ===")
+    reset()
+    GUILD_OBJ.kicked.clear()
+    gate(days=365)
+    assert await cog.check_new_member(joiner(0, uid=707, bot=True)) is False
+    assert not GUILD_OBJ.kicked, "a webhook or bot added by an admin is not a raider"
+    print("  a bot added on day zero is left alone OK")
+
+    print("\n=== the form remembers the day count while switched off ===")
+    form = Form({"minage_days": "14", "minage_action": "ban", "minage_tell": "on"})
+    out = store.clean_automod(form, set(), set(), {})
+    assert out["minage"] == {"on": False, "days": 14, "action": "ban", "tell": True}, \
+        out["minage"]
+    # Nothing submitted at all falls back to what was stored, not to the default.
+    out = store.clean_automod(Form({}), set(), set(), {"minage": {"days": 30}})
+    assert out["minage"]["days"] == 30, out["minage"]
+    assert out["minage"]["on"] is False and out["minage"]["action"] == "kick"
+    # And it is clamped like every other number on that form.
+    out = store.clean_automod(Form({"minage_on": "on", "minage_days": "9999"}),
+                              set(), set(), {})
+    assert out["minage"]["days"] == store.MINAGE_RANGE[1], out["minage"]
+    print("  remembered, defaulted and clamped OK")
 
     print("\nALL CHECKS PASSED")
 

@@ -121,6 +121,15 @@ AUTOMOD_MAX_DOMAINS = 50
 AUTOMOD_MAX_EXEMPT = 25
 AUTOMOD_TIMEOUT_RANGE = (1, 10080)          # a minute to a week, Discord's own ceiling
 
+# The account age gate. Not a message rule: it acts on arrival, before anybody has said
+# anything, which is why raids are mostly stopped by it rather than by the filters.
+MINAGE_RANGE = (1, 365)
+MINAGE_DEFAULT = 7
+MINAGE_ACTIONS = [
+    ("kick", "Kick them, and say why so they can come back later"),
+    ("ban", "Ban them"),
+]
+
 MAX_AUTOROLES = 10
 MAX_PANELS = 10
 MAX_PANEL_ROLES = 25          # Discord allows five rows of five buttons on one message
@@ -313,7 +322,22 @@ def clean_automod(form, valid_channels: set, valid_roles: set, existing: dict) -
 
     low, high = AUTOMOD_TIMEOUT_RANGE
     rlow, rhigh = AUTOMOD_REMOVAL_RANGE
+
+    # Kept alongside the rules rather than as its own setting, because it is the same job:
+    # protection that happens without anybody asking. The days value is remembered even when
+    # switched off, so turning it back on doesn't mean typing the number again.
+    was_age = (existing.get("minage") or {})
+    minage_action = form.get("minage_action", "kick")
+    minage = {
+        "on": "minage_on" in form,
+        "days": _clamp(form.get("minage_days"), MINAGE_RANGE[0], MINAGE_RANGE[1],
+                       was_age.get("days", MINAGE_DEFAULT)),
+        "action": minage_action if minage_action in dict(MINAGE_ACTIONS) else "kick",
+        "tell": "minage_tell" in form,
+    }
+
     return {
+        "minage": minage,
         "enabled": "automod_enabled" in form,
         "notify": "automod_notify" in form,
         "exempt_staff": "automod_exempt_staff" in form,
