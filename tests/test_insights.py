@@ -198,62 +198,114 @@ def main():
     assert store.retention_trend(111, "'; drop--")["period"] == store.DEFAULT_TREND
     print("  anything unrecognised falls back to weekly OK")
 
-    print("\n=== the chart geometry stays inside its box ===")
-    load(*[spell(d, None if d % 2 else 1) for d in range(8, 80, 3)])
-    chart = dashboard.trend_chart(store.retention_trend(111, "weekly"))
-    assert chart["dots"], "something to draw"
-    top, bottom = chart["top"], chart["h"] - chart["bottom"]
-    for dot in chart["dots"]:
-        assert top <= dot["y"] <= bottom, dot
-        assert chart["left"] <= dot["x"] <= chart["w"] - chart["right"], dot
-    # A polyline of one point draws nothing, so segments only exist where there are two.
-    assert all(len(run) > 1 for run in chart["segments"]), chart["segments"]
-    # The count doesn't matter, the spacing does: "18 May" is about 38px wide, so anything
-    # under roughly that would overlap the next one.
+    print("\n=== joins and leaves are counted in their own buckets ===")
+    # Somebody who joined five weeks ago and left last week is one join in one bucket and one
+    # leave in another, not both in the week they arrived. Counting a leave against the
+    # joining week would answer the question the survival bars already answer.
+    load(spell(35, 28))
+    activity = store.activity_trend(111, "weekly")
+    joins_at = [i for i, p in enumerate(activity["points"]) if p["joins"]]
+    leaves_at = [i for i, p in enumerate(activity["points"]) if p["leaves"]]
+    assert joins_at and leaves_at and joins_at != leaves_at, (joins_at, leaves_at)
+    assert activity["joins"] == 1 and activity["leaves"] == 1, activity
+    print(f"  join in bucket {joins_at[0]}, leave in bucket {leaves_at[0]} OK")
+
+    print("\n=== somebody still here is never counted as a leave ===")
+    load(spell(10, None), spell(10, None))
+    activity = store.activity_trend(111, "weekly")
+    assert activity["joins"] == 2 and activity["leaves"] == 0, activity
+    print("  2 joins, 0 leaves OK")
+
+    print("\n=== the axis scales to the numbers, in whole people ===")
+    for peak, expected_top in ((0, 4), (1, 4), (4, 4), (5, 5), (8, 8), (9, 10), (12, 15),
+                               (37, 40), (140, 150), (413, 500), (2100, 2500)):
+        top, ticks = dashboard.count_axis(peak)
+        assert top == expected_top, (peak, top, expected_top)
+        assert ticks[0] == 0 and ticks[-1] == top, ticks
+        assert len(ticks) <= 6, ticks
+        assert all(isinstance(t, int) for t in ticks), "half a person is not a tick"
+        assert top >= peak, "the tallest point has to fit under the ceiling"
+        # Evenly spaced, or the gridlines would lie about the scale.
+        gaps = {b - a for a, b in zip(ticks, ticks[1:])}
+        assert len(gaps) == 1, (peak, ticks)
+        print(f"  peak {peak:>4} -> 0 to {top} in {len(ticks) - 1} steps of {gaps.pop()}")
+
+    print("\n=== zero is a point on the floor, not a gap ===")
+    # Unlike retention, where a bucket can have no answer at all, a day nobody joined is a
+    # real zero. The line has to stay unbroken or it would imply missing data.
+    load(spell(35, None), spell(7, None))
+    chart = dashboard.activity_chart(store.activity_trend(111, "weekly"), "joins")
+    line = chart["lines"][0]
+    assert len(line["points"]) == 12, "every bucket gets a point"
+    assert sum(1 for p in line["points"] if p["value"] == 0) == 10, line["points"]
+    assert all(p["y"] == chart["baseline"] for p in line["points"] if p["value"] == 0)
+    print("  12 points, 10 of them sitting on the baseline OK")
+
+    print("\n=== the geometry stays inside its box, on every view ===")
+    load(*[spell(d, None if d % 2 else 3) for d in range(2, 80)])
     for period in store.TREND_PERIODS:
-        labels = dashboard.trend_chart(store.retention_trend(111, period))["labels"]
+        for series in store.SERIES:
+            chart = dashboard.activity_chart(store.activity_trend(111, period), series)
+            expected_lines = 2 if series == "both" else 1
+            assert len(chart["lines"]) == expected_lines, (period, series, chart["lines"])
+            for line in chart["lines"]:
+                for point in line["points"]:
+                    assert chart["top"] <= point["y"] <= chart["h"] - chart["bottom"], point
+                    assert chart["left"] <= point["x"] <= chart["w"] - chart["right"], point
+        # The count of labels doesn't matter, the spacing does: "18 May" is about 38px wide,
+        # so anything tighter than that would collide with the next one.
+        labels = chart["labels"]
         gaps = [b["x"] - a["x"] for a, b in zip(labels, labels[1:])]
-        assert labels, period
-        assert not gaps or min(gaps) >= 45, (period, min(gaps), len(labels))
+        assert labels and (not gaps or min(gaps) >= 45), (period, gaps)
         print(f"  {period}: {len(labels)} labels, closest {min(gaps) if gaps else '-'}px apart")
-    print(f"  {len(chart['dots'])} points, {len(chart['segments'])} line segments, "
-          f"all within bounds OK")
 
-    print("\n=== a gap really does break the line ===")
-    # Two runs of rated weeks with silent weeks between them. The line must not be drawn
-    # across the hole, which would invent a slope through weeks nobody joined in.
-    load(*[s for days in (45, 38, 17, 10)
-           for s in (spell(days, None), spell(days, 1))])
-    chart = dashboard.trend_chart(store.retention_trend(111, "weekly"))
-    assert len(chart["dots"]) == 4, chart["dots"]
-    assert len(chart["segments"]) == 2, chart["segments"]
-    assert all(len(run) == 2 for run in chart["segments"]), chart["segments"]
-    # And the hole is real: the gap between the runs is wider than a single step.
-    step = chart["segments"][0][1]["x"] - chart["segments"][0][0]["x"]
-    hole = chart["segments"][1][0]["x"] - chart["segments"][0][-1]["x"]
-    assert hole > step, (hole, step)
-    print(f"  two segments of two, separated by {hole:.0f}px against a {step:.0f}px step OK")
+    print("\n=== both series share one axis ===")
+    # Drawn against separate scales they would be uncomparable, which is the entire point of
+    # putting them on the same chart.
+    load(*[spell(20, None) for _ in range(30)], spell(20, 1))
+    activity = store.activity_trend(111, "weekly")
+    # 31 joins in one week against a single leave: the peak follows the taller series.
+    assert activity["peak"] == 31, activity["peak"]
+    assert activity["joins"] == 31 and activity["leaves"] == 1, activity
+    both = dashboard.activity_chart(activity, "both")
+    joins_only = dashboard.activity_chart(activity, "joins")
+    assert both["gridlines"] == joins_only["gridlines"], "the scale must not move"
+    print(f"  peak {activity['peak']}, same gridlines whichever lines are shown OK")
 
-    print("\n=== a lone rated bucket still shows up ===")
-    # It cannot be a line, so it has to survive as a dot or it vanishes off the chart.
-    load(spell(35, None), spell(35, 1))
-    chart = dashboard.trend_chart(store.retention_trend(111, "weekly"))
-    assert chart["segments"] == [], chart["segments"]
-    assert len(chart["dots"]) == 1, chart["dots"]
-    print("  no line, but the point is drawn OK")
-
-    print("\n=== the page renders ===")
+    print("\n=== the page renders, and the toggles pick the lines ===")
     load(*[spell(d, None if d % 3 else 2, code="promo" if d % 2 else "other")
            for d in range(2, 60)])
-    r = c.get("/servers/111/insights")
-    assert r.status_code == 200, r.status_code
-    body = html.unescape(r.data.decode())
-    assert "<svg" in body and 'class="trend"' in body
-    assert "polyline" in body, "a line got drawn"
+    for series, expect, forbid in (("joins", "line joins", "line leaves"),
+                                   ("leaves", "line leaves", "line joins"),
+                                   ("both", "line leaves", None)):
+        r = c.get(f"/servers/111/insights?series={series}")
+        assert r.status_code == 200, (series, r.status_code)
+        body = html.unescape(r.data.decode())
+        assert expect in body, (series, expect)
+        if forbid:
+            assert forbid not in body, (series, forbid)
+        assert f'class="trend {series}"' in body, series
+        print(f"  {series}: {expect} drawn{', ' + forbid + ' not' if forbid else ''} OK")
+
+    body = html.unescape(c.get("/servers/111/insights?series=both").data.decode())
+    assert "line joins" in body and "line leaves" in body, "both means both"
+    assert "Net" in body, "and the combined view does the subtraction"
+    print("  both: two lines and a net figure OK")
+
+    print("\n=== a bogus series falls back rather than erroring ===")
+    for bad in ("nonsense", "", "'; drop--"):
+        r = c.get(f"/servers/111/insights?series={bad}")
+        assert r.status_code == 200, (bad, r.status_code)
+        assert f'class="trend {store.DEFAULT_SERIES}"' in r.data.decode(), bad
+    print(f"  falls back to {store.DEFAULT_SERIES} OK")
+
+    print("\n=== the rest of the page is still there ===")
+    body = html.unescape(c.get("/servers/111/insights").data.decode())
     assert "Which invite they came through" in body
     assert "promo" in body and "other" in body
-    assert "7 day retention" in body
-    print("  chart, invite table and headline figures all present OK")
+    # Retention did not disappear when it stopped being the chart.
+    assert "7 day retention" in body and "How long people last" in body
+    print("  invite table, survival bars and the retention figure all present OK")
 
     print("\n=== a server with no data still gets a chart ===")
     load()
@@ -261,22 +313,27 @@ def main():
     # The axes are drawn either way. A paragraph where a chart should be reads as broken, and
     # the page would change shape under somebody the moment their first member joined.
     assert "<svg" in body, "the chart is drawn empty, not skipped"
-    assert 'class="trend bare"' in body, "and marked as empty so it can be styled back"
-    assert "Nothing recorded yet" in body
+    assert "trend joins bare" in body, "and marked as empty so it can be styled back"
+    assert "Nobody joined or left in this period" in body
     # Empty means empty: axes and labels, but nothing plotted on them.
     assert "polyline" not in body and "<circle" not in body, "nothing to plot"
     assert body.count("gridline") == 5, "the axis lines are still there"
+    # Whole numbers on the axis even with nothing to scale to, rather than 0.25 of a person.
+    chart = dashboard.activity_chart(store.activity_trend(111), "joins")
+    assert [g["value"] for g in chart["gridlines"]] == [0, 1, 2, 3, 4], chart["gridlines"]
     # And it must not nag about a permission on a server where nobody has joined at all.
     assert "Manage Server" not in body
-    print("  empty axes, a label saying so, and no permission nag OK")
+    print("  empty axes labelled 0 to 4, a note saying so, and no permission nag OK")
 
-    print("\n=== joins too recent to measure get a chart too ===")
+    print("\n=== but a single join is enough to draw ===")
+    # The old chart stayed blank until a group was a week old. This one has something to say
+    # the moment anybody arrives, which is the point of counting joins rather than rates.
     load(spell(1, None), spell(2, None))
     body = html.unescape(c.get("/servers/111/insights").data.decode())
-    assert 'class="trend bare"' in body
-    assert "No group here is a week old yet" in body
-    assert "2 joined over this period" in body, "the joins still get counted"
-    print("  drawn empty, but it says the joins landed OK")
+    assert "bare" not in body, "two joins is a chart"
+    assert "line joins" in body
+    assert "Nobody joined or left" not in body
+    print("  two joins on day one and the line is already there OK")
 
     print("\n=== and it says why nothing is attributed ===")
     load(spell(10, None, code=None, inviter=None))

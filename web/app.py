@@ -13,6 +13,7 @@ is deliberately re-checked per request rather than trusted from the session:
   can't aim the bot at a channel somewhere else.
 """
 
+import math
 import os
 import secrets
 from functools import wraps
@@ -617,36 +618,63 @@ def guild_settings(guild_id: int):
 CHART = {"w": 720, "h": 210, "left": 38, "right": 12, "top": 12, "bottom": 30}
 
 
-def trend_chart(trend: dict) -> dict:
-    points = trend["points"]
+def count_axis(peak: int) -> tuple:
+    """A top value and tick marks for a chart counting people.
+
+    Percentages could hardcode 0/25/50/75/100. Counts can't: a server with 7 joins on its best
+    day and one with 4,000 need different scales, and both need labels that are whole people
+    rather than 2.5 of one. Steps run 1, 2, 5, 10, 20, 50 and up, and the smallest one that
+    covers the peak in five intervals or fewer wins, so there are never more than six labels.
+
+    Floored at 4 so a quiet server gets a sensible axis instead of one that tops out at 1 and
+    pins its own line to the ceiling.
+    """
+    peak = max(int(peak or 0), 4)
+    step, magnitude = 1, 1
+    while peak / step > 5:
+        # 1, 2, 5, 10, 20, 50, 100 ... rather than doubling, which skips every 5.
+        base = step // magnitude
+        if base == 1:
+            step = 2 * magnitude
+        elif base == 2:
+            step = 5 * magnitude
+        else:
+            magnitude *= 10
+            step = magnitude
+    top = step * math.ceil(peak / step)
+    return top, [step * i for i in range(top // step + 1)]
+
+
+def activity_chart(activity: dict, series: str = store.DEFAULT_SERIES) -> dict:
+    """Joins and leaves over time, as one or two lines against a shared axis.
+
+    Zero is a real answer for both, so unlike the retention chart these never break: a day
+    nobody joined is a point on the floor, not a gap.
+    """
+    points = activity["points"]
     plot_w = CHART["w"] - CHART["left"] - CHART["right"]
     plot_h = CHART["h"] - CHART["top"] - CHART["bottom"]
     span = max(len(points) - 1, 1)
+    top, ticks = count_axis(activity["peak"])
 
     def x_of(i):
-        # A single bucket sits in the middle rather than hard against the axis.
         return CHART["left"] + (plot_w / 2 if len(points) == 1 else i * plot_w / span)
 
-    def y_of(rate):
-        return CHART["top"] + (100 - rate) / 100 * plot_h
+    def y_of(value):
+        return CHART["top"] + (1 - value / top) * plot_h
 
-    dots, segments, run = [], [], []
-    for i, point in enumerate(points):
-        if point["rate"] is None:
-            # A bucket too young to have a seven day figure breaks the line rather than
-            # dropping it to zero, which would read as a collapse that never happened.
-            if len(run) > 1:
-                segments.append(run)
-            run = []
-            continue
-        spot = {"x": round(x_of(i), 1), "y": round(y_of(point["rate"]), 1), **point}
-        run.append(spot)
-        dots.append(spot)
-    if len(run) > 1:
-        segments.append(run)
+    wanted = ("joins", "leaves") if series == "both" else (series,)
+    lines = []
+    for name in wanted:
+        lines.append({
+            "name": name,
+            "label": store.SERIES[name],
+            "total": activity[name],
+            "points": [{"x": round(x_of(i), 1), "y": round(y_of(p[name]), 1),
+                        "value": p[name], "label": p["label"]}
+                       for i, p in enumerate(points)],
+        })
 
-    # Every label on a 30 bucket chart is unreadable, so thin them out and always keep the
-    # last one: the most recent bucket is the one being looked at.
     every = max(1, len(points) // 8)
     labels = [{"x": round(x_of(i), 1), "text": p["label"]}
               for i, p in enumerate(points)
@@ -654,13 +682,14 @@ def trend_chart(trend: dict) -> dict:
 
     return {
         **CHART,
-        "segments": segments,
-        # A polyline needs two points. One rated bucket on its own still deserves to be
-        # visible, and the dots carry it.
-        "dots": dots,
+        "series": series,
+        "lines": lines,
         "labels": labels,
-        "gridlines": [{"y": round(y_of(v), 1), "value": v} for v in (0, 25, 50, 75, 100)],
+        "gridlines": [{"y": round(y_of(t), 1), "value": t} for t in ticks],
         "baseline": round(y_of(0), 1),
+        # Nobody has joined or left in the whole period, so the lines would all sit flat on
+        # the floor and say nothing. The page draws the axis and explains instead.
+        "empty": activity["joins"] == 0 and activity["leaves"] == 0,
     }
 
 
@@ -675,9 +704,15 @@ def guild_insights(guild_id: int):
     """
     guild = require_guild(guild_id)
     period = request.args.get("period", store.DEFAULT_TREND)
+    # Both toggles are links with their own url, so a chart can be sent to somebody and the
+    # back button does what it should. Anything unrecognised falls back rather than erroring.
+    series = request.args.get("series", store.DEFAULT_SERIES)
+    if series not in store.SERIES:
+        series = store.DEFAULT_SERIES
     data = store.insights(guild_id, period)
     return render_template("insights.html", guild=guild, data=data,
-                           chart=trend_chart(data["trend"]),
+                           chart=activity_chart(data["activity"], series),
+                           series=series, all_series=store.SERIES,
                            periods=store.TREND_PERIODS)
 
 

@@ -52,80 +52,95 @@
   </div>
 </div>
 
-{# ── the trend ──────────────────────────────────────────────────── #}
+{# ── joins and leaves ───────────────────────────────────────────── #}
+{% set activity = data.activity %}
 <div class="card chart-card">
   <div class="chart-top">
     <div>
-      <h2>Is it getting better</h2>
-      <p class="fine">{{ trend.heading }}. Each point is the share of that group still here a
-        week after they joined.</p>
+      <h2>Joined and left</h2>
+      <p class="fine">{{ activity.heading }}. Each point is one
+        {{ {"daily": "day", "weekly": "week", "monthly": "month"}[activity.period] }}.</p>
     </div>
-    <nav class="periods">
-      {% for key, spec in periods.items() %}
-        <a class="seg{{ ' on' if key == trend.period }}"
-           href="{{ url_for('guild_insights', guild_id=guild.id, period=key) }}">
-          {{ key|capitalize }}</a>
-      {% endfor %}
-    </nav>
+    {#- Both toggles are links rather than buttons: each view is its own url, so a chart can
+        be sent to somebody and the back button behaves. Neither needs scripting. -#}
+    <div class="chart-controls">
+      <nav class="periods" aria-label="How to group the days">
+        {% for key, spec in periods.items() %}
+          <a class="seg{{ ' on' if key == activity.period }}"
+             href="{{ url_for('guild_insights', guild_id=guild.id, period=key, series=series) }}">
+            {{ key|capitalize }}</a>
+        {% endfor %}
+      </nav>
+      <nav class="periods series" aria-label="Which lines to show">
+        {% for key, label in all_series.items() %}
+          <a class="seg {{ key }}{{ ' on' if key == series }}"
+             href="{{ url_for('guild_insights', guild_id=guild.id, period=activity.period, series=key) }}">
+            {{ label }}</a>
+        {% endfor %}
+      </nav>
+    </div>
   </div>
 
   {#- Always drawn, empty or not. Axes with nothing on them say "no data yet" better than a
       sentence where a chart should be, and the page keeps its shape the moment one arrives. -#}
   <div class="chart-wrap">
-    <svg class="trend{{ ' bare' if not chart.dots }}" viewBox="0 0 {{ chart.w }} {{ chart.h }}"
-         role="img"
-         aria-label="{% if chart.dots %}Seven day retention over time, {{ trend.heading|lower }}
-                     {%- else %}Seven day retention over time, nothing recorded yet{% endif %}">
-        {%- for line in chart.gridlines %}
-          <line class="gridline" x1="{{ chart.left }}" y1="{{ line.y }}"
-                x2="{{ chart.w - chart.right }}" y2="{{ line.y }}"></line>
-          <text class="axis" x="{{ chart.left - 8 }}" y="{{ line.y + 4 }}"
-                text-anchor="end">{{ line.value }}%</text>
-        {%- endfor %}
+    <svg class="trend {{ chart.series }}{{ ' bare' if chart.empty }}"
+         viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img"
+         aria-label="Members joined and left, {{ activity.heading|lower }}">
+      {%- for line in chart.gridlines %}
+        <line class="gridline" x1="{{ chart.left }}" y1="{{ line.y }}"
+              x2="{{ chart.w - chart.right }}" y2="{{ line.y }}"></line>
+        <text class="axis" x="{{ chart.left - 8 }}" y="{{ line.y + 4 }}"
+              text-anchor="end">{{ line.value }}</text>
+      {%- endfor %}
 
-        {#- Filled underneath so a single line still reads as a quantity. Closed down to the
-            baseline and back, which is why each segment needs its own shape. -#}
-        {%- for run in chart.segments %}
-          <polygon class="area" points="{{ run[0].x }},{{ chart.baseline }}
-            {%- for p in run %} {{ p.x }},{{ p.y }}{% endfor %}
-            {{- " " }}{{ run[-1].x }},{{ chart.baseline }}"></polygon>
-          <polyline class="line" points="{% for p in run %}{{ p.x }},{{ p.y }} {% endfor %}"></polyline>
+      {%- if not chart.empty %}
+        {#- Filled down to the baseline so the shape reads as a quantity rather than as a
+            squiggle. Areas go under every line, so an overlap doesn't hide one of them. -#}
+        {%- for line in chart.lines %}
+          <polygon class="area {{ line.name }}" points="{{ line.points[0].x }},{{ chart.baseline }}
+            {%- for p in line.points %} {{ p.x }},{{ p.y }}{% endfor %}
+            {{- " " }}{{ line.points[-1].x }},{{ chart.baseline }}"></polygon>
         {%- endfor %}
-
-        {%- for dot in chart.dots %}
-          <circle class="dot" cx="{{ dot.x }}" cy="{{ dot.y }}" r="4">
-            <title>{{ dot.label }}: {{ dot.rate }}% of {{ dot.measurable }} still here after a week</title>
-          </circle>
+        {%- for line in chart.lines %}
+          <polyline class="line {{ line.name }}"
+                    points="{% for p in line.points %}{{ p.x }},{{ p.y }} {% endfor %}"></polyline>
         {%- endfor %}
-
-        {%- for label in chart.labels %}
-          <text class="axis" x="{{ label.x }}" y="{{ chart.h - 8 }}"
-                text-anchor="middle">{{ label.text }}</text>
+        {%- for line in chart.lines %}
+          {%- for p in line.points %}
+            <circle class="dot {{ line.name }}" cx="{{ p.x }}" cy="{{ p.y }}" r="3.5">
+              <title>{{ p.label }}: {{ p.value }} {{ line.label|lower }}</title>
+            </circle>
+          {%- endfor %}
         {%- endfor %}
+      {%- endif %}
 
-        {%- if not chart.dots %}
-          {#- Inside the plot rather than under it, so the empty chart explains itself where
-              somebody is already looking. -#}
-          <text class="nothing" x="{{ chart.left + (chart.w - chart.left - chart.right) / 2 }}"
-                y="{{ chart.top + (chart.h - chart.top - chart.bottom) / 2 }}"
-                text-anchor="middle">
-            {%- if trend.joins %}No group here is a week old yet
-            {%- else %}Nothing recorded yet{% endif -%}
-          </text>
-        {%- endif %}
-      </svg>
-    </div>
-    <p class="fine">
-      {%- if chart.dots -%}
-        {{ trend.joins }} joined over this period. Gaps are groups still younger than a week,
-        so there is nothing to measure yet rather than nothing to report.
-      {%- elif trend.joins -%}
-        {{ trend.joins }} joined over this period, and the first point appears once a group
-        is seven days old.
-      {%- else -%}
-        The first point appears seven days after somebody joins.
-      {%- endif -%}
-    </p>
+      {%- for label in chart.labels %}
+        <text class="axis" x="{{ label.x }}" y="{{ chart.h - 8 }}"
+              text-anchor="middle">{{ label.text }}</text>
+      {%- endfor %}
+
+      {%- if chart.empty %}
+        {#- Inside the plot rather than under it, so the empty chart explains itself where
+            somebody is already looking. -#}
+        <text class="nothing" x="{{ chart.left + (chart.w - chart.left - chart.right) / 2 }}"
+              y="{{ chart.top + (chart.h - chart.top - chart.bottom) / 2 }}"
+              text-anchor="middle">Nobody joined or left in this period</text>
+      {%- endif %}
+    </svg>
+  </div>
+
+  <div class="legend">
+    {% for line in chart.lines %}
+      <span class="key {{ line.name }}"><i></i>{{ line.label }}
+        <b>{{ line.total }}</b></span>
+    {% endfor %}
+    {% if chart.series == "both" and activity.joins >= activity.leaves %}
+      <span class="key net">Net <b>+{{ activity.joins - activity.leaves }}</b></span>
+    {% elif chart.series == "both" %}
+      <span class="key net down">Net <b>{{ activity.joins - activity.leaves }}</b></span>
+    {% endif %}
+  </div>
 </div>
 
 {# ── how long people last ───────────────────────────────────────── #}

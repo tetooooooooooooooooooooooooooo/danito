@@ -1832,12 +1832,21 @@ svg.trend .axis { fill: var(--faint); font-size: 11px;
   font-family: ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
 svg.trend .line {
   fill: none;
-  stroke: var(--mint);
   stroke-width: 2.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-svg.trend .area { fill: var(--mint-glow); opacity: .5; }
+
+/* Green for arriving, red for leaving, everywhere the two appear: the lines, the dots, the
+   legend and the toggle. Nobody should have to consult a key to know which is which. */
+svg.trend .line.joins { stroke: var(--mint); }
+svg.trend .line.leaves { stroke: var(--danger); }
+svg.trend .area { opacity: .55; }
+svg.trend .area.joins { fill: var(--mint-glow); }
+svg.trend .area.leaves { fill: rgba(242, 114, 114, .22); }
+/* Two fills stacked read as a third colour where they cross, so they back off when both are
+   on show and the lines carry it instead. */
+svg.trend.both .area { opacity: .28; }
 
 /* An empty chart is still a chart. The axes stay put and fade back a little, so it reads as
    waiting for numbers rather than as something that failed to load. */
@@ -1848,9 +1857,31 @@ svg.trend .nothing {
   font-size: 13px;
   font-family: ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
 }
-svg.trend .dot { fill: var(--mint-bright); stroke: var(--bg); stroke-width: 2; }
+svg.trend .dot { stroke: var(--bg); stroke-width: 2; }
+svg.trend .dot.joins { fill: var(--mint-bright); }
+svg.trend .dot.leaves { fill: var(--danger); }
 /* Bigger than it looks, so the tooltip is catchable with a finger as well as a pointer. */
 svg.trend .dot:hover { r: 6; }
+
+.chart-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The selected series is coloured like the line it switches on, so the toggle says which is
+   which before the chart has been read. */
+.periods.series .seg.leaves.on,
+.periods.series .seg.leaves.on:hover {
+  background: linear-gradient(135deg, #f8a0a0, var(--danger));
+  box-shadow: 0 6px 18px -10px var(--danger);
+  color: #2a0d0d;
+}
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 15px; }
+.key { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+.key i { width: 15px; height: 3px; border-radius: 2px; background: var(--mint); }
+.key.leaves i { background: var(--danger); }
+.key b { color: var(--text); font-weight: 650; }
+/* The one number on the page that is a subtraction, so it says which way it went. */
+.key.net b { color: var(--mint); }
+.key.net.down b { color: var(--danger); }
 
 .meter-note { margin: -4px 0 12px 120px; font-size: 12.4px; }
 .meter.small { height: 7px; width: 74px; }

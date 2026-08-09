@@ -729,6 +729,61 @@ def retention_trend(guild_id: int, period: str = DEFAULT_TREND, spells: list = N
     }
 
 
+# The two series the activity chart can draw, and which key each reads.
+SERIES = {
+    "joins": "Joined",
+    "leaves": "Left",
+    "both": "Both",
+}
+DEFAULT_SERIES = "joins"
+
+
+def activity_trend(guild_id: int, period: str = DEFAULT_TREND, spells: list = None) -> dict:
+    """How many joined and how many left, bucket by bucket.
+
+    A join is counted in the bucket it happened in, and so is a leave, which means the two
+    series are independent: somebody who joined in March and left in July is one point on each
+    of two different bars. Counting a leave against the bucket they joined in would answer a
+    different question, and it is the one the survival figures already answer.
+
+    Zero is a real answer here, unlike the retention chart where a bucket can have no answer
+    at all, so these lines never break.
+    """
+    period = period if period in TREND_PERIODS else DEFAULT_TREND
+    unit, count, label_fmt, heading = TREND_PERIODS[period]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    spells = _spells(guild_id) if spells is None else spells
+
+    current = _period_start(now, unit)
+    starts = [_step_back(current, unit, n) for n in range(count - 1, -1, -1)]
+    buckets = {start: {"start": start, "label": start.strftime(label_fmt).lstrip("0"),
+                       "joins": 0, "leaves": 0} for start in starts}
+
+    for spell in spells:
+        joined = _aware(spell.get("joined_at"))
+        if joined is not None:
+            bucket = buckets.get(_period_start(joined, unit))
+            if bucket is not None:
+                bucket["joins"] += 1
+        left = _aware(spell.get("left_at"))
+        if left is not None:
+            bucket = buckets.get(_period_start(left, unit))
+            if bucket is not None:
+                bucket["leaves"] += 1
+
+    points = [buckets[start] for start in starts]
+    return {
+        "period": period,
+        "heading": heading,
+        "points": points,
+        "joins": sum(p["joins"] for p in points),
+        "leaves": sum(p["leaves"] for p in points),
+        # Both series share one axis, so it has to reach the taller of them or the shorter
+        # one would be drawn against a scale it doesn't fit.
+        "peak": max([max(p["joins"], p["leaves"]) for p in points] or [0]),
+    }
+
+
 def insights(guild_id: int, period: str = DEFAULT_TREND) -> dict:
     """Everything the insights page needs, off one read of the spells."""
     spells = _spells(guild_id)
@@ -749,7 +804,10 @@ def insights(guild_id: int, period: str = DEFAULT_TREND) -> dict:
         "joins": len(spells),
         "still_here": sum(1 for s in spells if s.get("left_at") is None),
         "survival": [survival[d] for d in INSIGHT_WINDOWS],
+        # Retention still feeds the headline figure and its direction. It stopped being the
+        # chart because joins and leaves are what somebody opens this page to see.
         "trend": retention_trend(guild_id, period, spells),
+        "activity": activity_trend(guild_id, period, spells),
         "invites": retention_by_invite(guild_id, spells),
         "window_days": SPELL_WINDOW_DAYS,
         "capped": len(spells) >= MAX_SPELLS_READ,
