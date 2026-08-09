@@ -1838,6 +1838,16 @@ svg.trend .line {
   stroke-linejoin: round;
 }
 svg.trend .area { fill: var(--mint-glow); opacity: .5; }
+
+/* An empty chart is still a chart. The axes stay put and fade back a little, so it reads as
+   waiting for numbers rather than as something that failed to load. */
+svg.trend.bare .gridline { stroke-dasharray: 3 4; opacity: .6; }
+svg.trend.bare .axis { opacity: .55; }
+svg.trend .nothing {
+  fill: var(--faint);
+  font-size: 13px;
+  font-family: ui-sans-serif, -apple-system, "Segoe UI", sans-serif;
+}
 svg.trend .dot { fill: var(--mint-bright); stroke: var(--bg); stroke-width: 2; }
 /* Bigger than it looks, so the tooltip is catchable with a finger as well as a pointer. */
 svg.trend .dot:hover { r: 6; }

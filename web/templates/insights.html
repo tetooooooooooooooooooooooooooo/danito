@@ -19,14 +19,13 @@
 </header>
 
 {% if not data.joins %}
-  <div class="card empty">
-    <div class="empty-icon" aria-hidden="true">📈</div>
-    <h2>Nothing to show yet</h2>
-    <p class="fine">Numbers start the first time somebody joins after the bot was added.
-      Nothing is backfilled, because {{ brand }} has no way to know when people who were
-      already here arrived.</p>
-  </div>
-{% else %}
+  {#- The page is drawn either way. An empty chart with its axes on says "nothing has
+      happened yet" far better than a paragraph where a chart should be, and it means the
+      shape of the page doesn't change under somebody the first time a member joins. -#}
+  <div class="warn">Nothing recorded yet. The figures start the first time somebody joins
+    after {{ brand }} was added, and nothing is backfilled, because there's no way to know
+    when the people already here arrived.</div>
+{% endif %}
 
 <div class="grid stats">
   <div class="stat">
@@ -70,10 +69,13 @@
     </nav>
   </div>
 
-  {% if chart.dots %}
-    <div class="chart-wrap">
-      <svg class="trend" viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img"
-           aria-label="Seven day retention over time, {{ trend.heading|lower }}">
+  {#- Always drawn, empty or not. Axes with nothing on them say "no data yet" better than a
+      sentence where a chart should be, and the page keeps its shape the moment one arrives. -#}
+  <div class="chart-wrap">
+    <svg class="trend{{ ' bare' if not chart.dots }}" viewBox="0 0 {{ chart.w }} {{ chart.h }}"
+         role="img"
+         aria-label="{% if chart.dots %}Seven day retention over time, {{ trend.heading|lower }}
+                     {%- else %}Seven day retention over time, nothing recorded yet{% endif %}">
         {%- for line in chart.gridlines %}
           <line class="gridline" x1="{{ chart.left }}" y1="{{ line.y }}"
                 x2="{{ chart.w - chart.right }}" y2="{{ line.y }}"></line>
@@ -100,14 +102,30 @@
           <text class="axis" x="{{ label.x }}" y="{{ chart.h - 8 }}"
                 text-anchor="middle">{{ label.text }}</text>
         {%- endfor %}
+
+        {%- if not chart.dots %}
+          {#- Inside the plot rather than under it, so the empty chart explains itself where
+              somebody is already looking. -#}
+          <text class="nothing" x="{{ chart.left + (chart.w - chart.left - chart.right) / 2 }}"
+                y="{{ chart.top + (chart.h - chart.top - chart.bottom) / 2 }}"
+                text-anchor="middle">
+            {%- if trend.joins %}No group here is a week old yet
+            {%- else %}Nothing recorded yet{% endif -%}
+          </text>
+        {%- endif %}
       </svg>
     </div>
-    <p class="fine">{{ trend.joins }} joined over this period. Gaps are groups still younger
-      than a week, so there is nothing to measure yet rather than nothing to report.</p>
-  {% else %}
-    <p class="fine">No group in this period is a week old yet. The first point appears seven
-      days after somebody joins.</p>
-  {% endif %}
+    <p class="fine">
+      {%- if chart.dots -%}
+        {{ trend.joins }} joined over this period. Gaps are groups still younger than a week,
+        so there is nothing to measure yet rather than nothing to report.
+      {%- elif trend.joins -%}
+        {{ trend.joins }} joined over this period, and the first point appears once a group
+        is seven days old.
+      {%- else -%}
+        The first point appears seven days after somebody joins.
+      {%- endif -%}
+    </p>
 </div>
 
 {# ── how long people last ───────────────────────────────────────── #}
@@ -150,7 +168,9 @@
       two hundred people who all leave is worth less than one that brings twenty who don't.</p>
   </div>
 
-  {% if not data.any_attributed %}
+  {#- Only worth saying once there are joins to trace. On a server with none it would read as
+      a problem to fix when there is nothing wrong. -#}
+  {% if data.joins and not data.any_attributed %}
     <div class="warn">Joins aren't being traced to an invite yet. Discord doesn't tell a bot
       how somebody arrived, so {{ brand }} works it out by watching which invite's use count
       goes up, and that needs Manage Server. If you added {{ brand }} before this existed,
@@ -199,10 +219,14 @@
       instant through different invites, which is genuinely unknowable rather than guessed
       at.</p>
   {% endif %}
+
+  {% if not data.joins %}
+    <p class="fine">Nothing to attribute yet. Each invite appears here the first time
+      somebody joins through it.</p>
+  {% endif %}
 </div>
 
 {% if data.capped %}
   <p class="fine">Based on the most recent {{ data.joins }} joins.</p>
-{% endif %}
 {% endif %}
 {% endblock %}

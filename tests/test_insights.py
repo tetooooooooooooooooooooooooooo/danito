@@ -255,12 +255,28 @@ def main():
     assert "7 day retention" in body
     print("  chart, invite table and headline figures all present OK")
 
-    print("\n=== an empty server says so instead of drawing nothing ===")
+    print("\n=== a server with no data still gets a chart ===")
     load()
     body = html.unescape(c.get("/servers/111/insights").data.decode())
-    assert "Nothing to show yet" in body
-    assert "<svg" not in body, "no empty chart"
-    print("  an explanation rather than a blank chart OK")
+    # The axes are drawn either way. A paragraph where a chart should be reads as broken, and
+    # the page would change shape under somebody the moment their first member joined.
+    assert "<svg" in body, "the chart is drawn empty, not skipped"
+    assert 'class="trend bare"' in body, "and marked as empty so it can be styled back"
+    assert "Nothing recorded yet" in body
+    # Empty means empty: axes and labels, but nothing plotted on them.
+    assert "polyline" not in body and "<circle" not in body, "nothing to plot"
+    assert body.count("gridline") == 5, "the axis lines are still there"
+    # And it must not nag about a permission on a server where nobody has joined at all.
+    assert "Manage Server" not in body
+    print("  empty axes, a label saying so, and no permission nag OK")
+
+    print("\n=== joins too recent to measure get a chart too ===")
+    load(spell(1, None), spell(2, None))
+    body = html.unescape(c.get("/servers/111/insights").data.decode())
+    assert 'class="trend bare"' in body
+    assert "No group here is a week old yet" in body
+    assert "2 joined over this period" in body, "the joins still get counted"
+    print("  drawn empty, but it says the joins landed OK")
 
     print("\n=== and it says why nothing is attributed ===")
     load(spell(10, None, code=None, inviter=None))
