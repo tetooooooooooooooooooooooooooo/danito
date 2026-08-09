@@ -188,6 +188,46 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
             return
         await interaction.followup.send(f"👋 Left **{name}** (`{gid}`).", ephemeral=True)
 
+    # ── /admin raise ─────────────────────────────────────────────────
+    @app_commands.command(name="raise",
+                          description="Break something deliberately, to check error reporting")
+    @app_commands.describe(where="Which path to break. They report through different code.")
+    @app_commands.choices(where=[
+        app_commands.Choice(name="a command", value="command"),
+        app_commands.Choice(name="an event handler", value="event"),
+    ])
+    async def raise_error(self, interaction: discord.Interaction,
+                          where: app_commands.Choice[str] = None):
+        """A fault you can cause on purpose.
+
+        Error reporting is the one feature you cannot test by using the bot normally: it only
+        shows itself when something is already broken. Breaking a real command to check it
+        would mean shipping that break to every server, so it lives here instead, behind the
+        same owner check as everything else in this group.
+
+        The two paths are genuinely different code. A command error goes through
+        tree.on_error; an event error goes through Client.on_error, which discord.py calls
+        directly rather than dispatching, and which is the newer of the two.
+        """
+        picked = where.value if where else "command"
+
+        if picked == "event":
+            # Reported, then answered, because on_error posts to the channel by itself and
+            # this command should not also fail.
+            try:
+                raise RuntimeError("deliberate, from /admin raise: the event handler path")
+            except RuntimeError:
+                await self.bot.on_error("on_member_join")
+            await interaction.response.send_message(
+                "Raised inside the event handler path. Check the error channel.",
+                ephemeral=True)
+            return
+
+        await interaction.response.send_message(
+            "Raising now. You'll get the ordinary error reply, and the channel gets the "
+            "traceback.", ephemeral=True)
+        raise RuntimeError("deliberate, from /admin raise: the command path")
+
 
 async def setup(bot: commands.Bot):
     cog = Owner(bot)
