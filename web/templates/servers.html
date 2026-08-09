@@ -18,6 +18,9 @@
         </div>
       </a>
     {% endfor %}
+    {#- Deliberately not a second link inside each card: the whole card is already one, and a
+        link inside a link is invalid html that browsers untangle differently. Insights is one
+        click further in, from the settings page header. -#}
   </div>
 {% else %}
   <p>The bot isn't in any server you manage yet.</p>

@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block bodyclass %}insights-page{% endblock %}
+{% block title %}{{ guild.name }} · Insights · {{ brand }}{% endblock %}
+
+{% set trend = data.trend %}
+{% set invites = data.invites %}
+
+{% block content %}
+<p><a class="fine" href="{{ url_for('servers') }}">&larr; All servers</a></p>
+
+<header class="page-head split">
+  <div>
+    <h1>{{ guild.name }}</h1>
+    <p class="fine">Who joined, who stayed, and which invite they came through. Everything
+      here covers the last {{ data.window_days }} days.</p>
+  </div>
+  <a class="button ghost small" href="{{ url_for('guild_settings', guild_id=guild.id) }}">
+    Settings</a>
+</header>
+
+{% if not data.joins %}
+  <div class="card empty">
+    <div class="empty-icon" aria-hidden="true">📈</div>
+    <h2>Nothing to show yet</h2>
+    <p class="fine">Numbers start the first time somebody joins after the bot was added.
+      Nothing is backfilled, because {{ brand }} has no way to know when people who were
+      already here arrived.</p>
+  </div>
+{% else %}
+
+<div class="grid stats">
+  <div class="stat">
+    <span class="stat-label">Joined</span>
+    <span class="stat-big">{{ data.joins }}</span>
+    <span class="fine">in the last {{ data.window_days }} days</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Still here</span>
+    <span class="stat-big">{{ data.still_here }}</span>
+    <span class="fine">of those who joined</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">7 day retention</span>
+    <span class="stat-big">
+      {%- if trend.latest is not none %}{{ trend.latest }}%{% else %}&mdash;{% endif -%}
+    </span>
+    {% if trend.change is not none and trend.change != 0 %}
+      <span class="delta {{ 'up' if trend.change > 0 else 'down' }}">
+        {{ "+" if trend.change > 0 }}{{ trend.change }} points across this period</span>
+    {% else %}
+      <span class="fine">across this period</span>
+    {% endif %}
+  </div>
+</div>
+
+{# ── the trend ──────────────────────────────────────────────────── #}
+<div class="card chart-card">
+  <div class="chart-top">
+    <div>
+      <h2>Is it getting better</h2>
+      <p class="fine">{{ trend.heading }}. Each point is the share of that group still here a
+        week after they joined.</p>
+    </div>
+    <nav class="periods">
+      {% for key, spec in periods.items() %}
+        <a class="seg{{ ' on' if key == trend.period }}"
+           href="{{ url_for('guild_insights', guild_id=guild.id, period=key) }}">
+          {{ key|capitalize }}</a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {% if chart.dots %}
+    <div class="chart-wrap">
+      <svg class="trend" viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img"
+           aria-label="Seven day retention over time, {{ trend.heading|lower }}">
+        {%- for line in chart.gridlines %}
+          <line class="gridline" x1="{{ chart.left }}" y1="{{ line.y }}"
+                x2="{{ chart.w - chart.right }}" y2="{{ line.y }}"></line>
+          <text class="axis" x="{{ chart.left - 8 }}" y="{{ line.y + 4 }}"
+                text-anchor="end">{{ line.value }}%</text>
+        {%- endfor %}
+
+        {#- Filled underneath so a single line still reads as a quantity. Closed down to the
+            baseline and back, which is why each segment needs its own shape. -#}
+        {%- for run in chart.segments %}
+          <polygon class="area" points="{{ run[0].x }},{{ chart.baseline }}
+            {%- for p in run %} {{ p.x }},{{ p.y }}{% endfor %}
+            {{- " " }}{{ run[-1].x }},{{ chart.baseline }}"></polygon>
+          <polyline class="line" points="{% for p in run %}{{ p.x }},{{ p.y }} {% endfor %}"></polyline>
+        {%- endfor %}
+
+        {%- for dot in chart.dots %}
+          <circle class="dot" cx="{{ dot.x }}" cy="{{ dot.y }}" r="4">
+            <title>{{ dot.label }}: {{ dot.rate }}% of {{ dot.measurable }} still here after a week</title>
+          </circle>
+        {%- endfor %}
+
+        {%- for label in chart.labels %}
+          <text class="axis" x="{{ label.x }}" y="{{ chart.h - 8 }}"
+                text-anchor="middle">{{ label.text }}</text>
+        {%- endfor %}
+      </svg>
+    </div>
+    <p class="fine">{{ trend.joins }} joined over this period. Gaps are groups still younger
+      than a week, so there is nothing to measure yet rather than nothing to report.</p>
+  {% else %}
+    <p class="fine">No group in this period is a week old yet. The first point appears seven
+      days after somebody joins.</p>
+  {% endif %}
+</div>
+
+{# ── how long people last ───────────────────────────────────────── #}
+<div class="card">
+  <div class="head">
+    <h2>How long people last</h2>
+    <p class="fine">Of the members old enough to be counted, how many were still here after
+      each stretch. The number counted differs per row on purpose: only somebody who joined
+      30 days ago can tell you anything about 30 day retention.</p>
+  </div>
+  <div class="chart">
+    {% for row in data.survival %}
+      <div class="meter-row">
+        <span class="meter-label">After {{ row.days }} day{{ "" if row.days == 1 else "s" }}</span>
+        <span class="meter">
+          {% if row.rate is not none %}
+            <span class="meter-fill" style="width: {{ row.rate }}%"></span>
+          {% endif %}
+        </span>
+        <span class="meter-val">
+          {%- if row.rate is not none %}{{ row.rate }}%{% else %}&mdash;{% endif -%}
+        </span>
+      </div>
+      <p class="meter-note fine">
+        {%- if row.rate is not none -%}
+          {{ row.survived }} of {{ row.measurable }}
+        {%- else -%}
+          nobody has been here {{ row.days }} day{{ "" if row.days == 1 else "s" }} yet
+        {%- endif -%}
+      </p>
+    {% endfor %}
+  </div>
+</div>
+
+{# ── by invite ──────────────────────────────────────────────────── #}
+<div class="card">
+  <div class="head">
+    <h2>Which invite they came through</h2>
+    <p class="fine">Sorted by how many stayed, not by how many arrived. An invite that brings
+      two hundred people who all leave is worth less than one that brings twenty who don't.</p>
+  </div>
+
+  {% if not data.any_attributed %}
+    <div class="warn">Joins aren't being traced to an invite yet. Discord doesn't tell a bot
+      how somebody arrived, so {{ brand }} works it out by watching which invite's use count
+      goes up, and that needs Manage Server. If you added {{ brand }} before this existed,
+      <a href="{{ invite_url(guild.id) }}" rel="noopener">add it again</a> to grant it.
+      Nothing else changes, and no existing settings are touched.</div>
+  {% endif %}
+
+  {% if invites.invites %}
+    <div class="table-wrap">
+      <table class="commands invites">
+        <thead>
+          <tr><th>Invite</th><th>Joined</th><th>Still here</th><th>Kept after a week</th></tr>
+        </thead>
+        <tbody>
+          {% for row in invites.invites %}
+            <tr>
+              <td class="cmd">
+                <code>{{ "the vanity url" if row.code == "vanity" else row.code }}</code>
+                {% if row.inviter %}<span class="args">by {{ row.inviter }}</span>{% endif %}
+              </td>
+              <td>{{ row.joins }}</td>
+              <td>{{ row.still_here }}</td>
+              <td>
+                {% if row.rate is not none %}
+                  <span class="rate-cell">
+                    <span class="meter small">
+                      <span class="meter-fill" style="width: {{ row.rate }}%"></span></span>
+                    <b>{{ row.rate }}%</b>
+                  </span>
+                  <span class="fine">{{ row.survived }} of {{ row.measurable }}</span>
+                {% else %}
+                  <span class="fine">too new to say</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  {% if invites.unknown %}
+    <p class="fine">{{ invites.unknown.joins }} of {{ invites.total }} joins couldn't be
+      traced to an invite. That covers anyone who arrived before tracking was on, joins
+      through Discovery or the widget, and the rare case of two people arriving in the same
+      instant through different invites, which is genuinely unknowable rather than guessed
+      at.</p>
+  {% endif %}
+</div>
+
+{% if data.capped %}
+  <p class="fine">Based on the most recent {{ data.joins }} joins.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

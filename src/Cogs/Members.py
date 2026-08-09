@@ -95,6 +95,9 @@ class Members(commands.Cog, name="Members"):
         self.spells.create_index([("guild_id", 1), ("user_id", 1), ("left_at", 1)],
                                  name="guild_user_open")
         self.spells.create_index([("guild_id", 1), ("joined_at", -1)], name="guild_joined")
+        # The dashboard groups by invite over the whole window, which is a collection scan
+        # per server without this.
+        self.spells.create_index([("guild_id", 1), ("invite_code", 1)], name="guild_invite")
         # No cleanup loop needed: Mongo expires these itself.
         self.spells.create_index("joined_at", expireAfterSeconds=SPELL_TTL_DAYS * 86400,
                                  name="ttl_joined")
@@ -105,13 +108,33 @@ class Members(commands.Cog, name="Members"):
         if member.bot:
             return
         cohort = str(datetime.date.today())
-        await self._open_spell(member, cohort)
+        # Asked for before the spell is written, so the invite lands in the same insert. It
+        # also has to happen now rather than later: the lookup works by comparing use counts
+        # against the moment before this person arrived, and every further join blurs that.
+        invite = await self._resolve_invite(member.guild)
+        await self._open_spell(member, cohort, invite)
         await self._assign_cohort_role(member, cohort)
         # Greeting the member is the Greetings cog's job, and only if the server set one up.
 
-    async def _open_spell(self, member: discord.Member, cohort: str):
+    async def _resolve_invite(self, guild: discord.Guild) -> tuple:
+        """Which invite this join came through, or blanks if it can't be known.
+
+        Kept behind a lookup rather than an import so the Invites cog failing to load, or
+        being removed, costs the invite column and nothing else.
+        """
+        cog = self.bot.get_cog("Invites")
+        if cog is None:
+            return None, None, None
+        try:
+            return await cog.resolve(guild)
+        except Exception as e:
+            print(f"[Members] invite lookup failed for {guild.id}: {e}")
+            return None, None, None
+
+    async def _open_spell(self, member: discord.Member, cohort: str, invite=(None, None, None)):
         """Record the start of a membership. Their join date doubles as the cohort key, so it
         lines up with the cohort role and with whatever the reminder later targets."""
+        code, inviter_id, inviter_name = invite
         try:
             await self._run(self.spells.insert_one, {
                 "guild_id": member.guild.id,
@@ -120,6 +143,12 @@ class Members(commands.Cog, name="Members"):
                 "joined_at": datetime.datetime.now(datetime.timezone.utc),
                 "left_at": None,
                 "nudged": False,
+                # None where the invite genuinely can't be known, which the dashboard shows
+                # as its own row rather than dropping. A server with no Manage Server
+                # permission has every join in there, and needs telling why.
+                "invite_code": code,
+                "inviter_id": inviter_id,
+                "inviter_name": inviter_name,
             })
         except Exception as e:
             print(f"[Members] couldn't record the join: {e}")

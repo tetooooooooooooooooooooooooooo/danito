@@ -540,3 +540,221 @@ def delete_panel(guild_id: int, panel_id) -> bool:
         {"_id": oid, "guild_id": guild_id},
         {"$set": {"pending_delete": True, "needs_publish": False}})
     return result.matched_count == 1
+
+
+# ── insights ─────────────────────────────────────────────────────────
+# The bot records one document per membership spell: opened on join, closed on leave. Those
+# two facts answer both questions this page asks, so nothing extra is stored and nothing is
+# precomputed.
+#
+# Spells expire after 180 days, which is the ceiling on everything below. The page says so,
+# because a number that quietly stops counting is worse than one that admits its window.
+SPELL_WINDOW_DAYS = 180
+INSIGHT_WINDOWS = (1, 7, 14, 30)
+
+# Grouping for the trend chart. Weekly is the default: daily is too noisy to read a direction
+# off, and monthly over a 180 day window is six bars.
+TREND_PERIODS = {
+    "daily": ("day", 30, "%d %b", "Last 30 days"),
+    "weekly": ("week", 12, "%d %b", "Last 12 weeks"),
+    "monthly": ("month", 6, "%b %Y", "Last 6 months"),
+}
+DEFAULT_TREND = "weekly"
+
+# This runs on a web request. A server past the cap gets its most recent joins, which is the
+# part anybody is looking at, and the page says the figures are based on a sample.
+MAX_SPELLS_READ = 20000
+
+
+def _memberships():
+    return db()["memberships"]
+
+
+def _aware(dt):
+    """pymongo hands back naive UTC datetimes, and comparing one to an aware now raises."""
+    if dt is None:
+        return None
+    return dt.replace(tzinfo=datetime.timezone.utc) if dt.tzinfo is None else dt
+
+
+def _survived(spell, days: int) -> bool:
+    """Whether this member was still here `days` after joining.
+
+    Somebody still in the server has survived every window they are old enough for. Somebody
+    who left survived only the windows that closed before they went.
+    """
+    joined = _aware(spell.get("joined_at"))
+    left = _aware(spell.get("left_at"))
+    if joined is None:
+        return False
+    if left is None:
+        return True
+    return (left - joined).total_seconds() >= days * 86400
+
+
+def _measurable(spell, days: int, now) -> bool:
+    """Only somebody who joined at least `days` ago can say anything about that window.
+
+    This is why the denominators differ per window. Counting a member who joined yesterday as
+    having survived 30 days would flatter every figure on the page.
+    """
+    joined = _aware(spell.get("joined_at"))
+    return joined is not None and (now - joined).total_seconds() >= days * 86400
+
+
+def _period_start(when, unit: str):
+    """The start of the bucket a timestamp falls in."""
+    when = _aware(when)
+    if unit == "day":
+        return when.replace(hour=0, minute=0, second=0, microsecond=0)
+    if unit == "week":
+        midnight = when.replace(hour=0, minute=0, second=0, microsecond=0)
+        return midnight - datetime.timedelta(days=midnight.weekday())
+    return when.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def _step_back(when, unit: str, count: int):
+    if unit == "day":
+        return when - datetime.timedelta(days=count)
+    if unit == "week":
+        return when - datetime.timedelta(weeks=count)
+    # Months vary in length, so walk them rather than subtracting a fixed number of days.
+    year, month = when.year, when.month - count
+    while month <= 0:
+        month += 12
+        year -= 1
+    return when.replace(year=year, month=month)
+
+
+def _spells(guild_id: int) -> list:
+    """Every spell the window still holds for this server, newest first."""
+    return list(_memberships()
+                .find({"guild_id": guild_id})
+                .sort("joined_at", -1)
+                .limit(MAX_SPELLS_READ))
+
+
+def retention_by_invite(guild_id: int, spells: list = None) -> dict:
+    """How many of each invite's joins were still here a week later.
+
+    The point of the page: which promotion brings people who stay, rather than which brings
+    the most people. An invite pulling in two hundred members who all leave is worth less than
+    one bringing twenty who don't, and a join count alone cannot tell you that.
+    """
+    now = datetime.datetime.now(datetime.timezone.utc)
+    spells = _spells(guild_id) if spells is None else spells
+
+    rows = {}
+    for spell in spells:
+        code = spell.get("invite_code")
+        row = rows.setdefault(code, {"code": code, "inviter": None, "joins": 0,
+                                     "still_here": 0, "measurable": 0, "survived": 0})
+        # Taken from whichever spell has one: an invite whose author has since left still has
+        # a name on the older joins.
+        row["inviter"] = row["inviter"] or spell.get("inviter_name")
+        row["joins"] += 1
+        if spell.get("left_at") is None:
+            row["still_here"] += 1
+        if _measurable(spell, 7, now):
+            row["measurable"] += 1
+            if _survived(spell, 7):
+                row["survived"] += 1
+
+    for row in rows.values():
+        # None rather than zero where nothing can be said yet, so the page shows a dash
+        # instead of a 0% that reads as a terrible invite.
+        row["rate"] = (round(row["survived"] / row["measurable"] * 100)
+                       if row["measurable"] else None)
+
+    # Best keep rate first, then biggest. An invite with nothing measurable yet sorts last
+    # rather than at either extreme, since it is neither good nor bad news.
+    ordered = sorted(rows.values(),
+                     key=lambda r: (r["rate"] is not None, r["rate"] or 0, r["joins"]),
+                     reverse=True)
+    known = [r for r in ordered if r["code"] is not None]
+    unknown = next((r for r in ordered if r["code"] is None), None)
+    return {"invites": known, "unknown": unknown,
+            "total": sum(r["joins"] for r in ordered)}
+
+
+def retention_trend(guild_id: int, period: str = DEFAULT_TREND, spells: list = None) -> dict:
+    """The seven day figure bucket by bucket, so a direction is visible rather than a point.
+
+    One number tells you where you are. This tells you whether what you changed worked, which
+    is the question anybody looking at retention is actually asking.
+    """
+    period = period if period in TREND_PERIODS else DEFAULT_TREND
+    unit, count, label_fmt, heading = TREND_PERIODS[period]
+    now = datetime.datetime.now(datetime.timezone.utc)
+    spells = _spells(guild_id) if spells is None else spells
+
+    # Oldest first, so the chart reads left to right.
+    current = _period_start(now, unit)
+    starts = [_step_back(current, unit, n) for n in range(count - 1, -1, -1)]
+    buckets = {start: {"start": start, "label": start.strftime(label_fmt).lstrip("0"),
+                       "joins": 0, "measurable": 0, "survived": 0} for start in starts}
+
+    for spell in spells:
+        joined = _aware(spell.get("joined_at"))
+        if joined is None:
+            continue
+        bucket = buckets.get(_period_start(joined, unit))
+        if bucket is None:
+            continue                      # older than the chart reaches
+        bucket["joins"] += 1
+        if _measurable(spell, 7, now):
+            bucket["measurable"] += 1
+            if _survived(spell, 7):
+                bucket["survived"] += 1
+
+    points = []
+    for start in starts:
+        bucket = buckets[start]
+        # A bucket whose members are all younger than seven days has no rate yet. Drawn as a
+        # gap rather than as zero, which would look like a collapse.
+        bucket["rate"] = (round(bucket["survived"] / bucket["measurable"] * 100)
+                          if bucket["measurable"] else None)
+        points.append(bucket)
+
+    rated = [p["rate"] for p in points if p["rate"] is not None]
+    return {
+        "period": period,
+        "heading": heading,
+        "points": points,
+        "joins": sum(p["joins"] for p in points),
+        # The direction, which is the one thing anybody wants off this chart. Measured across
+        # the rated buckets only, and only when there are two to compare.
+        "change": (rated[-1] - rated[0]) if len(rated) >= 2 else None,
+        "latest": rated[-1] if rated else None,
+    }
+
+
+def insights(guild_id: int, period: str = DEFAULT_TREND) -> dict:
+    """Everything the insights page needs, off one read of the spells."""
+    spells = _spells(guild_id)
+    now = datetime.datetime.now(datetime.timezone.utc)
+
+    survival = {}
+    for days in INSIGHT_WINDOWS:
+        measurable = [s for s in spells if _measurable(s, days, now)]
+        survived = sum(1 for s in measurable if _survived(s, days))
+        survival[days] = {
+            "days": days,
+            "measurable": len(measurable),
+            "survived": survived,
+            "rate": round(survived / len(measurable) * 100) if measurable else None,
+        }
+
+    return {
+        "joins": len(spells),
+        "still_here": sum(1 for s in spells if s.get("left_at") is None),
+        "survival": [survival[d] for d in INSIGHT_WINDOWS],
+        "trend": retention_trend(guild_id, period, spells),
+        "invites": retention_by_invite(guild_id, spells),
+        "window_days": SPELL_WINDOW_DAYS,
+        "capped": len(spells) >= MAX_SPELLS_READ,
+        # Joins recorded before invite tracking existed carry no code at all. Telling those
+        # apart from "it couldn't be worked out" matters: one is history, the other is a
+        # permission the server still has to grant.
+        "any_attributed": any(s.get("invite_code") for s in spells),
+    }

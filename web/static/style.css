@@ -1760,6 +1760,84 @@ ul.ticks li.carried { color: var(--text); font-weight: 600; }
 
 .pricing-foot { max-width: 58ch; margin: 22px auto 0; }
 
+/* ── insights ────────────────────────────────────────────────────── */
+/* Wider than the settings pages: a twelve point line squeezed into 800px is a scribble. */
+body.insights-page main { max-width: 1000px; }
+
+/* A modifier rather than a rule on .page-head itself, which the changelog, status and support
+   pages also use with a single child. Making that flex would change how their text wraps for
+   no reason. */
+.page-head.split { display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page-head.split h1 { margin-bottom: 0; }
+
+.stat-big {
+  display: block;
+  font-size: 30px;
+  font-weight: 650;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  margin: 3px 0 2px;
+}
+
+/* Which way it moved, in a colour you can read before the number. Up is not automatically
+   good on every metric, but on retention it is. */
+.delta { font-size: 12.8px; font-weight: 600; }
+.delta.up { color: var(--mint); }
+.delta.down { color: var(--warn); }
+
+.chart-card { padding-bottom: 18px; }
+.chart-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.chart-top h2 { margin-bottom: 4px; }
+.chart-top .fine { max-width: 52ch; }
+
+/* Links rather than buttons: each period is its own url, so a chart can be linked to and the
+   back button does what it should. .seg is shared with the pricing toggle. */
+.periods { display: inline-flex; gap: 4px; padding: 4px; background: var(--surface);
+  border: 1px solid var(--line); border-radius: 999px; }
+.periods .seg { text-decoration: none; display: inline-flex; align-items: center; }
+
+/* The chart keeps its shape and scrolls rather than squashing. A line chart compressed onto a
+   phone stops being readable long before it stops fitting. */
+.chart-wrap { overflow-x: auto; margin: 0 -4px; padding: 0 4px; }
+svg.trend { display: block; width: 100%; min-width: 460px; height: auto; overflow: visible; }
+
+svg.trend .gridline { stroke: var(--line); stroke-width: 1; }
+svg.trend .axis { fill: var(--faint); font-size: 11px;
+  font-family: ui-sans-serif, -apple-system, "Segoe UI", sans-serif; }
+svg.trend .line {
+  fill: none;
+  stroke: var(--mint);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+svg.trend .area { fill: var(--mint-glow); opacity: .5; }
+svg.trend .dot { fill: var(--mint-bright); stroke: var(--bg); stroke-width: 2; }
+/* Bigger than it looks, so the tooltip is catchable with a finger as well as a pointer. */
+svg.trend .dot:hover { r: 6; }
+
+.meter-note { margin: -4px 0 12px 120px; font-size: 12.4px; }
+.meter.small { height: 7px; width: 74px; }
+
+.rate-cell { display: flex; align-items: center; gap: 9px; }
+.rate-cell b { font-size: 14px; color: var(--mint-bright); }
+
+table.invites td { vertical-align: middle; }
+table.invites .fine { margin-top: 3px; }
+
+@media (max-width: 560px) {
+  .meter-note { margin-left: 0; }
+  .chart-top { flex-direction: column; }
+}
+
 /* ── unsaved changes ─────────────────────────────────────────────── */
 /* Built by the script, so it never appears on a page that can't clear it. */
 .unsaved {

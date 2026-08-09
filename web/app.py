@@ -41,7 +41,15 @@ app.secret_key = os.environ.get("DASHBOARD_SECRET_KEY") or secrets.token_hex(32)
 BRAND = os.environ.get("DASHBOARD_BRAND", "Newt")
 
 # The permissions the invite asks for, in one place rather than repeated in each template.
-INVITE_PERMISSIONS = "1374389534294"
+#
+# Manage Server (0x20) was added for invite tracking. Discord tells a bot nothing about how
+# somebody joined, so the only way to know is to read every invite's use count and watch which
+# one moves, and reading them needs this. Without it the insights page still works, it just
+# reports every join as coming from an unknown invite and says why.
+#
+# Anybody who added the bot before this went in keeps the old permissions until they add it
+# again: Discord does not widen a grant retrospectively.
+INVITE_PERMISSIONS = "1374389534326"
 
 # The terms and privacy policy live outside this app, on their own static site, so they stay
 # up whether or not the dashboard is. Discord wants both reachable from anywhere the bot is
@@ -599,6 +607,78 @@ def guild_settings(guild_id: int):
         automod_actions=store.AUTOMOD_ACTIONS,
         automod_defaults=store.AUTOMOD_DEFAULTS,
     )
+
+
+# ── the trend chart ──────────────────────────────────────────────────
+# Drawn as inline SVG worked out here rather than by a charting library. Nothing loads from a
+# CDN anywhere on this site, and a line with a few gaps in it does not justify 90KB of
+# JavaScript. Doing the arithmetic in Python also keeps the template readable, which the same
+# sums written in Jinja would not be.
+CHART = {"w": 720, "h": 210, "left": 38, "right": 12, "top": 12, "bottom": 30}
+
+
+def trend_chart(trend: dict) -> dict:
+    points = trend["points"]
+    plot_w = CHART["w"] - CHART["left"] - CHART["right"]
+    plot_h = CHART["h"] - CHART["top"] - CHART["bottom"]
+    span = max(len(points) - 1, 1)
+
+    def x_of(i):
+        # A single bucket sits in the middle rather than hard against the axis.
+        return CHART["left"] + (plot_w / 2 if len(points) == 1 else i * plot_w / span)
+
+    def y_of(rate):
+        return CHART["top"] + (100 - rate) / 100 * plot_h
+
+    dots, segments, run = [], [], []
+    for i, point in enumerate(points):
+        if point["rate"] is None:
+            # A bucket too young to have a seven day figure breaks the line rather than
+            # dropping it to zero, which would read as a collapse that never happened.
+            if len(run) > 1:
+                segments.append(run)
+            run = []
+            continue
+        spot = {"x": round(x_of(i), 1), "y": round(y_of(point["rate"]), 1), **point}
+        run.append(spot)
+        dots.append(spot)
+    if len(run) > 1:
+        segments.append(run)
+
+    # Every label on a 30 bucket chart is unreadable, so thin them out and always keep the
+    # last one: the most recent bucket is the one being looked at.
+    every = max(1, len(points) // 8)
+    labels = [{"x": round(x_of(i), 1), "text": p["label"]}
+              for i, p in enumerate(points)
+              if i % every == 0 or i == len(points) - 1]
+
+    return {
+        **CHART,
+        "segments": segments,
+        # A polyline needs two points. One rated bucket on its own still deserves to be
+        # visible, and the dots carry it.
+        "dots": dots,
+        "labels": labels,
+        "gridlines": [{"y": round(y_of(v), 1), "value": v} for v in (0, 25, 50, 75, 100)],
+        "baseline": round(y_of(0), 1),
+    }
+
+
+@app.route("/servers/<int:guild_id>/insights")
+@login_required
+def guild_insights(guild_id: int):
+    """The numbers, drawn rather than listed.
+
+    Separate from the settings page on purpose. Settings is a form you come to with something
+    to change; this is a page you come to with a question, and putting a chart behind a
+    settings tab hides it from everybody who is not already editing something.
+    """
+    guild = require_guild(guild_id)
+    period = request.args.get("period", store.DEFAULT_TREND)
+    data = store.insights(guild_id, period)
+    return render_template("insights.html", guild=guild, data=data,
+                           chart=trend_chart(data["trend"]),
+                           periods=store.TREND_PERIODS)
 
 
 @app.route("/servers/<int:guild_id>", methods=["POST"])

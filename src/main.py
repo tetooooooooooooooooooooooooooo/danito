@@ -77,6 +77,9 @@ class Bot(commands.Bot):
         self.cogslist = [
             "Cogs.Ratings",
             "Cogs.Members",
+            # Before Members in nothing but name: it holds the invite counts that Members
+            # asks for on every join, and seeds them when the bot connects.
+            "Cogs.Invites",
             "Cogs.Greetings",
             "Cogs.AutoRole",
             "Cogs.RoleButtons",
