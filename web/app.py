@@ -169,8 +169,11 @@ def index():
     problems = api.configured()
     if problems:
         return render_template("misconfigured.html", problems=problems), 503
-    if current_user():
-        return redirect(url_for("servers"))
+    # Shown to everybody, signed in or not. It used to bounce anybody logged in straight to
+    # their server list, which meant the brand in the header was a link back to the dashboard
+    # you were already in, and there was no way to reach the front page at all without
+    # logging out. The dashboard has its own button in the header instead.
+    #
     # The prices are on the landing page as well as on /premium. Somebody who reads the whole
     # pitch and never learns there is a paid tier is a worse outcome than one who sees the
     # number early and decides it is fine.

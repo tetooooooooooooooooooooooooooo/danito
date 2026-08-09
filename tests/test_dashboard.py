@@ -117,8 +117,32 @@ def main():
         assert "state" not in s, "the state should be single use"
     print("  a matching state logs in and is then consumed OK")
 
-    print("\n=== the picker only offers what it should ===")
+    print("\n=== the header, once you're signed in ===")
     login(c)
+    # The front page used to bounce anybody logged in to their server list, which made the
+    # brand in the header a link back to the page you were already on and left no way to
+    # reach the pitch, the prices or the feature list without logging out.
+    r = c.get("/")
+    assert r.status_code == 200, r.status_code
+    body = r.data.decode()
+    assert "Get found by people" in body, "the landing page itself, not a redirect"
+    # It has to stop offering a login to somebody who is already logged in.
+    assert "Log in with Discord" not in body
+    assert "Open the dashboard" in body
+    print("  / renders the landing page rather than redirecting OK")
+
+    # And because it no longer redirects, the way back to the dashboard has to be in the
+    # header on every page rather than implied by clicking the brand.
+    for path in ("/", "/docs", "/premium", "/support", "/servers"):
+        body = c.get(path).data.decode()
+        assert ">Dashboard</a>" in body, path
+        assert "Log out" in body, path
+        # The button replaced the "Servers" link that used to sit in the left nav, rather
+        # than joining it. Two links to the same page in one bar is just noise.
+        assert 'nav-link" href="/servers"' not in body, path
+    print("  a Dashboard button beside Log out, on every page OK")
+
+    print("\n=== the picker only offers what it should ===")
     r = c.get("/servers")
     body = r.data.decode()
     assert "Managed" in body and "No Bot" in body

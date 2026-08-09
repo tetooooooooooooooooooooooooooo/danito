@@ -22,7 +22,13 @@
        you where you stand.</p>
     <div class="cta">
       <a class="button" rel="noopener" href="{{ invite_url() }}">Add {{ brand }} to Discord</a>
-      <a class="button ghost" href="{{ url_for('login') }}">Log in with Discord</a>
+      {#- Anybody signed in can reach this page now, so the second button has to be the thing
+          they would actually want rather than an invitation to log in again. -#}
+      {% if user %}
+        <a class="button ghost" href="{{ url_for('servers') }}">Open the dashboard</a>
+      {% else %}
+        <a class="button ghost" href="{{ url_for('login') }}">Log in with Discord</a>
+      {% endif %}
     </div>
     <p class="fine">Free. Every feature is off until you turn it on.</p>
   </div>

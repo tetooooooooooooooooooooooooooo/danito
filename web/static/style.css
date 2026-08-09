@@ -2036,7 +2036,14 @@ footer p { margin: 0; }
   .bar-left { gap: 15px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
   .bar-left::-webkit-scrollbar { display: none; }
   .bar-left .nav-link { flex: none; }
-  .who { flex: none; }
+  .who { flex: none; gap: 9px; }
+
+  /* The account block has to earn its width at this size. The avatar goes first: "Log out"
+     being on the page already says somebody is signed in, and the picture was the only part
+     that said nothing the rest didn't. That plus a tighter button buys the nav back about
+     sixty pixels, which is the difference between it scrolling and it looking clipped. */
+  .who img { display: none; }
+  .who .button.small { padding: 7px 11px; font-size: 13.2px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

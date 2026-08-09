@@ -44,10 +44,13 @@
       <a class="nav-link" href="{{ url_for('premium') }}">Premium</a>
       <a class="nav-link" href="{{ url_for('status') }}">Status</a>
       <a class="nav-link" href="{{ url_for('support') }}">Support</a>
-      {% if user %}<a class="nav-link" href="{{ url_for('servers') }}">Servers</a>{% endif %}
     </div>
     {% if user %}
+      {#- The dashboard is a button rather than another link on the left, because it is the
+          one thing somebody signed in is here to do. The brand goes to the front page now,
+          so this is the way back to your servers. -#}
       <div class="who">
+        <a class="button small" href="{{ url_for('servers') }}">Dashboard</a>
         <img src="{{ user.avatar }}" alt="" width="28" height="28">
         <span>{{ user.username }}</span>
         <form method="post" action="{{ url_for('logout') }}">
