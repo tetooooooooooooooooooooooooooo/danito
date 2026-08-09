@@ -125,8 +125,10 @@ AUTOMOD_TIMEOUT_RANGE = (1, 10080)          # a minute to a week, Discord's own 
 # anything, which is why raids are mostly stopped by it rather than by the filters.
 MINAGE_RANGE = (1, 365)
 MINAGE_DEFAULT = 7
+# Short, because these are the options in a dropdown sitting in half a row. What a kick means
+# is explained underneath it, where there is room for a sentence.
 MINAGE_ACTIONS = [
-    ("kick", "Kick them, and say why so they can come back later"),
+    ("kick", "Kick them"),
     ("ban", "Ban them"),
 ]
 

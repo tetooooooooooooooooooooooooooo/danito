@@ -2133,7 +2133,10 @@ label.num input:focus {
 }
 
 /* ── text inputs and panels ──────────────────────────────────────── */
-input[type="text"] {
+/* number as well as text. It was left out, so every threshold in the automod pane, the
+   timeout, the removal ceiling and the account age all rendered as raw browser defaults:
+   a small white box on a dark page, which is most of why that tab looked unfinished. */
+input[type="text"], input[type="number"] {
   display: block;
   width: 100%;
   margin-top: 7px;
@@ -2146,12 +2149,21 @@ input[type="text"] {
   font-size: 14.5px;
   transition: border-color .18s var(--ease), box-shadow .18s var(--ease);
 }
-input[type="text"]:hover { border-color: #3a5548; }
-input[type="text"]:focus {
+input[type="text"]:hover, input[type="number"]:hover { border-color: #3a5548; }
+input[type="text"]:focus, input[type="number"]:focus {
   outline: none;
   border-color: var(--mint);
   box-shadow: 0 0 0 3px var(--mint-glow);
 }
+
+/* A box for "7" does not need to be as wide as one for a welcome message. Capped rather than
+   fixed so it still shrinks on a narrow screen. */
+input[type="number"] { max-width: 150px; }
+/* Firefox and Chrome both put spinners on these. They are tiny, they are ugly against this
+   background, and nobody has ever nudged a timeout up one minute at a time. */
+input[type="number"] { -moz-appearance: textfield; }
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 /* Inside a role row these sit beside the name, so they shed the block layout above. */
 input.mini {
