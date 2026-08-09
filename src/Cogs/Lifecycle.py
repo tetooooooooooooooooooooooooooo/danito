@@ -39,6 +39,8 @@ BY_GUILD_ID = [
     "mod_cases",      # numbered moderation cases
     "role_panels",    # self-serve role messages
     "ping_events",    # the survey reminder log
+    "marriages",      # who /marry paired up, which means nothing outside this server
+    "wyr_polls",      # votes on would-you-rather questions
 ]
 # These two key on the guild id itself rather than a guild_id field.
 BY_ID = ["config_dirty"]

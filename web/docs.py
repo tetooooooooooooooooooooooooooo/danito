@@ -491,6 +491,40 @@ SECTIONS = [
         ],
     },
     {
+        "id": "fun",
+        "icon": "🎲",
+        "title": "Profiles and fun",
+        "blurb": "The ones nobody needs. A server people enjoy being in is the thing "
+                 "everything else here measures.",
+        "setup": [],
+        "notes": [
+            "<code>/userinfo</code> shows what Discord knows plus the two things only this "
+            "bot does: the score that member gave the server, and who they are married to "
+            "here. Both are left out when there is nothing to say.",
+            "<code>/marry</code> posts a proposal with buttons, and only the person being "
+            "asked can answer it. Nobody can be married to two people in the same server, "
+            "and that is checked again when the proposal is accepted rather than only when "
+            "it was made, so an old button can't get round it. <code>/divorce</code> ends "
+            "it, and either partner can.",
+            "<code>/ship</code> is worked out from the two member IDs, so the same pair "
+            "always gets the same number. It is meant to be a joke, not a measurement.",
+            "Marriages and poll votes belong to the server they happened in, and are deleted "
+            "along with everything else if the bot is removed.",
+        ],
+        "commands": [
+            ("/userinfo", "[member]", "Profile, roles, join position, rating and marriage.",
+             EVERYONE),
+            ("/serverinfo", "", "Members, channels, boosts, and who joined this week.",
+             EVERYONE),
+            ("/wouldyourather", "", "A question with two buttons, and the split once people "
+                                    "vote.", EVERYONE),
+            ("/marry", "<member>", "Propose to somebody. They have to accept.", EVERYONE),
+            ("/divorce", "", "End your marriage in this server.", EVERYONE),
+            ("/ship", "<member> [other]", "A compatibility score that never changes.",
+             EVERYONE),
+        ],
+    },
+    {
         "id": "premium",
         "icon": "✦",
         "title": "Premium",

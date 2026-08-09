@@ -30,6 +30,8 @@ CATEGORIES = {
     "RoleButtons": ("🎛️", "Role Buttons",
                     "Messages people click to give themselves roles."),
     "Utility": ("🔧", "Utility", "Small tools for server admins."),
+    "Fun": ("🎲", "Profiles & Fun",
+            "Look somebody up, ask the room a question, and get married."),
     "Help": ("❓", "Help", "This menu."),
 }
 FALLBACK = ("▫️", None, "")
