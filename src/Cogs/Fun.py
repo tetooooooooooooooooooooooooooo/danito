@@ -91,17 +91,55 @@ def compatibility(one: int, two: int) -> int:
     return int(digest[:8], 16) % 101
 
 
+# Welding two names together lands on something unfortunate more often than you would guess:
+# Sam and Alex produce exactly one of these. Not an attempt at a swear filter, just enough to
+# stop the obvious ones coming out of a bot that also ships an automod for the same words.
+# Only exact matches, because that is where short blends actually go wrong.
+AWKWARD = {"sex", "ass", "tit", "cum", "fag", "dick", "cock", "piss", "shit", "fuck",
+           "bum", "wank", "twat", "crap", "anal", "slut", "hoe"}
+
+
 def ship_name(one: str, two: str) -> str:
     """The front of one name welded to the back of the other."""
     one, two = (one or "?").strip(), (two or "?").strip()
-    head = one[:max(1, len(one) // 2)]
-    tail = two[len(two) // 2:] or two[-1]
-    return (head + tail).title()
+
+    def blend(a, b):
+        return (a[:max(1, len(a) // 2)] + (b[len(b) // 2:] or b[-1])).title()
+
+    name = blend(one, two)
+    if name.lower() in AWKWARD:
+        # Take the halves from the other name each. It nearly always lands somewhere else,
+        # and if it somehow doesn't, the pair keep whatever they get.
+        name = blend(two, one)
+    return name
 
 
-def bar(percent: int, width: int = 12) -> str:
+def bar(percent: int, width: int = 10) -> str:
+    """Hearts rather than blocks. It is a love meter, and Discord renders emoji large enough
+    to read at a glance, which is the whole job."""
     filled = round(percent / 100 * width)
-    return "█" * filled + "░" * (width - filled)
+    return "❤️" * filled + "🤍" * (width - filled)
+
+
+# score floor -> (emoji, colour, what to say about it). Read from the top down, first match
+# wins, so the order matters more than the numbers.
+VERDICTS = [
+    (95, "💞", 0xFF4D8D, "a formality at this point"),
+    (80, "💖", 0xFF4D8D, "alarmingly strong"),
+    (60, "💗", 0xE85D9C, "genuinely quite good"),
+    (45, "💓", 0xE85D9C, "some promise"),
+    (25, "💔", 0xF0B45F, "not impossible, with work"),
+    (10, "🥀", 0x8BA79B, "a lost cause"),
+    (0, "🧊", 0x8BA79B, "nothing at all"),
+]
+
+
+def verdict(score: int) -> tuple:
+    """The emoji, colour and wording for a score."""
+    for floor, emoji, colour, words in VERDICTS:
+        if score >= floor:
+            return emoji, colour, words
+    return VERDICTS[-1][1:]
 
 
 class Fun(commands.Cog, name="Fun"):
@@ -332,17 +370,26 @@ class Fun(commands.Cog, name="Fun"):
         # Everything the accept needs is in the id, so this still works after a restart and
         # nothing has to be written down about a proposal that may never be answered.
         view.add_item(discord.ui.Button(
-            label="Accept", style=discord.ButtonStyle.success,
+            label="Say yes", emoji="💍", style=discord.ButtonStyle.success,
             custom_id=f"marry:{interaction.user.id}:{member.id}:yes"))
         view.add_item(discord.ui.Button(
-            label="Decline", style=discord.ButtonStyle.secondary,
+            label="Say no", style=discord.ButtonStyle.secondary,
             custom_id=f"marry:{interaction.user.id}:{member.id}:no"))
 
+        score = compatibility(interaction.user.id, member.id)
+        emoji, _colour, words = verdict(score)
         embed = discord.Embed(
-            title="💍 A proposal",
+            title="💍  A proposal",
             colour=COLOR_LOVE,
-            description=f"{interaction.user.mention} has asked {member.mention} to marry them.\n"
-                        f"Only {member.display_name} can answer.")
+            description=f"**{interaction.user.display_name}** has asked "
+                        f"**{member.display_name}** to marry them.")
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        # The score is on the proposal rather than saved for the wedding, because it is much
+        # funnier as something they have to look at before deciding.
+        embed.add_field(name="The numbers, before you answer",
+                        value=f"{bar(score)}\n{emoji} **{score}%**, which is {words}.",
+                        inline=False)
+        embed.set_footer(text=f"Only {member.display_name} can answer this.")
         await interaction.response.send_message(content=member.mention, embed=embed, view=view)
 
     async def _answer_proposal(self, interaction: discord.Interaction,
@@ -353,9 +400,12 @@ class Fun(commands.Cog, name="Fun"):
             return
 
         if answer == "no":
-            embed = discord.Embed(title="Turned down", colour=0x8BA79B,
-                                  description=f"<@{target_id}> said no. These things happen.")
-            await interaction.response.edit_message(embed=embed, view=None)
+            embed = discord.Embed(
+                title="🥀  Turned down",
+                colour=0x8BA79B,
+                description=f"<@{target_id}> said no to <@{proposer_id}>.\n"
+                            f"These things happen. There are other servers.")
+            await interaction.response.edit_message(content=None, embed=embed, view=None)
             return
 
         # Checked again here rather than trusting the check at proposal time: a proposal can
@@ -382,12 +432,15 @@ class Fun(commands.Cog, name="Fun"):
                 ephemeral=True)
             return
 
+        score = compatibility(proposer_id, target_id)
         embed = discord.Embed(
-            title="💒 Married",
+            title="💒  Married",
             colour=COLOR_LOVE,
-            description=f"<@{proposer_id}> and <@{target_id}>, as of <t:{int(now.timestamp())}:D>.\n"
-                        f"Compatibility: **{compatibility(proposer_id, target_id)}%**, "
-                        f"for whatever that's worth now.")
+            description=f"<@{proposer_id}>  💞  <@{target_id}>\n\n"
+                        f"Since <t:{int(now.timestamp())}:D>. The numbers said **{score}%**, "
+                        f"and nobody asked them.")
+        embed.set_thumbnail(url=interaction.user.display_avatar.url)
+        embed.set_footer(text="/divorce, if it comes to that. Either of you can.")
         await interaction.response.edit_message(content=None, embed=embed, view=None)
 
     @app_commands.command(name="divorce", description="End your marriage in this server")
@@ -410,9 +463,19 @@ class Fun(commands.Cog, name="Fun"):
             return
 
         embed = discord.Embed(
-            title="Divorced", colour=0x8BA79B,
+            title="📄  Divorced", colour=0x8BA79B,
             description=f"{interaction.user.mention} and <@{other}> are no longer married."
                         if other else f"{interaction.user.mention} is single again.")
+        # How long it lasted is the only detail anybody wants, and it costs nothing: the date
+        # it started is already on the record being deleted.
+        since = wed.get("since")
+        if since is not None:
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=datetime.timezone.utc)
+            days = (datetime.datetime.now(datetime.timezone.utc) - since).days
+            embed.set_footer(
+                text="It lasted less than a day." if days < 1 else
+                     f"It lasted {days} day{'' if days == 1 else 's'}.")
         await interaction.response.send_message(embed=embed)
 
     # ── ship ─────────────────────────────────────────────────────────
@@ -429,23 +492,41 @@ class Fun(commands.Cog, name="Fun"):
                 "That's just one person.", ephemeral=True)
             return
 
+        await interaction.response.defer()
         score = compatibility(member.id, other.id)
-        verdict = ("nothing at all" if score < 10 else
-                   "a lost cause" if score < 25 else
-                   "not impossible" if score < 45 else
-                   "some promise" if score < 60 else
-                   "genuinely quite good" if score < 80 else
-                   "alarmingly strong" if score < 95 else
-                   "a formality at this point")
+        emoji, colour, words = verdict(score)
+        name = ship_name(member.display_name, other.display_name)
 
         embed = discord.Embed(
-            title=ship_name(member.display_name, other.display_name),
-            colour=COLOR_LOVE,
-            description=f"{member.mention} 💞 {other.mention}\n\n"
-                        f"`{bar(score)}` **{score}%**\n"
-                        f"The numbers say {verdict}.")
-        embed.set_footer(text="Worked out from their IDs, so it never changes. Sorry.")
-        await interaction.response.send_message(embed=embed)
+            title=f"{emoji}  {name}",
+            colour=colour,
+            description=f"{member.mention}  ×  {other.mention}\n\n"
+                        f"{bar(score)}\n"
+                        f"### {score}%\n"
+                        f"The numbers say {words}.")
+        # One face on the byline and the other in the corner. Two avatars is as close to a
+        # composite as this gets without putting an image library on the dyno for a joke.
+        # Same order as the description, so the top of the card and the middle agree.
+        embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+        embed.set_thumbnail(url=other.display_avatar.url)
+
+        # If they really did marry each other in this server, the joke lands better when it
+        # knows. Never fatal: a database blip just costs the extra line.
+        footer = "Worked out from their IDs, so it never changes. Sorry."
+        try:
+            wed = await self._marriage(interaction.guild.id, member.id)
+            if wed and other.id in wed["partners"]:
+                embed.add_field(
+                    name="For what it's worth",
+                    value=f"These two are actually married here, since "
+                          f"<t:{int(wed['since'].timestamp())}:D>.",
+                    inline=False)
+                footer = "The numbers had nothing to do with it."
+        except Exception as e:
+            print(f"[Fun] ship marriage check failed: {e}")
+
+        embed.set_footer(text=footer)
+        await interaction.followup.send(embed=embed)
 
     # ── button clicks ────────────────────────────────────────────────
     @commands.Cog.listener()

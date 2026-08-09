@@ -194,9 +194,31 @@ async def main():
     print("\n=== the ship name and the bar ===")
     assert F.ship_name("Alex", "Sam") == "Alam", F.ship_name("Alex", "Sam")
     assert F.ship_name("A", "B") == "Ab", F.ship_name("A", "B")
-    assert len(F.bar(0)) == len(F.bar(100)) == 12
-    assert F.bar(100).count("█") == 12 and F.bar(0).count("█") == 0
-    print(f"  Alex + Sam = {F.ship_name('Alex', 'Sam')}, bar fills 0 to 12 OK")
+    # Two ordinary names, one unfortunate blend. It has to take the other split instead: a
+    # bot that filters these words should not be generating them.
+    assert F.ship_name("Sam", "Alex") == "Alam", F.ship_name("Sam", "Alex")
+    for a, b in (("Sam", "Alex"), ("Assa", "Assb"), ("Tim", "Kit"), ("Cuma", "Cumb")):
+        assert F.ship_name(a, b).lower() not in F.AWKWARD, (a, b, F.ship_name(a, b))
+    # Ten hearts wide whatever the score, or the meter would change length as it fills.
+    for score in (0, 1, 50, 99, 100):
+        filled, empty = F.bar(score).count("❤️"), F.bar(score).count("🤍")
+        assert filled + empty == 10, (score, filled, empty)
+    assert F.bar(100).count("❤️") == 10 and F.bar(0).count("❤️") == 0
+    assert F.bar(50).count("❤️") == 5
+    print(f"  Alex + Sam = {F.ship_name('Alex', 'Sam')}, and the meter is always 10 wide")
+
+    print("\n=== every score gets a verdict, and they get warmer ===")
+    seen = []
+    for score in range(0, 101):
+        emoji, colour, words = F.verdict(score)
+        assert emoji and words and isinstance(colour, int), score
+        seen.append((emoji, words))
+    assert len(set(seen)) == len(F.VERDICTS), set(seen)
+    # The bands have to be in order, or a 90% would read colder than a 30%.
+    assert F.verdict(0)[2] != F.verdict(100)[2]
+    assert F.verdict(100)[1] == 0xFF4D8D, "the top band is the brightest"
+    print(f"  {len(set(seen))} bands, 0% is '{F.verdict(0)[2]}', "
+          f"100% is '{F.verdict(100)[2]}'")
 
     print("\n=== ship refuses one person twice ===")
     i = FakeInteraction(alex, guild_members=everyone)
@@ -230,6 +252,13 @@ async def main():
     assert ids == ["marry:1:2:yes", "marry:1:2:no"], ids
     assert view.timeout is None, "it has to outlive the process that drew it"
     print(f"  {ids[0]} and {ids[1]}, with no timeout OK")
+
+    # The score is shown before they answer, which is the point of putting it there.
+    proposal = i.response.sent[0]["embed"]
+    assert f"{F.compatibility(1, 2)}%" in proposal.fields[0].value, proposal.fields[0].value
+    assert "❤️" in proposal.fields[0].value or "🤍" in proposal.fields[0].value
+    assert "Sam" in (proposal.footer.text or ""), proposal.footer.text
+    print("  and it shows the score, and whose answer it is, before anyone clicks OK")
 
     # Somebody else pressing accept must not marry anyone.
     outsider = FakeInteraction(kit, custom_id="marry:1:2:yes", guild_members=everyone)
@@ -293,11 +322,23 @@ async def main():
     assert "aren't married" in i.text, i.text
     assert len(DB["marriages"].docs) == 1, "somebody unmarried must not end someone else's"
 
+    print("\n=== shipping a married pair says so ===")
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.ship.callback(cog, i, sam)
+    assert "actually married" in i.text, i.text
+    # And a pair who aren't must not get that line.
+    j = FakeInteraction(alex, guild_members=everyone)
+    await cog.ship.callback(cog, j, kit)
+    assert "actually married" not in j.text, j.text
+    print("  the joke knows when it's wrong OK")
+
     i = FakeInteraction(sam, guild_members=everyone)
     await cog.divorce.callback(cog, i)
     assert not DB["marriages"].docs, "either partner can end it"
     assert "no longer married" in i.text, i.text
-    print("  only a partner can, and either partner can OK")
+    footer = i.response.sent[0]["embed"].footer.text
+    assert "lasted" in footer, footer
+    print(f"  only a partner can, either partner can, and it says how long: {footer}")
 
     print("\n=== would you rather counts one vote each ===")
     i = FakeInteraction(alex, guild_members=everyone)
