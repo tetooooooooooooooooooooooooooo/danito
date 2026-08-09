@@ -124,6 +124,28 @@ def login_required(view):
     return wrapper
 
 
+def needs_discord(view):
+    """Refuse to write anything while Discord isn't answering.
+
+    Every save on this dashboard validates what was submitted against the guild's real
+    channels and roles, which means asking Discord. When that call fails there is no valid
+    set to check against, and carrying on would treat "I couldn't ask" as "none of these
+    exist" and save an empty result over whatever was there. Better to change nothing and
+    say so.
+    """
+    @wraps(view)
+    def wrapper(*a, **kw):
+        try:
+            return view(*a, **kw)
+        except api.DiscordError:
+            flash("Discord isn't answering just now, so nothing was changed. This is nothing "
+                  "to do with your settings. Try again in a moment.")
+            guild_id = kw.get("guild_id")
+            return redirect(url_for("guild_settings", guild_id=guild_id) if guild_id
+                            else url_for("servers"))
+    return wrapper
+
+
 def require_guild(guild_id: int) -> dict:
     """Confirm, right now, that the logged in user can manage this guild and the bot is in it.
 
@@ -584,8 +606,16 @@ def servers():
 @login_required
 def guild_settings(guild_id: int):
     guild = require_guild(guild_id)
-    roles = api.guild_roles(guild_id)
-    channels = api.guild_channels(guild_id)
+    # The page is still worth rendering when Discord won't answer: the tabs, the switches and
+    # everything already saved are all readable. Only the dropdowns need it. What matters is
+    # that the page says which of the two happened, rather than showing empty dropdowns under
+    # a warning about a permission that is perfectly fine.
+    try:
+        roles = api.guild_roles(guild_id)
+        channels = api.guild_channels(guild_id)
+        discord_ok = True
+    except api.DiscordError:
+        roles, channels, discord_ok = [], [], False
 
     panels = store.panels(guild_id)
     for panel in panels:
@@ -599,6 +629,7 @@ def guild_settings(guild_id: int):
         settings=store.settings(guild_id),
         channels=channels,
         roles=roles,
+        discord_ok=discord_ok,
         panels=panels,
         role_names={r["id"]: r for r in roles},
         channel_names={c["id"]: c for c in channels},
@@ -750,6 +781,7 @@ def guild_insights(guild_id: int):
 
 @app.route("/servers/<int:guild_id>", methods=["POST"])
 @login_required
+@needs_discord
 def save_guild_settings(guild_id: int):
     check_csrf()
     require_guild(guild_id)
@@ -858,6 +890,7 @@ def _panel_form(guild_id: int):
 
 @app.route("/servers/<int:guild_id>/panels", methods=["POST"])
 @login_required
+@needs_discord
 def create_panel(guild_id: int):
     check_csrf()
     require_guild(guild_id)
@@ -872,6 +905,7 @@ def create_panel(guild_id: int):
 
 @app.route("/servers/<int:guild_id>/panels/<panel_id>", methods=["POST"])
 @login_required
+@needs_discord
 def save_panel(guild_id: int, panel_id: str):
     check_csrf()
     require_guild(guild_id)

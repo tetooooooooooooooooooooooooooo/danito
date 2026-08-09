@@ -50,6 +50,10 @@ class Invites(commands.Cog, name="Invites"):
         # guild_id -> {code: inviter}. Kept beside the counts because an invite that gets
         # deleted between the join and the lookup would otherwise lose its author.
         self.authors: dict[int, dict[str, discord.abc.User | None]] = {}
+        # Guilds with a lookup already in flight. A second person arriving inside that window
+        # cannot be attributed anyway, so they are answered straight away rather than starting
+        # another fetch. That is what stops a raid turning into one api call per joiner.
+        self.busy: set[int] = set()
 
     # ── keeping the counts ───────────────────────────────────────────
     async def _snapshot(self, guild: discord.Guild) -> bool:
@@ -122,6 +126,20 @@ class Invites(commands.Cog, name="Invites"):
         Called by Members the moment somebody joins, before the counts are re-read, so the
         comparison is against the state from just before they arrived.
         """
+        if guild.id in self.busy:
+            # Somebody else arrived while this server's counts were being read. Which invite
+            # belongs to which of them is unknowable, so the answer is already decided, and a
+            # second fetch would cost a call to learn nothing. A raid answers instantly here
+            # instead of queueing behind a few hundred rate limited requests.
+            return UNKNOWN, None, None
+
+        self.busy.add(guild.id)
+        try:
+            return await self._compare(guild)
+        finally:
+            self.busy.discard(guild.id)
+
+    async def _compare(self, guild: discord.Guild):
         before = self.uses.get(guild.id)
         if before is None:
             # Never snapshotted: either no permission, or the bot joined mid-session. Try

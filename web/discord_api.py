@@ -153,11 +153,16 @@ def forget_user(user_id: int):
 
 def guild_channels(guild_id: int) -> list:
     """Text channels the bot can see, for the dropdowns. Uses the bot's own credentials, which
-    is correct here: this is about where the bot could post, not about the user."""
-    try:
-        channels = _as_bot(f"/guilds/{guild_id}/channels")
-    except DiscordError:
-        return []
+    is correct here: this is about where the bot could post, not about the user.
+
+    Raises DiscordError rather than returning an empty list when the call fails. Those are two
+    different facts and the caller has to be able to tell them apart: an empty list means the
+    bot really cannot see any channels, which is a permission to go and fix, while a failure
+    means Discord did not answer and nothing at all is known. Returning [] for both made the
+    settings page blame a permission for a rate limit, and made a save silently drop every
+    channel it could not validate.
+    """
+    channels = _as_bot(f"/guilds/{guild_id}/channels")
     # 0 = text, 5 = announcement. Both are somewhere the bot can post a log or a greeting.
     text = [c for c in channels if c.get("type") in (0, 5)]
     text.sort(key=lambda c: (c.get("position", 0), c.get("name", "")))
@@ -171,11 +176,11 @@ def guild_roles(guild_id: int) -> list:
     assignment with a bare 403, so a dashboard that offers every role produces a setting that
     looks saved and silently never fires. The two rules it enforces are that managed roles
     belong to an integration, and that a bot cannot grant a role at or above its own highest.
+    Raises on failure for the same reason as guild_channels above: no roles and no answer are
+    different facts, and a save that treats the second as the first quietly discards
+    everything it was asked to store.
     """
-    try:
-        roles = _as_bot(f"/guilds/{guild_id}/roles")
-    except DiscordError:
-        return []
+    roles = _as_bot(f"/guilds/{guild_id}/roles")
 
     by_id = {r["id"]: r for r in roles}
 

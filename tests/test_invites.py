@@ -14,13 +14,30 @@ sys.path.insert(0, SRC_DIR)
 
 
 class FakeColl:
-    def __init__(self, name): self.name = name; self.docs = []
+    """Enough of a collection to test a two step write: insert, then patch by _id."""
+
+    def __init__(self, name):
+        self.name = name
+        self.docs = []
+        self._ids = 0
+
     def create_index(self, *a, **k): pass
     def find(self, q=None, *a, **k): return []
     def find_one(self, q, *a, **k): return None
-    def insert_one(self, d): self.docs.append(dict(d))
     def find_one_and_update(self, *a, **k): return None
-    def update_one(self, *a, **k): return types.SimpleNamespace(matched_count=1)
+
+    def insert_one(self, d):
+        self._ids += 1
+        doc = dict(d, _id=self._ids)
+        self.docs.append(doc)
+        return types.SimpleNamespace(inserted_id=doc["_id"])
+
+    def update_one(self, q, ops, upsert=False):
+        for doc in self.docs:
+            if all(doc.get(key) == value for key, value in q.items()):
+                doc.update(ops.get("$set", {}))
+                return types.SimpleNamespace(matched_count=1)
+        return types.SimpleNamespace(matched_count=0)
 
 
 class FakeDB:
@@ -211,6 +228,55 @@ async def main():
     assert spell["left_at"] is None and spell["cohort"], spell
     print(f"  spell carries invite_code={spell['invite_code']}, "
           f"inviter_name={spell['inviter_name']} OK")
+
+    print("\n=== the join is recorded even when Discord never answers ===")
+    # The whole point of the two step write. A fetch that hangs used to hold the membership
+    # record behind it, and a raid is when both the fetch is slowest and the record matters
+    # most. The join has to land regardless.
+    slow = FakeGuild(21, [FakeInvite("promo", 1, marcus)])
+    await cog._snapshot(slow)
+
+    async def never_answers():
+        await asyncio.sleep(3600)
+
+    slow.invites = never_answers
+    before = len(DB["memberships"].docs)
+    try:
+        await asyncio.wait_for(
+            members.on_member_join(types.SimpleNamespace(id=600, bot=False, guild=slow)),
+            timeout=0.4)
+    except asyncio.TimeoutError:
+        pass                      # the handler is still stuck on the fetch, which is fine
+    await asyncio.sleep(0)
+    assert len(DB["memberships"].docs) == before + 1, "the join was held up by the lookup"
+    assert DB["memberships"].docs[-1]["user_id"] == 600
+    assert DB["memberships"].docs[-1]["invite_code"] is None, "nothing to attribute yet"
+    print("  recorded while the invite fetch was still hanging OK")
+
+    print("\n=== a burst costs one lookup, not one per joiner ===")
+    # Ten people arriving at once used to mean ten invite fetches, each rate limited, each
+    # holding up a record. They cannot be told apart anyway, so the ones arriving inside an
+    # existing lookup are answered without a second call.
+    rush = FakeGuild(22, [FakeInvite("promo", 0, marcus)])
+    await cog._snapshot(rush)
+    calls = {"n": 0}
+    real_invites = rush.invites
+
+    async def counted():
+        calls["n"] += 1
+        await asyncio.sleep(0.05)         # long enough for the others to pile up behind it
+        return await real_invites()
+
+    rush.invites = counted
+    rush.use("promo", 10)
+    before = len(DB["memberships"].docs)
+    await asyncio.gather(*[
+        members.on_member_join(types.SimpleNamespace(id=700 + n, bot=False, guild=rush))
+        for n in range(10)])
+    assert len(DB["memberships"].docs) == before + 10, "every join still recorded"
+    assert calls["n"] == 1, f"{calls['n']} invite fetches for 10 simultaneous joins"
+    assert not cog.busy, "the in flight marker has to clear"
+    print(f"  10 joins, all recorded, {calls['n']} invite fetch OK")
 
     print("\n=== and still works with the Invites cog gone ===")
     await bot.unload_extension("Cogs.Invites")

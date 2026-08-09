@@ -68,7 +68,14 @@ class _Cursor(list):
     def sort(self, key, direction=1):
         # Really sorts, because the cooldown asks for the newest ticket and a no-op here
         # would hand it the oldest instead.
-        return _Cursor(sorted(self, key=lambda d: d.get(key) or 0, reverse=direction < 0))
+        #
+        # The two part key is so a missing value never gets compared against a real one:
+        # Mongo sorts nulls first, Python raises. A document without the field is exactly
+        # the case the cooldown has to survive, so the harness has to allow it.
+        def rank(doc):
+            value = doc.get(key)
+            return (value is not None, value)
+        return _Cursor(sorted(self, key=rank, reverse=direction < 0))
     def limit(self, n): return _Cursor(self[:n])
 
 
@@ -186,6 +193,21 @@ def main():
     assert len(TICKETS) == before, f"{store.MAX_OPEN_TICKETS} open should be the ceiling"
     assert "already have" in store.can_open_ticket(ME)
     print(f"  and no more than {store.MAX_OPEN_TICKETS} open at once OK")
+
+    print("\n=== a ticket with no timestamp doesn't take the page down ===")
+    # store had two functions called _aware, one here and one under the insights, and the
+    # later definition silently replaced the earlier one for every caller. They disagreed
+    # about None, so a document missing created_at turned this check into "now - None".
+    for t in TICKETS:
+        t["status"] = "closed"
+    TICKETS[0]["created_at"] = None
+    TICKETS[0]["status"] = "open"
+    blocked = store.can_open_ticket(ME)          # must not raise
+    assert "seconds" not in blocked, blocked
+    # And the page that calls it still renders rather than returning a 500.
+    assert c.get("/support").status_code == 200
+    print("  no crash, and an unaged ticket doesn't impose a cooldown OK")
+    TICKETS[0]["created_at"] = datetime.datetime.now(datetime.timezone.utc)
 
     # Leave one open for the reply tests below.
     for t in TICKETS[1:]:

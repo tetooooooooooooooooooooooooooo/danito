@@ -251,6 +251,45 @@ def main():
     assert "{user}" in body, "the placeholder help should be shown"
     print("  all five cards, both channels and a csrf token present OK")
 
+    print("\n=== Discord being down is not a permissions problem ===")
+    # guild_channels used to return [] whether the bot really could see nothing or the call
+    # simply failed. The page then blamed View Channel, sending people to check a permission
+    # that was already correct, and a save silently validated against an empty set.
+    def down(*a, **k):
+        raise api.DiscordError("Discord returned 503")
+
+    working_channels, working_roles = api.guild_channels, api.guild_roles
+    api.guild_channels, api.guild_roles = down, down
+    try:
+        r = c.get("/servers/111")
+        assert r.status_code == 200, "the page still renders, it just can't offer dropdowns"
+        body = r.data.decode()
+        assert "isn't answering" in body, body[:400]
+        assert "View Channel" not in body, "it must not blame a permission"
+        print("  the settings page says Discord is down, not that you're missing a permission")
+
+        # And nothing gets written while there is no valid set to check against.
+        SAVED.pop(111, None)
+        r = c.post("/servers/111", data={
+            "section": "welcome", "csrf": token, "welcome_enabled": "on",
+            "welcome_channel": "900", "welcome_message": "hello"})
+        assert r.status_code == 302, r.status_code
+        assert 111 not in SAVED, "a save with nothing to validate against must not write"
+        print("  and a save is refused rather than storing an unvalidated blank OK")
+    finally:
+        api.guild_channels, api.guild_roles = working_channels, working_roles
+
+    # Genuinely no channels still reads as the permission problem it is.
+    api.guild_channels = lambda gid: []
+    try:
+        body = c.get("/servers/111").data.decode()
+        assert "View Channel" in body, "an empty list is still a permission to go and fix"
+        assert "isn't answering" not in body
+        print("  an empty channel list still points at View Channel OK")
+    finally:
+        api.guild_channels = working_channels
+    SAVED.pop(111, None)
+
     print("\n=== a brand new server is told where to start ===")
     SAVED.pop(111, None)          # this suite's fake returns no role panels either
     body = c.get("/servers/111").data.decode()

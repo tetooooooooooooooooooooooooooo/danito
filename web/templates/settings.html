@@ -44,8 +44,14 @@
         {% endif %}
       </div>
     {% else %}
-      <p class="fine">I can't see any roles here. Check that the bot has View Channels and
-        that it is actually in this server.</p>
+      {#- Same two reasons as the channels warning at the top of the page: an empty list is a
+          permission, an unreachable Discord is not. -#}
+      {% if not discord_ok %}
+        <p class="fine">Nothing to list while Discord isn't answering. Your roles are fine.</p>
+      {% else %}
+        <p class="fine">I can't see any roles here. Check that the bot has View Channels and
+          that it is actually in this server.</p>
+      {% endif %}
     {% endfor %}
   </div>
   {% if limit %}<p class="fine">Up to {{ limit }}.</p>{% endif %}
@@ -88,7 +94,15 @@
 <p><a class="fine" href="{{ url_for('servers') }}">&larr; All servers</a></p>
 <h1>{{ guild.name }}</h1>
 
-{% if not channels %}
+{#- Two different reasons for empty dropdowns, and they need different answers. One is a
+    permission to go and fix; the other is Discord being unreachable, which is nobody's fault
+    and nothing to go looking for. Saying the first when it was the second sent people off to
+    check a permission that was already correct. -#}
+{% if not discord_ok %}
+  <div class="warn">Discord isn't answering just now, so the dropdowns below are empty and
+    saving is switched off. Nothing is wrong with your settings or your permissions, and
+    nothing already saved has changed. Try again in a moment.</div>
+{% elif not channels %}
   <div class="warn">I can't see any channels here. Check that the bot has View Channel,
     otherwise the dropdowns below will be empty.</div>
 {% endif %}

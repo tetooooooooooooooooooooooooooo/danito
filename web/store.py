@@ -464,19 +464,15 @@ def can_open_ticket(user_id: int) -> str:
                 f"than starting another.")
 
     last = list(_tickets().find({"user_id": user_id}).sort("created_at", -1).limit(1))
-    if last:
-        age = (datetime.datetime.now(datetime.timezone.utc)
-               - _aware(last[0].get("created_at"))).total_seconds()
+    # A ticket with no timestamp can't be aged, so it doesn't get a say. Letting somebody
+    # through is the right way to be wrong here: the open ticket limit above is what actually
+    # stops a flood, and this only spaces them out.
+    opened = _aware(last[0].get("created_at")) if last else None
+    if opened is not None:
+        age = (datetime.datetime.now(datetime.timezone.utc) - opened).total_seconds()
         if age < TICKET_COOLDOWN:
             return f"Give it {int(TICKET_COOLDOWN - age)} more seconds before opening another."
     return ""
-
-
-def _aware(value):
-    """pymongo hands back naive UTC datetimes; comparing one to an aware now raises."""
-    if value is None:
-        return datetime.datetime.now(datetime.timezone.utc)
-    return value.replace(tzinfo=datetime.timezone.utc) if value.tzinfo is None else value
 
 
 def open_ticket(user_id: int, user_tag: str, category: str, subject: str, body: str,
@@ -571,7 +567,13 @@ def _memberships():
 
 
 def _aware(dt):
-    """pymongo hands back naive UTC datetimes, and comparing one to an aware now raises."""
+    """pymongo hands back naive UTC datetimes, and comparing one to an aware now raises.
+
+    The one definition in this module. There were briefly two, this one and another under the
+    tickets, and since a later def silently replaces an earlier one every caller was getting
+    whichever happened to be further down the file. They disagreed about None, so the ticket
+    cooldown was one missing timestamp away from a TypeError. Callers handle None themselves.
+    """
     if dt is None:
         return None
     return dt.replace(tzinfo=datetime.timezone.utc) if dt.tzinfo is None else dt

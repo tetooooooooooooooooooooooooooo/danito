@@ -108,12 +108,16 @@ class Members(commands.Cog, name="Members"):
         if member.bot:
             return
         cohort = str(datetime.date.today())
-        # Asked for before the spell is written, so the invite lands in the same insert. It
-        # also has to happen now rather than later: the lookup works by comparing use counts
-        # against the moment before this person arrived, and every further join blurs that.
-        invite = await self._resolve_invite(member.guild)
-        await self._open_spell(member, cohort, invite)
+        # Started first and finished last. The lookup has to begin immediately, because it
+        # works by comparing invite use counts against the moment before this person arrived
+        # and every further join blurs that. But it is an http call, and nothing about
+        # recording the join should wait on Discord answering one: it used to, which meant a
+        # slow or rate limited fetch held the membership record behind it. During a raid that
+        # is every join at once, which is exactly when the records matter most.
+        lookup = asyncio.create_task(self._resolve_invite(member.guild))
+        spell_id = await self._open_spell(member, cohort)
         await self._assign_cohort_role(member, cohort)
+        await self._attach_invite(spell_id, await lookup)
         # Greeting the member is the Greetings cog's job, and only if the server set one up.
 
     async def _resolve_invite(self, guild: discord.Guild) -> tuple:
@@ -131,27 +135,45 @@ class Members(commands.Cog, name="Members"):
             print(f"[Members] invite lookup failed for {guild.id}: {e}")
             return None, None, None
 
-    async def _open_spell(self, member: discord.Member, cohort: str, invite=(None, None, None)):
+    async def _open_spell(self, member: discord.Member, cohort: str):
         """Record the start of a membership. Their join date doubles as the cohort key, so it
-        lines up with the cohort role and with whatever the reminder later targets."""
-        code, inviter_id, inviter_name = invite
+        lines up with the cohort role and with whatever the reminder later targets.
+
+        Returns the new document's id so the invite can be filled in once it is known, or None
+        if the write failed, in which case there is nothing to fill in.
+        """
         try:
-            await self._run(self.spells.insert_one, {
+            result = await self._run(self.spells.insert_one, {
                 "guild_id": member.guild.id,
                 "user_id": member.id,
                 "cohort": cohort,
                 "joined_at": datetime.datetime.now(datetime.timezone.utc),
                 "left_at": None,
                 "nudged": False,
-                # None where the invite genuinely can't be known, which the dashboard shows
-                # as its own row rather than dropping. A server with no Manage Server
-                # permission has every join in there, and needs telling why.
-                "invite_code": code,
-                "inviter_id": inviter_id,
-                "inviter_name": inviter_name,
+                # Written empty and filled in a moment later. None is also the final answer
+                # whenever the invite genuinely can't be known, which the dashboard shows as
+                # its own row rather than dropping. A server that hasn't granted Manage
+                # Server has every join in there, and needs telling why.
+                "invite_code": None,
+                "inviter_id": None,
+                "inviter_name": None,
             })
         except Exception as e:
             print(f"[Members] couldn't record the join: {e}")
+            return None
+        return getattr(result, "inserted_id", None)
+
+    async def _attach_invite(self, spell_id, invite: tuple):
+        """Put the invite onto the membership record, once Discord has been asked."""
+        code, inviter_id, inviter_name = invite
+        if spell_id is None or code is None:
+            return
+        try:
+            await self._run(self.spells.update_one, {"_id": spell_id},
+                            {"$set": {"invite_code": code, "inviter_id": inviter_id,
+                                      "inviter_name": inviter_name}})
+        except Exception as e:
+            print(f"[Members] couldn't record which invite was used: {e}")
 
     async def _assign_cohort_role(self, member: discord.Member, today: str):
         """Give the member the role for today's date, creating it if this is the day's first
