@@ -334,6 +334,102 @@ def close_ticket_route(number: int):
     return redirect(url_for("support"))
 
 
+# ── premium ──────────────────────────────────────────────────────────
+# Nothing here takes money yet. The prices and the plans are real enough to show, but the
+# checkout links come from the environment and are unset, so every buy button says the page
+# isn't open rather than leading somewhere that would charge somebody. Same shape as
+# SUPPORT_INVITE above: a missing piece is visible on the page instead of hidden.
+PREMIUM_CURRENCY = (os.environ.get("PREMIUM_CURRENCY") or "$").strip()
+PREMIUM_PRICE_MONTHLY = (os.environ.get("PREMIUM_PRICE_MONTHLY") or "2.99").strip()
+PREMIUM_PRICE_YEARLY = (os.environ.get("PREMIUM_PRICE_YEARLY") or "29.99").strip()
+PREMIUM_CHECKOUT_MONTHLY = (os.environ.get("PREMIUM_CHECKOUT_MONTHLY") or "").strip()
+PREMIUM_CHECKOUT_YEARLY = (os.environ.get("PREMIUM_CHECKOUT_YEARLY") or "").strip()
+
+# Placeholders, every one of them. These are slots waiting for real features, not a list of
+# things anybody can buy today, and the page says so out loud. Replace the title and the line
+# under it as each one becomes real. Keep them in the order you want them read.
+PREMIUM_FEATURES = [
+    ("📊", "Premium feature one", "Placeholder. Say what this adds and who it's for."),
+    ("🗂️", "Premium feature two", "Placeholder. Say what this adds and who it's for."),
+    ("⚡", "Premium feature three", "Placeholder. Say what this adds and who it's for."),
+    ("🎨", "Premium feature four", "Placeholder. Say what this adds and who it's for."),
+    ("🔎", "Premium feature five", "Placeholder. Say what this adds and who it's for."),
+    ("🤝", "Premium feature six", "Placeholder. Say what this adds and who it's for."),
+]
+
+# The free side is not a placeholder: these all work today, and the point of listing them is
+# that none of them move behind the paywall later.
+PREMIUM_FREE = [
+    "Retention figures and the joining groups behind them",
+    "The 1 to 10 survey, and every rating it collects",
+    "Moderation with numbered cases, and automod's nine rules",
+    "Role buttons, autorole, welcome and goodbye messages",
+    "Logging, deleted media, and the Discovery readiness check",
+]
+
+
+def premium_saving(monthly: str, yearly: str) -> str:
+    """How much a year up front saves, worked out rather than typed in.
+
+    Both prices can be changed from the environment, so a saving written by hand would go
+    stale the first time one of them moved. Returns an empty string when the sums don't work
+    out to a saving, which is also what a price that isn't a number gets.
+    """
+    try:
+        twelve, year = float(monthly) * 12, float(yearly)
+    except (TypeError, ValueError):
+        return ""
+    if year <= 0 or year >= twelve:
+        return ""
+    saved = twelve - year
+    months = saved / float(monthly)
+    # Whole months read better than a percentage, but only when it really is about a whole
+    # number of them. Otherwise fall back to the amount.
+    if abs(months - round(months)) < 0.15 and round(months) >= 1:
+        whole = round(months)
+        return f"{whole} month{'' if whole == 1 else 's'} free"
+    return f"Save {PREMIUM_CURRENCY}{saved:.2f}".replace(".00", "")
+
+
+def premium_plans() -> list:
+    saving = premium_saving(PREMIUM_PRICE_MONTHLY, PREMIUM_PRICE_YEARLY)
+    return [
+        {
+            "id": "monthly",
+            "name": "Monthly",
+            "price": PREMIUM_CURRENCY + PREMIUM_PRICE_MONTHLY,
+            "cadence": "a month",
+            "blurb": "Month to month. Cancel it whenever you like.",
+            "saving": "",
+            "checkout": PREMIUM_CHECKOUT_MONTHLY,
+        },
+        {
+            "id": "yearly",
+            "name": "Yearly",
+            "price": PREMIUM_CURRENCY + PREMIUM_PRICE_YEARLY,
+            "cadence": "a year",
+            # The saving goes in the words as well as on the toggle, because the toggle needs
+            # scripting and this line doesn't.
+            "blurb": (f"One payment a year, which works out at {saving.lower()}." if saving
+                      else "One payment a year rather than twelve."),
+            "saving": saving,
+            "checkout": PREMIUM_CHECKOUT_YEARLY,
+        },
+    ]
+
+
+@app.route("/premium")
+def premium():
+    """Public, like the docs: somebody deciding whether this is worth paying for should be
+    able to read the prices without signing in first."""
+    plans = premium_plans()
+    return render_template("premium.html", plans=plans,
+                           features=PREMIUM_FEATURES, free=PREMIUM_FREE,
+                           # With no checkout link there is nothing to send anybody to, so the
+                           # page drops the buy buttons rather than showing dead ones.
+                           on_sale=any(p["checkout"] for p in plans))
+
+
 @app.route("/added")
 def added():
     """Where Discord sends somebody after they add the bot.

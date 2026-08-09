@@ -1551,6 +1551,103 @@ body.status-page main { max-width: 760px; }
 .pip.wobbly { background: var(--warn); box-shadow: 0 0 0 3px rgba(240, 180, 95, .18); }
 .pip.down { background: var(--danger); box-shadow: 0 0 0 3px rgba(242, 114, 114, .18); }
 
+/* ── premium ─────────────────────────────────────────────────────── */
+body.premium-page main { max-width: 860px; }
+
+/* The monthly/yearly switch. Hidden without scripting, because the only thing it does is hide
+   a plan, and both plans on the page at once say the same thing. */
+.billing { display: none; }
+.js .billing {
+  display: inline-flex;
+  gap: 4px;
+  margin: 0 0 16px;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.seg {
+  background: none;
+  color: var(--dim);
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: none;
+}
+.seg:hover { background: var(--surface-2); color: var(--text); filter: none; transform: none;
+             box-shadow: none; }
+.seg.on {
+  background: linear-gradient(135deg, var(--mint), var(--mint-deep));
+  color: #05221a;
+  box-shadow: 0 6px 18px -10px var(--mint);
+}
+.seg.on:hover { background: linear-gradient(135deg, var(--mint), var(--mint-deep)); color: #05221a; }
+
+.chip {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--mint-glow);
+  color: var(--mint-bright);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: .1px;
+}
+.seg.on .chip { background: rgba(5, 34, 26, .22); color: #05221a; }
+
+.plans { display: grid; gap: 13px; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); }
+.plans .card { margin: 0; }
+
+/* With scripting the toggle picks one. Without it, neither is hidden and both stay. */
+.js .plan { display: none; }
+.js .plan.on { display: block; }
+/* One card left in an auto-fit grid stretches the full width of the page, which turns a price
+   into a banner. Once the toggle is doing the choosing, hold it to a card's width instead. */
+.js .plans { grid-template-columns: minmax(0, 330px); justify-content: center; }
+
+.plan.best { border-color: var(--line-bright); }
+.plan.best::before { opacity: 1; }
+
+.best-tag {
+  position: absolute;
+  top: -1px;
+  right: 16px;
+  transform: translateY(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--mint), var(--mint-deep));
+  color: #05221a;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.price { display: flex; align-items: baseline; gap: 7px; margin: 12px 0 0; }
+.price strong { font-size: 34px; letter-spacing: -1.2px; line-height: 1; }
+.price span { color: var(--dim); font-size: 13.5px; }
+
+.plan .fine { margin-bottom: 18px; }
+/* Full width inside a plan card, so the two cards' buttons line up whatever the label says. */
+.plan .button { width: 100%; }
+
+.grid.perks { grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); margin-top: 14px; }
+.grid.perks .card { margin: 0; }
+
+.perk-icon { font-size: 22px; line-height: 1; margin-bottom: 9px; }
+.perk h3 { margin: 0; font-size: 14.8px; letter-spacing: -.2px; }
+
+ul.ticks { list-style: none; padding: 0; margin: 14px 0; }
+ul.ticks li { position: relative; padding-left: 24px; margin-bottom: 9px; font-size: 14.2px; }
+ul.ticks li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: var(--mint);
+  font-weight: 700;
+}
+
 /* ── unsaved changes ─────────────────────────────────────────────── */
 /* Built by the script, so it never appears on a page that can't clear it. */
 .unsaved {
@@ -1816,6 +1913,9 @@ footer p { margin: 0; }
   .hero { padding: 52px 0 40px; }
   .who span { display: none; }
   .grid { grid-template-columns: 1fr; }
+  /* A lone plan card lines up with the rest of the page rather than sitting inset by a few
+     pixels, which is all the centred column buys you at this width. */
+  .js .plans { grid-template-columns: 1fr; }
 
   /* The nav scrolls rather than pushing the account block off the page. min-width: 0 is the
      part that matters: without it a flex child refuses to shrink below its content, so every

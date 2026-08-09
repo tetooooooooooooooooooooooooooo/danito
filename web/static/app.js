@@ -452,6 +452,39 @@
     });
   }
 
+  /* ── monthly or yearly ───────────────────────────────────────────── */
+  /* Both plans are in the page already. This only decides which one is on show, so with the
+     script missing the page is two cards side by side rather than nothing. */
+  var billing = document.querySelector("[data-billing]");
+  if (billing) {
+    var segs = [].slice.call(billing.querySelectorAll("[data-period]"));
+    var cards = [].slice.call(document.querySelectorAll("[data-plan]"));
+
+    var show = function (period) {
+      segs.forEach(function (seg) {
+        var on = seg.getAttribute("data-period") === period;
+        seg.classList.toggle("on", on);
+        seg.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      cards.forEach(function (card) {
+        card.classList.toggle("on", card.getAttribute("data-plan") === period);
+      });
+    };
+
+    segs.forEach(function (seg) {
+      seg.addEventListener("click", function () {
+        show(seg.getAttribute("data-period"));
+      });
+    });
+
+    /* ?plan=yearly so a link can point straight at the one being talked about. Anything else
+       leaves the server's choice alone. */
+    var wanted = (location.search.match(/[?&]plan=([a-z]+)/) || [])[1];
+    if (wanted && segs.some(function (s) { return s.getAttribute("data-period") === wanted; })) {
+      show(wanted);
+    }
+  }
+
   /* ── retention bars fill when they come into view ────────────────── */
   var chart = document.querySelector("[data-chart]");
   if (chart) {

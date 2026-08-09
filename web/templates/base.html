@@ -41,6 +41,7 @@
     <div class="bar-left">
       <a class="brand" href="{{ url_for('index') }}">{{ brand }}</a>
       <a class="nav-link" href="{{ url_for('documentation') }}">Docs</a>
+      <a class="nav-link" href="{{ url_for('premium') }}">Premium</a>
       <a class="nav-link" href="{{ url_for('status') }}">Status</a>
       <a class="nav-link" href="{{ url_for('support') }}">Support</a>
       {% if user %}<a class="nav-link" href="{{ url_for('servers') }}">Servers</a>{% endif %}
@@ -77,6 +78,7 @@
     {% if user %}<p>Changes made here reach the bot within a few seconds.</p>{% endif %}
     <nav class="foot-links">
       <a href="{{ url_for('documentation') }}">Docs</a>
+      <a href="{{ url_for('premium') }}">Premium</a>
       <a href="{{ url_for('status') }}">Status</a>
       <a href="{{ url_for('support') }}">Support</a>
       <a href="{{ url_for('whats_new') }}">What's new</a>
