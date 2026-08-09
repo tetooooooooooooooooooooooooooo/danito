@@ -325,6 +325,162 @@ def clean_automod(form, valid_channels: set, valid_roles: set, existing: dict) -
     }
 
 
+# ── the embed builder ────────────────────────────────────────────────
+# Discord's own limits. Enforced here rather than left to Discord because it rejects the whole
+# message for one long field and names it in a nested error tree, which is a bad way to find
+# out you wrote 4,200 characters.
+EMBED_MAX = {
+    "content": 2000, "title": 256, "description": 4096, "author": 256,
+    "footer": 2048, "field_name": 256, "field_value": 1024, "url": 1024,
+}
+MAX_EMBED_FIELDS = 25
+# Discord counts title, description, author, footer and every field together against one
+# ceiling, on top of the individual ones. Nothing warns you until it refuses.
+EMBED_TOTAL = 6000
+
+HEX_COLOUR = re.compile(r"^#?([0-9a-fA-F]{6})$")
+
+
+def _link(raw, problems: list, label: str):
+    """A url Discord will accept, or None with a reason worth reading.
+
+    Checked here because Discord's answer to a bad one is to refuse the entire message, and
+    the most common mistake by far is pasting something that isn't a link at all.
+    """
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if not value.startswith(("http://", "https://")):
+        problems.append(f"{label} has to start with http:// or https://.")
+        return None
+    if len(value) > EMBED_MAX["url"]:
+        problems.append(f"{label} is too long.")
+        return None
+    return value
+
+
+def _cut(raw, limit: int, problems: list, label: str):
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if len(value) > limit:
+        problems.append(f"{label} is {len(value)} characters. The limit is {limit}.")
+        return None
+    return value
+
+
+def clean_embed(form) -> tuple:
+    """Turn the builder's form into a message Discord will accept, or say why it won't.
+
+    Returns (payload, problems). An empty problems list means it is safe to send.
+    """
+    problems = []
+
+    content = _cut(form.get("content"), EMBED_MAX["content"], problems, "The message text")
+    embed = {}
+
+    title = _cut(form.get("title"), EMBED_MAX["title"], problems, "The title")
+    if title:
+        embed["title"] = title
+    description = _cut(form.get("description"), EMBED_MAX["description"], problems,
+                       "The description")
+    if description:
+        embed["description"] = description
+
+    url = _link(form.get("url"), problems, "The title link")
+    if url:
+        if not title:
+            problems.append("A title link needs a title, or there is nothing to click.")
+        else:
+            embed["url"] = url
+
+    raw_colour = (form.get("colour") or "").strip()
+    if raw_colour:
+        match = HEX_COLOUR.match(raw_colour)
+        if not match:
+            problems.append("The colour has to be a hex code like #3ddc97.")
+        else:
+            embed["color"] = int(match.group(1), 16)
+
+    author_name = _cut(form.get("author_name"), EMBED_MAX["author"], problems, "The author")
+    author_url = _link(form.get("author_url"), problems, "The author link")
+    author_icon = _link(form.get("author_icon"), problems, "The author icon")
+    if author_name:
+        embed["author"] = {"name": author_name}
+        if author_url:
+            embed["author"]["url"] = author_url
+        if author_icon:
+            embed["author"]["icon_url"] = author_icon
+    elif author_url or author_icon:
+        problems.append("An author link or icon needs an author name to hang off.")
+
+    footer_text = _cut(form.get("footer_text"), EMBED_MAX["footer"], problems, "The footer")
+    footer_icon = _link(form.get("footer_icon"), problems, "The footer icon")
+    if footer_text:
+        embed["footer"] = {"text": footer_text}
+        if footer_icon:
+            embed["footer"]["icon_url"] = footer_icon
+    elif footer_icon:
+        problems.append("A footer icon needs footer text to sit beside.")
+
+    thumbnail = _link(form.get("thumbnail"), problems, "The thumbnail")
+    if thumbnail:
+        embed["thumbnail"] = {"url": thumbnail}
+    image = _link(form.get("image"), problems, "The image")
+    if image:
+        embed["image"] = {"url": image}
+
+    if form.get("timestamp"):
+        embed["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+    # Indexed rather than parallel lists, because an unticked checkbox submits nothing at all
+    # and would silently shift every later row's inline flag onto the wrong field.
+    fields = []
+    for index in range(MAX_EMBED_FIELDS):
+        name = _cut(form.get(f"field_name_{index}"), EMBED_MAX["field_name"], problems,
+                    f"Field {index + 1}'s name")
+        value = _cut(form.get(f"field_value_{index}"), EMBED_MAX["field_value"], problems,
+                     f"Field {index + 1}'s text")
+        if not name and not value:
+            continue
+        if not name or not value:
+            problems.append(f"Field {index + 1} needs both a name and some text.")
+            continue
+        fields.append({"name": name, "value": value,
+                       "inline": bool(form.get(f"field_inline_{index}"))})
+    if fields:
+        embed["fields"] = fields
+
+    # Everything that counts towards Discord's shared ceiling.
+    counted = sum(len(str(part)) for part in (
+        embed.get("title", ""), embed.get("description", ""),
+        (embed.get("author") or {}).get("name", ""),
+        (embed.get("footer") or {}).get("text", ""),
+    )) + sum(len(f["name"]) + len(f["value"]) for f in fields)
+    if counted > EMBED_TOTAL:
+        problems.append(f"The embed is {counted} characters all told. Discord's limit across "
+                        f"the title, description, author, footer and fields is {EMBED_TOTAL}.")
+
+    # An embed with only a colour is invisible, and Discord refuses a message with neither
+    # text nor a real embed. Say which rather than letting it come back as a 400.
+    substantial = any(key in embed for key in
+                      ("title", "description", "fields", "image", "thumbnail", "author",
+                       "footer"))
+    if not content and not substantial:
+        problems.append("There's nothing to send. Write some text, or fill in the embed.")
+
+    payload = {}
+    if content:
+        payload["content"] = content
+    if substantial:
+        payload["embeds"] = [embed]
+    # Nothing pings unless it is asked for. An admin pasting a draft with an @everyone in it
+    # should not find out it was live by the sound of a thousand notifications.
+    payload["allowed_mentions"] = ({"parse": ["users", "roles", "everyone"]}
+                                   if form.get("allow_pings") else {"parse": []})
+    return payload, problems
+
+
 def save(guild_id: int, values: dict):
     """Write settings and flag the guild so the bot drops its cached copy promptly."""
     if values:

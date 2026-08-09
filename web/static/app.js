@@ -452,6 +452,278 @@
     });
   }
 
+  /* ── the message builder ─────────────────────────────────────────── */
+  /* Everything here is a convenience over a form that already works: the preview, the
+     character counts, the field rows and the draft in local storage. With the script off you
+     get a long form with no fields and no preview, which still sends a perfectly good
+     message. */
+  var builder = document.querySelector("[data-embed-form]");
+  if (builder) {
+    var DRAFT = "newt:embed:" + location.pathname;
+    var pv = function (name) { return builder.querySelector("[data-pv-" + name + "]"); };
+    var fieldBox = builder.querySelector("[data-fields]");
+    var emptyNote = builder.querySelector("[data-pv-empty]");
+    var embedBox = builder.querySelector("[data-preview-embed]");
+
+    var val = function (name) {
+      var el = builder.querySelector('[name="' + name + '"]');
+      if (!el) return "";
+      return el.type === "checkbox" ? el.checked : (el.value || "").trim();
+    };
+
+    var escaped = function (text) {
+      return String(text).replace(/[&<>"]/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+      });
+    };
+
+    /* Just enough markdown to recognise your own message. Discord's is far bigger; this
+       covers what people actually put in an embed. Escaped first, always: the preview is
+       built from typed text and must never be able to run any of it. */
+    var markdown = function (text) {
+      return escaped(text)
+        .replace(/```([\s\S]+?)```/g, "<code class='block'>$1</code>")
+        .replace(/`([^`]+?)`/g, "<code>$1</code>")
+        .replace(/\*\*\*([^*]+?)\*\*\*/g, "<b><i>$1</i></b>")
+        .replace(/\*\*([^*]+?)\*\*/g, "<b>$1</b>")
+        .replace(/\*([^*]+?)\*/g, "<i>$1</i>")
+        .replace(/__([^_]+?)__/g, "<u>$1</u>")
+        .replace(/~~([^~]+?)~~/g, "<s>$1</s>")
+        .replace(/^### (.+)$/gm, "<b class='h3'>$1</b>")
+        .replace(/^## (.+)$/gm, "<b class='h2'>$1</b>")
+        .replace(/^# (.+)$/gm, "<b class='h1'>$1</b>")
+        .replace(/^-# (.+)$/gm, "<small>$1</small>")
+        .replace(/\[([^\]]+?)\]\((https?:\/\/[^)\s]+?)\)/g, "<a href='$2'>$1</a>")
+        .replace(/\n/g, "<br>");
+    };
+
+    var setText = function (node, text, asMarkdown) {
+      if (!node) return false;
+      var has = !!text;
+      node.hidden = !has;
+      if (has) node[asMarkdown ? "innerHTML" : "textContent"] = asMarkdown
+        ? markdown(text) : text;
+      return has;
+    };
+
+    var setImage = function (node, url) {
+      if (!node) return false;
+      var has = /^https?:\/\//i.test(url);
+      node.hidden = !has;
+      if (has && node.getAttribute("src") !== url) node.src = url;
+      return has;
+    };
+
+    var rows = function () {
+      return [].slice.call(fieldBox ? fieldBox.querySelectorAll("[data-field-row]") : []);
+    };
+
+    var drawFields = function () {
+      var box = pv("fields");
+      if (!box) return false;
+      box.innerHTML = "";
+      var any = false;
+      rows().forEach(function (row) {
+        var name = row.querySelector("[data-field-name]").value.trim();
+        var text = row.querySelector("[data-field-value]").value.trim();
+        if (!name && !text) return;
+        any = true;
+        var cell = document.createElement("div");
+        cell.className = "pv-field" +
+          (row.querySelector("[data-field-inline]").checked ? " inline" : "");
+        cell.innerHTML = "<b>" + markdown(name) + "</b><span>" + markdown(text) + "</span>";
+        box.appendChild(cell);
+      });
+      return any;
+    };
+
+    var draw = function () {
+      var channel = builder.querySelector('[name="channel_id"]');
+      var picked = channel && channel.selectedIndex > 0
+        ? channel.options[channel.selectedIndex].text : "# wherever you pick";
+      builder.querySelector("[data-preview-channel]").textContent = picked;
+
+      var content = builder.querySelector("[data-preview-content]");
+      setText(content, val("content"), true);
+
+      var parts = [
+        setText(pv("title"), val("title"), false),
+        setText(pv("desc"), val("description"), true),
+        drawFields(),
+        setImage(pv("image"), val("image")),
+        setImage(pv("thumb"), val("thumbnail")),
+      ];
+
+      var authorName = val("author_name");
+      var author = pv("author");
+      author.hidden = !authorName;
+      if (authorName) {
+        pv("author-name").textContent = authorName;
+        setImage(pv("author-icon"), val("author_icon"));
+        parts.push(true);
+      }
+
+      var footerText = val("footer_text");
+      var stamped = val("timestamp");
+      var footer = pv("footer");
+      footer.hidden = !(footerText || stamped);
+      if (footerText || stamped) {
+        pv("footer-text").textContent = footerText;
+        setImage(pv("footer-icon"), footerText ? val("footer_icon") : "");
+        var time = pv("time");
+        time.hidden = !stamped;
+        if (stamped) {
+          time.textContent = (footerText ? " • " : "") +
+            new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+        }
+        parts.push(true);
+      }
+
+      var colour = val("colour");
+      embedBox.style.borderLeftColor = colour || "var(--line-bright)";
+      var swatch = builder.querySelector("[data-colour-text]");
+      if (swatch) swatch.textContent = colour || "none";
+
+      var anything = parts.some(Boolean);
+      embedBox.hidden = !anything;
+      emptyNote.hidden = anything || !!val("content");
+
+      builder.querySelectorAll("[data-limit]").forEach(function (input) {
+        var counter = builder.querySelector('[data-count-for="' + input.name + '"]');
+        if (!counter) return;
+        var limit = parseInt(input.getAttribute("data-limit"), 10);
+        var used = (input.value || "").length;
+        /* Only once it is worth knowing. A counter on an empty box is clutter. */
+        counter.textContent = used > limit * 0.7 ? used + " / " + limit : "";
+        counter.classList.toggle("over", used >= limit);
+      });
+    };
+
+    /* ── field rows ────────────────────────────────────────────────── */
+    var renumber = function () {
+      rows().forEach(function (row, i) {
+        row.querySelector("[data-field-name]").name = "field_name_" + i;
+        row.querySelector("[data-field-value]").name = "field_value_" + i;
+        row.querySelector("[data-field-inline]").name = "field_inline_" + i;
+        row.querySelector("[data-field-number]").textContent = "Field " + (i + 1);
+      });
+      var add = builder.querySelector("[data-add-field]");
+      if (add) add.disabled = rows().length >= 25;
+    };
+
+    var addField = function (name, text, inline) {
+      if (rows().length >= 25) return;
+      var row = document.createElement("div");
+      row.className = "field-row";
+      row.setAttribute("data-field-row", "");
+      row.innerHTML =
+        '<div class="field-head"><strong data-field-number></strong>' +
+        '<button type="button" class="link" data-remove-field>Remove</button></div>' +
+        '<label>Name<input type="text" maxlength="256" data-field-name data-limit="256"></label>' +
+        '<label>Text<textarea rows="2" maxlength="1024" data-field-value ' +
+        'data-limit="1024"></textarea></label>' +
+        '<label class="check"><input type="checkbox" data-field-inline>' +
+        '<span>Sit it beside the others</span></label>';
+      fieldBox.appendChild(row);
+      row.querySelector("[data-field-name]").value = name || "";
+      row.querySelector("[data-field-value]").value = text || "";
+      row.querySelector("[data-field-inline]").checked = !!inline;
+      row.querySelector("[data-remove-field]").addEventListener("click", function () {
+        row.remove();
+        renumber();
+        changed();
+      });
+      renumber();
+    };
+
+    /* ── the draft ─────────────────────────────────────────────────── */
+    var collect = function () {
+      var out = { fields: [] };
+      builder.querySelectorAll("[name]").forEach(function (el) {
+        if (el.name === "csrf" || /^field_/.test(el.name)) return;
+        out[el.name] = el.type === "checkbox" ? el.checked : el.value;
+      });
+      rows().forEach(function (row) {
+        out.fields.push({
+          name: row.querySelector("[data-field-name]").value,
+          value: row.querySelector("[data-field-value]").value,
+          inline: row.querySelector("[data-field-inline]").checked,
+        });
+      });
+      return out;
+    };
+
+    var changed = function () {
+      draw();
+      try {
+        localStorage.setItem(DRAFT, JSON.stringify(collect()));
+      } catch (e) {
+        /* Private browsing, or a full quota. The form still works, it just won't come back. */
+      }
+    };
+
+    var restore = function () {
+      var saved;
+      try {
+        saved = JSON.parse(localStorage.getItem(DRAFT) || "null");
+      } catch (e) {
+        saved = null;
+      }
+      if (!saved) return;
+      Object.keys(saved).forEach(function (key) {
+        if (key === "fields") return;
+        var el = builder.querySelector('[name="' + key + '"]');
+        if (!el) return;
+        if (el.type === "checkbox") el.checked = !!saved[key];
+        else el.value = saved[key];
+      });
+      (saved.fields || []).forEach(function (f) { addField(f.name, f.value, f.inline); });
+    };
+
+    builder.addEventListener("input", changed);
+    builder.addEventListener("change", changed);
+
+    var addButton = builder.querySelector("[data-add-field]");
+    if (addButton) {
+      addButton.addEventListener("click", function () { addField(); changed(); });
+    }
+
+    var clearColour = builder.querySelector("[data-clear-colour]");
+    if (clearColour) {
+      clearColour.addEventListener("click", function () {
+        /* A colour input can't be empty, so the value is blanked by name instead and the
+           swatch says "none" until one is picked again. */
+        var input = builder.querySelector('[name="colour"]');
+        input.value = "";
+        changed();
+      });
+    }
+
+    var reset = builder.querySelector("[data-reset]");
+    if (reset) {
+      reset.addEventListener("click", function () {
+        if (!confirm("Clear everything and start again?")) return;
+        builder.reset();
+        rows().forEach(function (row) { row.remove(); });
+        try { localStorage.removeItem(DRAFT); } catch (e) {}
+        renumber();
+        draw();
+      });
+    }
+
+    /* The draft is thrown away only once something really went out. Clearing it on submit
+       instead would lose everything somebody typed the moment the server refused a message,
+       which is exactly when they least want to start again: every route back here, sent or
+       refused, is the same redirect to the same url. */
+    if (/[?&]sent=1(&|$)/.test(location.search)) {
+      try { localStorage.removeItem(DRAFT); } catch (e) {}
+      history.replaceState(null, "", location.pathname);
+    }
+
+    restore();
+    draw();
+  }
+
   /* ── the insights chart ──────────────────────────────────────────── */
   /* Every period's geometry is already on the page, worked out server side, so switching a
      toggle is a redraw rather than a page load. The toggles stay real links: without this

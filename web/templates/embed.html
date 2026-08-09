@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block bodyclass %}embed-page{% endblock %}
+{% block title %}{{ guild.name }} · Message builder · {{ brand }}{% endblock %}
+
+{% macro counted(name, label, limit, rows=0, placeholder="") %}
+  <label>{{ label }}
+    {% if rows %}
+      <textarea name="{{ name }}" rows="{{ rows }}" maxlength="{{ limit }}"
+                data-preview="{{ name }}" data-limit="{{ limit }}"
+                placeholder="{{ placeholder }}"></textarea>
+    {% else %}
+      <input type="text" name="{{ name }}" maxlength="{{ limit }}"
+             data-preview="{{ name }}" data-limit="{{ limit }}"
+             placeholder="{{ placeholder }}">
+    {% endif %}
+    <span class="count" data-count-for="{{ name }}"></span>
+  </label>
+{% endmacro %}
+
+{% block content %}
+<p><a class="fine" href="{{ url_for('guild_settings', guild_id=guild.id) }}">
+  &larr; {{ guild.name }}</a></p>
+
+<header class="page-head">
+  <div>
+    <h1>Message builder</h1>
+    <p class="fine">Write a message, watch it build itself on the right, and post it as
+      {{ brand }}. Everything here is optional except having something to say.</p>
+  </div>
+</header>
+
+{% if not discord_ok %}
+  <div class="warn">Discord isn't answering just now, so there are no channels to pick from
+    and nothing can be sent. Nothing is wrong at your end. Try again in a moment.</div>
+{% endif %}
+
+<form class="builder" method="post" data-embed-form
+      action="{{ url_for('send_embed', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+
+  <div class="build-cols">
+    {# ── the form ────────────────────────────────────────────────── #}
+    <div class="build-fields">
+      <div class="card">
+        <div class="head"><h2>Where it goes</h2></div>
+        <label>Channel
+          <select name="channel_id" required data-preview="channel">
+            <option value="">Pick one</option>
+            {% for c in channels %}
+              <option value="{{ c.id }}">#{{ c.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        {{ counted("content", "Text above the embed", limits.content, rows=3,
+                   placeholder="Optional. This is the part that can ping people.") }}
+        <label class="check">
+          <input type="checkbox" name="allow_pings" data-preview="allow_pings">
+          <span>Let it ping people</span>
+        </label>
+        <p class="fine">Off means an @everyone in the text shows up as words and notifies
+          nobody. Leave it off unless you mean it.</p>
+      </div>
+
+      <div class="card">
+        <div class="head"><h2>The embed</h2></div>
+        {{ counted("title", "Title", limits.title) }}
+        {{ counted("url", "Title link", limits.url, placeholder="https://") }}
+        {{ counted("description", "Description", limits.description, rows=6,
+                   placeholder="Markdown works here. **bold**, *italic*, [links](https://…)") }}
+        <label>Colour
+          <span class="colour-row">
+            <input type="color" name="colour" value="#3ddc97" data-preview="colour">
+            <span class="fine" data-colour-text>#3ddc97</span>
+            <button type="button" class="link" data-clear-colour>No colour</button>
+          </span>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="head"><h2>Author and footer</h2></div>
+        {{ counted("author_name", "Author name", limits.author) }}
+        {{ counted("author_icon", "Author icon", limits.url, placeholder="https://") }}
+        {{ counted("author_url", "Author link", limits.url, placeholder="https://") }}
+        {{ counted("footer_text", "Footer text", limits.footer) }}
+        {{ counted("footer_icon", "Footer icon", limits.url, placeholder="https://") }}
+        <label class="check">
+          <input type="checkbox" name="timestamp" data-preview="timestamp">
+          <span>Put the time on the footer</span>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="head"><h2>Pictures</h2></div>
+        {{ counted("thumbnail", "Thumbnail, small and top right", limits.url,
+                   placeholder="https://") }}
+        {{ counted("image", "Image, large and along the bottom", limits.url,
+                   placeholder="https://") }}
+      </div>
+
+      <div class="card">
+        <div class="head">
+          <h2>Fields</h2>
+          <p class="fine">Up to {{ max_fields }}. Inline ones sit side by side, three to a
+            row.</p>
+        </div>
+        {#- Built by the script. Without it the form is still perfectly usable, it just has no
+            fields, which is the part of an embed nobody misses first. -#}
+        <div data-fields></div>
+        <button type="button" class="button ghost small" data-add-field>Add a field</button>
+      </div>
+
+      <div class="row end sticky-send">
+        <button type="button" class="button ghost" data-reset>Start again</button>
+        <button type="submit">Send it</button>
+      </div>
+    </div>
+
+    {# ── the preview ─────────────────────────────────────────────── #}
+    <div class="build-preview">
+      <div class="mock">
+        <div class="mock-bar">
+          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+          <span class="mock-channel" data-preview-channel># wherever you pick</span>
+        </div>
+        <div class="mock-body">
+          <div class="mock-msg">
+            <div class="mock-avatar">{{ brand[:1] }}</div>
+            <div class="mock-content">
+              <div class="mock-name">{{ brand }}<span class="tag">APP</span></div>
+              <div class="mock-text" data-preview-content hidden></div>
+              <div class="mock-embed live" data-preview-embed>
+                <div class="pv-main">
+                  <div class="pv-author" data-pv-author hidden>
+                    <img data-pv-author-icon alt="" hidden><span data-pv-author-name></span>
+                  </div>
+                  <div class="pv-title" data-pv-title hidden></div>
+                  <div class="pv-desc" data-pv-desc hidden></div>
+                  <div class="pv-fields" data-pv-fields></div>
+                  <img class="pv-image" data-pv-image alt="" hidden>
+                  <div class="pv-footer" data-pv-footer hidden>
+                    <img data-pv-footer-icon alt="" hidden><span data-pv-footer-text></span>
+                    <span data-pv-time hidden></span>
+                  </div>
+                </div>
+                <img class="pv-thumb" data-pv-thumb alt="" hidden>
+              </div>
+              <p class="fine pv-empty" data-pv-empty>Nothing yet. Start typing on the
+                left.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p class="fine">A close approximation, not a photograph. Discord decides the final
+        spacing, and a picture it can't load will be missing there and here.</p>
+    </div>
+  </div>
+</form>
+{% endblock %}

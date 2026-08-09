@@ -1108,6 +1108,9 @@ body.settings-page main { max-width: 1060px; }
   border-top: 1px solid var(--line);
   border-radius: 0 0 var(--r-sm) var(--r-sm);
 }
+/* The second one and any after it belong to the same group, so only the first draws the rule
+   that separates the group from the tabs. */
+.sidenav a.leaves.nudge { margin-top: 0; padding-top: 9px; border-top: 0; }
 .sidenav a.leaves:hover { background: var(--surface); color: var(--mint-bright); }
 .sidenav a.leaves:hover .arrow { transform: translateX(2px); }
 .sidenav .arrow {
@@ -1777,6 +1780,98 @@ ul.ticks li.carried { color: var(--text); font-weight: 600; }
 .plan .button { width: 100%; }
 
 .pricing-foot { max-width: 58ch; margin: 22px auto 0; }
+
+/* ── the message builder ─────────────────────────────────────────── */
+body.embed-page main { max-width: 1160px; }
+
+.build-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.build-fields .card:last-of-type { margin-bottom: 12px; }
+
+/* The preview follows you down a long form. There is no point in a live preview you have to
+   scroll back up to look at. */
+.build-preview { position: sticky; top: 84px; align-self: start; }
+.build-preview .fine { margin-top: 12px; }
+
+.sticky-send {
+  position: sticky;
+  bottom: 0;
+  gap: 10px;
+  padding: 14px 0;
+  background: linear-gradient(transparent, var(--bg) 28%);
+}
+
+.colour-row { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
+.colour-row input[type="color"] {
+  width: 46px; height: 34px; padding: 2px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-bright);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+/* Only appears once you are near the limit, so it reads as a warning rather than furniture. */
+.count { display: block; margin-top: 4px; font-size: 11.6px; color: var(--faint); }
+.count.over { color: var(--danger); font-weight: 600; }
+
+.field-row {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  padding: 14px 14px 2px;
+  margin-bottom: 11px;
+  background: rgba(12, 19, 17, .4);
+}
+.field-head { display: flex; justify-content: space-between; align-items: center;
+              margin-bottom: 10px; font-size: 13px; }
+
+/* ── the preview itself ──────────────────────────────────────────── */
+.mock-text { font-size: 14.4px; line-height: 1.55; margin-bottom: 8px; word-wrap: break-word; }
+
+.mock-embed.live {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  justify-content: space-between;
+  border-left-width: 4px;
+  margin-bottom: 0;
+}
+.pv-main { min-width: 0; flex: 1; }
+
+.pv-author { display: flex; align-items: center; gap: 8px; font-size: 13.6px;
+             font-weight: 600; margin-bottom: 8px; }
+.pv-author img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+
+.pv-title { font-size: 15px; font-weight: 650; color: var(--mint-bright); margin-bottom: 7px; }
+.pv-desc { font-size: 13.8px; line-height: 1.6; color: var(--dim); word-wrap: break-word; }
+.pv-desc code, .mock-text code {
+  background: rgba(0, 0, 0, .35); border-radius: 4px; padding: 1px 4px; font-size: .92em;
+}
+.pv-desc code.block, .mock-text code.block { display: block; padding: 8px 10px; margin: 6px 0; }
+.pv-desc a, .mock-text a { color: var(--mint); text-decoration: none; }
+.pv-desc .h1 { font-size: 1.3em; } .pv-desc .h2 { font-size: 1.15em; }
+.pv-desc .h3 { font-size: 1.05em; }
+.pv-desc small, .mock-text small { color: var(--faint); font-size: .86em; }
+
+/* Discord packs inline fields three to a row and gives a full-width one its own line. */
+.pv-fields { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.pv-field { flex: 0 0 100%; min-width: 0; }
+.pv-field.inline { flex: 1 1 30%; }
+.pv-field b { display: block; font-size: 13.2px; margin-bottom: 2px; }
+.pv-field span { font-size: 13.4px; color: var(--dim); word-wrap: break-word; }
+
+.pv-image { display: block; max-width: 100%; border-radius: 6px; margin-top: 12px; }
+.pv-thumb { width: 76px; height: 76px; flex: none; border-radius: 6px; object-fit: cover; }
+
+.pv-footer { display: flex; align-items: center; gap: 8px; margin-top: 11px;
+             font-size: 12.2px; color: var(--faint); }
+.pv-footer img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+
+.pv-empty { margin: 0; }
+
+@media (max-width: 900px) {
+  .build-cols { grid-template-columns: minmax(0, 1fr); }
+  /* Stuck to the top of a phone it would cover the field being typed into. */
+  .build-preview { position: static; }
+}
 
 /* ── insights ────────────────────────────────────────────────────── */
 /* Wider than the settings pages: a twelve point line squeezed into 800px is a scribble. */

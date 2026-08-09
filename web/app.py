@@ -779,6 +779,64 @@ def guild_insights(guild_id: int):
                            periods=store.TREND_PERIODS)
 
 
+@app.route("/servers/<int:guild_id>/embed")
+@login_required
+def embed_builder(guild_id: int):
+    """Build a message and post it as the bot.
+
+    Its own page rather than a settings tab: nothing here is a setting. You come to it with
+    something to say, send it, and leave.
+    """
+    guild = require_guild(guild_id)
+    try:
+        channels = api.guild_channels(guild_id)
+        discord_ok = True
+    except api.DiscordError:
+        channels, discord_ok = [], False
+    return render_template("embed.html", guild=guild, channels=channels,
+                           discord_ok=discord_ok, limits=store.EMBED_MAX,
+                           max_fields=store.MAX_EMBED_FIELDS)
+
+
+@app.route("/servers/<int:guild_id>/embed", methods=["POST"])
+@login_required
+@needs_discord
+def send_embed(guild_id: int):
+    check_csrf()
+    require_guild(guild_id)
+
+    # The same check every other save makes: a channel id typed into a request is not a
+    # channel in this server until Discord says it is.
+    valid = {int(c["id"]): c for c in api.guild_channels(guild_id)}
+    try:
+        channel_id = int(request.form.get("channel_id") or 0)
+    except ValueError:
+        channel_id = 0
+    if channel_id not in valid:
+        flash("Pick a channel in this server.")
+        return redirect(url_for("embed_builder", guild_id=guild_id))
+
+    payload, problems = store.clean_embed(request.form)
+    if problems:
+        # All of them at once. Fixing one thing to be told about the next is the worst way to
+        # fill in a form this long.
+        for problem in problems[:6]:
+            flash(problem)
+        return redirect(url_for("embed_builder", guild_id=guild_id))
+
+    try:
+        api.post_message(channel_id, payload)
+    except api.DiscordError as e:
+        flash(f"Discord wouldn't send it. {e}")
+        return redirect(url_for("embed_builder", guild_id=guild_id))
+
+    flash(f"Sent to #{valid[channel_id]['name']}.")
+    # sent=1 is how the page knows to throw the saved draft away. It cannot be done when the
+    # form is submitted, because every route back here is the same redirect and a refused
+    # message would take somebody's work with it.
+    return redirect(url_for("embed_builder", guild_id=guild_id, sent=1))
+
+
 @app.route("/servers/<int:guild_id>", methods=["POST"])
 @login_required
 @needs_discord

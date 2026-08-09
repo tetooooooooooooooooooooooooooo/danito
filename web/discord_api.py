@@ -221,6 +221,61 @@ def guild_roles(guild_id: int) -> list:
     return out
 
 
+def _explain(payload) -> str:
+    """Flatten Discord's nested validation errors into something a person can act on.
+
+    It answers a rejected message with a tree keyed by the path to each bad field, which is
+    genuinely the most useful error in the whole API and completely unreadable raw. Turning
+    `{"embeds": {"0": {"image": {"url": {"_errors": [...]}}}}}` into "embeds.0.image.url: Not
+    a well formed URL" is the difference between fixing it and guessing.
+    """
+    found = []
+
+    def walk(node, path):
+        if isinstance(node, dict):
+            if "_errors" in node:
+                for problem in node["_errors"]:
+                    where = ".".join(path)
+                    found.append(f"{where}: {problem.get('message', '?')}" if where
+                                 else problem.get("message", "?"))
+                return
+            for key, value in node.items():
+                walk(value, path + [key])
+
+    if isinstance(payload, dict):
+        walk(payload.get("errors") or {}, [])
+        if not found and payload.get("message"):
+            found.append(payload["message"])
+    return "; ".join(found[:6])
+
+
+def post_message(channel_id: int, payload: dict) -> dict:
+    """Send a message as the bot.
+
+    The dashboard has no gateway connection, but it does not need one to post: this is an
+    ordinary REST call with the bot's own token, the same credential already used to list a
+    guild's channels. Role panels go the long way round through the bot because their buttons
+    have to be handled by something with a gateway; a one-off message has no such problem.
+    """
+    resp = requests.post(
+        f"{API}/channels/{channel_id}/messages",
+        headers={"Authorization": f"Bot {BOT_TOKEN}", "Content-Type": "application/json"},
+        json=payload, timeout=TIMEOUT)
+    if resp.status_code in (200, 201):
+        return resp.json()
+
+    try:
+        detail = _explain(resp.json())
+    except ValueError:
+        detail = ""
+    if resp.status_code == 403:
+        raise DiscordError("I can't post in that channel. Check I have View Channel, "
+                           "Send Messages and Embed Links there.")
+    if resp.status_code == 404:
+        raise DiscordError("That channel doesn't exist any more.")
+    raise DiscordError(detail or f"Discord returned {resp.status_code}")
+
+
 def icon_url(guild: dict) -> str:
     if guild.get("icon"):
         return f"https://cdn.discordapp.com/icons/{guild['id']}/{guild['icon']}.png?size=64"
