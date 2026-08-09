@@ -339,7 +339,7 @@ def main():
 
     print("\n=== the rest of the page is still there ===")
     body = html.unescape(c.get("/servers/111/insights").data.decode())
-    assert "Which invite they came through" in body
+    assert "Top invite codes" in body
     assert "promo" in body and "other" in body
     # Retention did not disappear when it stopped being the chart.
     assert "7 day retention" in body and "How long people last" in body

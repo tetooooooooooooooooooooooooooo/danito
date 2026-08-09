@@ -159,9 +159,10 @@
 <div class="card">
   <div class="head">
     <h2>How long people last</h2>
-    <p class="fine">Of the members old enough to be counted, how many were still here after
-      each stretch. The number counted differs per row on purpose: only somebody who joined
-      30 days ago can tell you anything about 30 day retention.</p>
+    <p class="fine">Each row asks how many people were still here after that long. Only
+      members who joined at least that long ago are counted, so somebody who joined yesterday
+      counts towards the 1 day row and none of the others. That is why the number under each
+      bar is different.</p>
   </div>
   <div class="chart">
     {% for row in data.survival %}
@@ -190,7 +191,7 @@
 {# ── by invite ──────────────────────────────────────────────────── #}
 <div class="card">
   <div class="head">
-    <h2>Which invite they came through</h2>
+    <h2>Top invite codes</h2>
     <p class="fine">Sorted by how many stayed, not by how many arrived. An invite that brings
       two hundred people who all leave is worth less than one that brings twenty who don't.</p>
   </div>
