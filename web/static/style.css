@@ -1823,52 +1823,221 @@ body.embed-page main { max-width: 1160px; }
 .field-head { display: flex; justify-content: space-between; align-items: center;
               margin-bottom: 10px; font-size: 13px; }
 
-/* ── the preview itself ──────────────────────────────────────────── */
-.mock-text { font-size: 14.4px; line-height: 1.55; margin-bottom: 8px; word-wrap: break-word; }
+/* ── the preview itself ──────────────────────────────── */
+/* Discord's own dark theme, not this site's. Everything below is deliberately hardcoded
+   rather than using the variables the rest of the page runs on: the whole job of this panel
+   is to look like somewhere else, and inheriting a mint accent from the surrounding page
+   would make it a worse preview every time the site's palette changed.
 
-.mock-embed.live {
+   The values are Discord's current dark theme. Chat #313338, embeds a shade darker at
+   #2b2d31, body text #dbdee1, headings #f2f3f5, muted #949ba4, links #00a8fc, blurple
+   #5865f2 for the APP badge.
+
+   Prefixed dc- because one of them, --text, is also the name of a variable this site
+   defines at the root. Redefining it here would quietly shadow it for anything nested
+   inside the preview. */
+.dc {
+  --dc-chat: #313338;
+  --dc-embed: #2b2d31;
+  --dc-sunk: #1e1f22;
+  --dc-text: #dbdee1;
+  --dc-bright: #f2f3f5;
+  --dc-muted: #949ba4;
+  --dc-link: #00a8fc;
+  --dc-blurple: #5865f2;
+
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--dc-chat);
+  border: 1px solid #26282c;
+  /* gg sans is Discord's own and isn't licensed for use here, so this names it first for
+     anyone who happens to have it and falls back to the same stack Discord itself falls back
+     to. It is the one thing that cannot be exact. */
+  font-family: "gg sans", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.dc-header {
   display: flex;
-  gap: 14px;
-  align-items: flex-start;
-  justify-content: space-between;
-  border-left-width: 4px;
-  margin-bottom: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--dc-chat);
+  box-shadow: 0 1px 0 rgba(4, 4, 5, .2), 0 1.5px 0 rgba(6, 6, 7, .05);
+  color: var(--dc-bright);
+  font-size: 16px;
+  font-weight: 600;
 }
-.pv-main { min-width: 0; flex: 1; }
+.dc-hash { width: 20px; height: 20px; flex: none; color: var(--dc-muted); }
 
-.pv-author { display: flex; align-items: center; gap: 8px; font-size: 13.6px;
-             font-weight: 600; margin-bottom: 8px; }
-.pv-author img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+.dc-chat { padding: 16px 16px 18px; }
+.dc-msg { display: flex; gap: 16px; }
 
-.pv-title { font-size: 15px; font-weight: 650; color: var(--mint-bright); margin-bottom: 7px; }
-.pv-desc { font-size: 13.8px; line-height: 1.6; color: var(--dim); word-wrap: break-word; }
-.pv-desc code, .mock-text code {
-  background: rgba(0, 0, 0, .35); border-radius: 4px; padding: 1px 4px; font-size: .92em;
+.dc-avatar {
+  width: 40px; height: 40px; flex: none;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--dc-blurple);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 500;
 }
-.pv-desc code.block, .mock-text code.block { display: block; padding: 8px 10px; margin: 6px 0; }
-.pv-desc a, .mock-text a { color: var(--mint); text-decoration: none; }
-.pv-desc .h1 { font-size: 1.3em; } .pv-desc .h2 { font-size: 1.15em; }
-.pv-desc .h3 { font-size: 1.05em; }
-.pv-desc small, .mock-text small { color: var(--faint); font-size: .86em; }
 
-/* Discord packs inline fields three to a row and gives a full-width one its own line. */
-.pv-fields { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
-.pv-field { flex: 0 0 100%; min-width: 0; }
-.pv-field.inline { flex: 1 1 30%; }
-.pv-field b { display: block; font-size: 13.2px; margin-bottom: 2px; }
-.pv-field span { font-size: 13.4px; color: var(--dim); word-wrap: break-word; }
+.dc-body { min-width: 0; flex: 1; }
+.dc-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; }
+.dc-name { color: var(--dc-bright); font-size: 16px; font-weight: 500; line-height: 1.375; }
+.dc-app {
+  background: var(--dc-blurple);
+  color: #fff;
+  border-radius: 3px;
+  padding: 0 4px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+.dc-when { color: var(--dc-muted); font-size: 12px; }
 
-.pv-image { display: block; max-width: 100%; border-radius: 6px; margin-top: 12px; }
-.pv-thumb { width: 76px; height: 76px; flex: none; border-radius: 6px; object-fit: cover; }
+.dc-text {
+  color: var(--dc-text);
+  font-size: 16px;
+  line-height: 1.375;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin-bottom: 4px;
+}
 
-.pv-footer { display: flex; align-items: center; gap: 8px; margin-top: 11px;
-             font-size: 12.2px; color: var(--faint); }
-.pv-footer img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; }
+/* The left bar is set from the colour picker, so only the fallback lives here. */
+.dc-embed {
+  max-width: 520px;
+  margin-top: 8px;
+  border-left: 4px solid var(--dc-sunk);
+  border-radius: 4px;
+  background: var(--dc-embed);
+  padding: 8px 16px 16px 12px;
+}
 
-.pv-empty { margin: 0; }
+/* Discord lays an embed out as a grid: everything in the first column, the thumbnail beside
+   it in the second, and the image and footer across both. */
+.dc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 16px;
+}
+.dc-col { grid-column: 1; min-width: 0; }
+.dc-thumb {
+  grid-column: 2; grid-row: 1;
+  width: 80px; height: 80px;
+  margin-top: 8px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+.dc-image, .dc-foot { grid-column: 1 / -1; }
+
+.dc-author {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 8px;
+  color: var(--dc-bright);
+  font-size: 14px;
+  font-weight: 600;
+}
+.dc-author img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
+
+.dc-title {
+  margin-top: 8px;
+  color: var(--dc-bright);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.375;
+}
+.dc-desc {
+  margin-top: 8px;
+  color: var(--dc-text);
+  font-size: 14px;
+  line-height: 1.125rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.dc-title.linked { color: var(--dc-link); cursor: pointer; }
+.dc-title.linked:hover { text-decoration: underline; }
+.dc-desc a, .dc-text a { color: var(--dc-link); text-decoration: none; }
+.dc-desc a:hover, .dc-text a:hover { text-decoration: underline; }
+.dc-desc code, .dc-text code {
+  background: var(--dc-sunk);
+  border-radius: 3px;
+  padding: 0 2px;
+  font-family: Consolas, "Andale Mono WT", "Andale Mono", monospace;
+  font-size: 85%;
+}
+.dc-desc code.block, .dc-text code.block {
+  display: block;
+  padding: 8px;
+  margin-top: 6px;
+  border: 1px solid var(--dc-sunk);
+  font-size: 12px;
+  line-height: 1.125rem;
+}
+.dc-desc .h1 { font-size: 24px; } .dc-desc .h2 { font-size: 20px; }
+.dc-desc .h3 { font-size: 16px; }
+.dc-desc small, .dc-text small { color: var(--dc-muted); font-size: 12px; }
+
+/* Discord splits an embed into twelve columns and gives each inline field four of them, so
+   three sit in a row and a full-width one takes the lot. */
+/* minmax(0, 1fr) rather than 1fr: a bare 1fr track still refuses to shrink below its
+   content's minimum width, so a field name long enough to matter widened its column and
+   pushed the next field onto a row of its own. */
+.dc-fields {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.dc-field { grid-column: span 12; min-width: 0; }
+.dc-field.inline { grid-column: span 4; }
+.dc-field b {
+  display: block;
+  color: var(--dc-bright);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.125rem;
+  margin-bottom: 2px;
+}
+.dc-field span {
+  color: var(--dc-text);
+  font-size: 14px;
+  line-height: 1.125rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.dc-image {
+  display: block;
+  max-width: 100%;
+  margin-top: 16px;
+  border-radius: 4px;
+}
+
+.dc-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--dc-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1rem;
+}
+.dc-foot img { width: 20px; height: 20px; border-radius: 50%; object-fit: cover; }
+
+.dc-nothing { margin: 8px 0 0; color: var(--dc-muted); font-size: 14px; }
 
 @media (max-width: 900px) {
   .build-cols { grid-template-columns: minmax(0, 1fr); }
+  /* Three inline fields in an embed this narrow is about twenty pixels of text each. Two
+     across stays readable and is what Discord's own app does at this width. */
+  .dc-field.inline { grid-column: span 6; }
   /* Stuck to the top of a phone it would cover the field being typed into. */
   .build-preview { position: static; }
 }

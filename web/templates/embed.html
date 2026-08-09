@@ -115,43 +115,54 @@
       </div>
     </div>
 
-    {# ── the preview ─────────────────────────────────────────────── #}
+    {# ── the preview ─────────────────────────────────────────────────
+       Deliberately none of this site's classes. It is meant to look like Discord rather
+       than like the page it sits on, so it carries Discord's own colours, spacing and
+       type, and shares no styling with anything else here. -#}
     <div class="build-preview">
-      <div class="mock">
-        <div class="mock-bar">
-          <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-          <span class="mock-channel" data-preview-channel># wherever you pick</span>
+      <div class="dc">
+        <div class="dc-header">
+          <svg class="dc-hash" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor"
+            d="M5.887 21a.5.5 0 0 1-.493-.582l.744-4.418H2.5a.5.5 0 0 1-.493-.582l.167-1A.5.5 0 0 1 2.667 14h3.81l1-6H3.5a.5.5 0 0 1-.493-.582l.167-1A.5.5 0 0 1 3.667 6h3.81l.78-4.582A.5.5 0 0 1 8.75 1h1.014a.5.5 0 0 1 .493.582L9.513 6h6l.78-4.582A.5.5 0 0 1 16.75 1h1.014a.5.5 0 0 1 .493.582L17.513 6H21.5a.5.5 0 0 1 .493.582l-.167 1A.5.5 0 0 1 21.333 8h-4.153l-1 6H20.5a.5.5 0 0 1 .493.582l-.167 1a.5.5 0 0 1-.493.418h-4.153l-.78 4.582a.5.5 0 0 1-.493.418H13.89a.5.5 0 0 1-.493-.582L14.153 16h-6l-.78 4.582A.5.5 0 0 1 6.88 21H5.887ZM8.486 14h6l1-6h-6l-1 6Z"/></svg>
+          <span data-preview-channel>wherever you pick</span>
         </div>
-        <div class="mock-body">
-          <div class="mock-msg">
-            <div class="mock-avatar">{{ brand[:1] }}</div>
-            <div class="mock-content">
-              <div class="mock-name">{{ brand }}<span class="tag">APP</span></div>
-              <div class="mock-text" data-preview-content hidden></div>
-              <div class="mock-embed live" data-preview-embed>
-                <div class="pv-main">
-                  <div class="pv-author" data-pv-author hidden>
-                    <img data-pv-author-icon alt="" hidden><span data-pv-author-name></span>
+        <div class="dc-chat">
+          <div class="dc-msg">
+            <div class="dc-avatar">{{ brand[:1] }}</div>
+            <div class="dc-body">
+              <div class="dc-meta">
+                <span class="dc-name">{{ brand }}</span>
+                <span class="dc-app">APP</span>
+                <span class="dc-when">Today at
+                  {{ "%d:%02d" % (12, 34) }}</span>
+              </div>
+              <div class="dc-text" data-preview-content hidden></div>
+              <div class="dc-embed" data-preview-embed>
+                <div class="dc-grid">
+                  <div class="dc-col">
+                    <div class="dc-author" data-pv-author hidden>
+                      <img data-pv-author-icon alt="" hidden><span data-pv-author-name></span>
+                    </div>
+                    <div class="dc-title" data-pv-title hidden></div>
+                    <div class="dc-desc" data-pv-desc hidden></div>
+                    <div class="dc-fields" data-pv-fields></div>
                   </div>
-                  <div class="pv-title" data-pv-title hidden></div>
-                  <div class="pv-desc" data-pv-desc hidden></div>
-                  <div class="pv-fields" data-pv-fields></div>
-                  <img class="pv-image" data-pv-image alt="" hidden>
-                  <div class="pv-footer" data-pv-footer hidden>
+                  <img class="dc-thumb" data-pv-thumb alt="" hidden>
+                  <img class="dc-image" data-pv-image alt="" hidden>
+                  <div class="dc-foot" data-pv-footer hidden>
                     <img data-pv-footer-icon alt="" hidden><span data-pv-footer-text></span>
                     <span data-pv-time hidden></span>
                   </div>
                 </div>
-                <img class="pv-thumb" data-pv-thumb alt="" hidden>
               </div>
-              <p class="fine pv-empty" data-pv-empty>Nothing yet. Start typing on the
-                left.</p>
+              <p class="dc-nothing" data-pv-empty>Nothing yet. Start typing on the left.</p>
             </div>
           </div>
         </div>
       </div>
-      <p class="fine">A close approximation, not a photograph. Discord decides the final
-        spacing, and a picture it can't load will be missing there and here.</p>
+      <p class="fine">Close, not a photograph. Discord's own font isn't licensed for use
+        here, so this falls back to the nearest one your computer has, and a picture Discord
+        can't load will be missing there as well as here.</p>
     </div>
   </div>
 </form>

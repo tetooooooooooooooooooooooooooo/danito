@@ -529,7 +529,7 @@
         if (!name && !text) return;
         any = true;
         var cell = document.createElement("div");
-        cell.className = "pv-field" +
+        cell.className = "dc-field" +
           (row.querySelector("[data-field-inline]").checked ? " inline" : "");
         cell.innerHTML = "<b>" + markdown(name) + "</b><span>" + markdown(text) + "</span>";
         box.appendChild(cell);
@@ -539,12 +539,19 @@
 
     var draw = function () {
       var channel = builder.querySelector('[name="channel_id"]');
+      /* The hash is drawn as an icon beside this, the way Discord draws it, so the one the
+         option text carries has to come off or it reads "# #general". */
       var picked = channel && channel.selectedIndex > 0
-        ? channel.options[channel.selectedIndex].text : "# wherever you pick";
+        ? channel.options[channel.selectedIndex].text.replace(/^#/, "")
+        : "wherever you pick";
       builder.querySelector("[data-preview-channel]").textContent = picked;
 
       var content = builder.querySelector("[data-preview-content]");
       setText(content, val("content"), true);
+
+      /* Discord colours a title blue when it links somewhere, and leaves it white when it
+         doesn't. It is the only styling in the embed that depends on another field. */
+      pv("title").classList.toggle("linked", !!val("url") && !!val("title"));
 
       var parts = [
         setText(pv("title"), val("title"), false),
@@ -580,7 +587,7 @@
       }
 
       var colour = val("colour");
-      embedBox.style.borderLeftColor = colour || "var(--line-bright)";
+      embedBox.style.borderLeftColor = colour || "#1e1f22";
       var swatch = builder.querySelector("[data-colour-text]");
       if (swatch) swatch.textContent = colour || "none";
 
