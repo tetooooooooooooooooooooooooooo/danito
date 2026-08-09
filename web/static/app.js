@@ -452,6 +452,217 @@
     });
   }
 
+  /* ── the insights chart ──────────────────────────────────────────── */
+  /* Every period's geometry is already on the page, worked out server side, so switching a
+     toggle is a redraw rather than a page load. The toggles stay real links: without this
+     script they navigate, and the server renders exactly the same thing. */
+  var chartRoot = document.querySelector("[data-chart-root]");
+  if (chartRoot) {
+    var NS = "http://www.w3.org/2000/svg";
+    var charts = JSON.parse(document.querySelector("[data-chart-data]").textContent);
+    var svg = chartRoot.querySelector("[data-activity]");
+    var wrap = chartRoot.querySelector(".chart-wrap");
+    var tip = chartRoot.querySelector("[data-chart-tip]");
+    var legend = chartRoot.querySelector("[data-chart-legend]");
+    var headingEl = chartRoot.querySelector("[data-chart-heading]");
+    var unitEl = chartRoot.querySelector("[data-chart-unit]");
+    var state = { period: chartRoot.dataset.period, series: chartRoot.dataset.series };
+    var activeBucket = -1;
+
+    var shown = function (series) {
+      return series === "both" ? ["joins", "leaves"] : [series];
+    };
+
+    var make = function (name, attrs) {
+      var node = document.createElementNS(NS, name);
+      for (var key in attrs) node.setAttribute(key, attrs[key]);
+      return node;
+    };
+
+    /* Named around what is already here: `var` is function scoped across this whole file, so
+       `chart` would clash with the landing page's retention bars further down and `current`
+       with the docs scroll-spy above. Both would silently overwrite this one. */
+    var thisChart = function () { return charts[state.period]; };
+
+    /* ── drawing ───────────────────────────────────────────────────── */
+    var draw = function () {
+      var c = thisChart();
+      var names = shown(state.series);
+      var frag = document.createDocumentFragment();
+
+      c.gridlines.forEach(function (g) {
+        frag.appendChild(make("line", { "class": "gridline", x1: c.left, y1: g.y,
+                                        x2: c.w - c.right, y2: g.y }));
+        var label = make("text", { "class": "axis", x: c.left - 8, y: g.y + 4,
+                                   "text-anchor": "end" });
+        label.textContent = g.value;
+        frag.appendChild(label);
+      });
+
+      if (!c.empty) {
+        /* Areas first, all of them, so an overlap never buries a line. */
+        names.forEach(function (name) {
+          var pts = c.lines[name].points;
+          var shape = pts[0].x + "," + c.baseline;
+          pts.forEach(function (p) { shape += " " + p.x + "," + p.y; });
+          shape += " " + pts[pts.length - 1].x + "," + c.baseline;
+          frag.appendChild(make("polygon", { "class": "area " + name, points: shape }));
+        });
+        names.forEach(function (name) {
+          var line = c.lines[name].points.map(function (p) { return p.x + "," + p.y; });
+          frag.appendChild(make("polyline", { "class": "line " + name,
+                                              points: line.join(" ") }));
+        });
+        names.forEach(function (name) {
+          c.lines[name].points.forEach(function (p) {
+            frag.appendChild(make("circle", { "class": "dot " + name,
+                                              cx: p.x, cy: p.y, r: 3.5 }));
+          });
+        });
+      }
+
+      c.labels.forEach(function (l) {
+        var label = make("text", { "class": "axis", x: l.x, y: c.h - 8,
+                                   "text-anchor": "middle" });
+        label.textContent = l.text;
+        frag.appendChild(label);
+      });
+
+      if (c.empty) {
+        var note = make("text", { "class": "nothing", "text-anchor": "middle",
+                                  x: c.left + (c.w - c.left - c.right) / 2,
+                                  y: c.top + (c.h - c.top - c.bottom) / 2 });
+        note.textContent = "Nobody joined or left in this period";
+        frag.appendChild(note);
+      }
+
+      /* The guide sits under the hit columns, which are transparent and catch everything. */
+      var guide = make("line", { "class": "guide", x1: 0, y1: c.top, x2: 0, y2: c.baseline });
+      guide.style.display = "none";
+      frag.appendChild(guide);
+
+      c.hits.forEach(function (hit, i) {
+        var rect = make("rect", { "class": "hit", x: hit.x, y: c.top,
+                                  width: hit.w, height: c.baseline - c.top });
+        rect.addEventListener("pointerenter", function () { point(i); });
+        /* Touch reports a pointerenter and never a leave, so tapping elsewhere has to be
+           what dismisses it. */
+        rect.addEventListener("pointerdown", function () { point(i); });
+        frag.appendChild(rect);
+      });
+
+      svg.textContent = "";
+      svg.appendChild(frag);
+      svg.setAttribute("class", "trend " + state.series + (c.empty ? " bare" : ""));
+      svg.setAttribute("aria-label", "Members joined and left, " + c.heading.toLowerCase());
+      headingEl.textContent = c.heading;
+      unitEl.textContent = c.unit;
+      hide();
+      drawLegend();
+    };
+
+    var drawLegend = function () {
+      var c = thisChart();
+      var html = shown(state.series).map(function (name) {
+        return '<span class="key ' + name + '"><i></i>' + c.lines[name].label +
+               " <b>" + c.lines[name].total + "</b></span>";
+      });
+      if (state.series === "both") {
+        var net = c.totals.net;
+        html.push('<span class="key net' + (net < 0 ? " down" : "") + '">Net <b>' +
+                  (net >= 0 ? "+" : "") + net + "</b></span>");
+      }
+      legend.innerHTML = html.join("");
+    };
+
+    /* ── the tooltip ───────────────────────────────────────────────── */
+    var hide = function () {
+      activeBucket = -1;
+      tip.hidden = true;
+      var guide = svg.querySelector(".guide");
+      if (guide) guide.style.display = "none";
+    };
+
+    var point = function (i) {
+      var c = thisChart();
+      if (c.empty || i === activeBucket) return;
+      activeBucket = i;
+      var hit = c.hits[i];
+      var names = shown(state.series);
+
+      var rows = names.map(function (name) {
+        return '<span class="tip-row"><i class="' + name + '"></i>' +
+               "<b>" + hit[name] + "</b> " + c.lines[name].label.toLowerCase() + "</span>";
+      });
+      tip.innerHTML = '<span class="tip-when">' + hit.label + "</span>" + rows.join("");
+      tip.hidden = false;
+
+      var guide = svg.querySelector(".guide");
+      if (guide) {
+        guide.setAttribute("x1", hit.centre);
+        guide.setAttribute("x2", hit.centre);
+        guide.style.display = "";
+      }
+
+      /* The svg scales to its container, so a viewBox coordinate has to be converted before
+         an html element can be put on top of it. scrollLeft matters too: on a narrow screen
+         the chart scrolls inside the wrapper the tooltip is positioned against. */
+      var box = svg.getBoundingClientRect();
+      var frame = wrap.getBoundingClientRect();
+      var scale = box.width / c.w;
+      var highest = Math.min.apply(null, names.map(function (name) {
+        return c.lines[name].points[i].y;
+      }));
+      var left = box.left - frame.left + wrap.scrollLeft + hit.centre * scale;
+      tip.style.left = left + "px";
+      tip.style.top = (box.top - frame.top + highest * scale) + "px";
+
+      /* Nudged back inside if it would hang off either edge, so the first and last buckets
+         are as readable as the ones in the middle. */
+      var width = tip.offsetWidth;
+      var limit = wrap.clientWidth + wrap.scrollLeft;
+      var shift = 0;
+      if (left - width / 2 < wrap.scrollLeft + 4) shift = wrap.scrollLeft + 4 - (left - width / 2);
+      else if (left + width / 2 > limit - 4) shift = limit - 4 - (left + width / 2);
+      tip.style.left = (left + shift) + "px";
+    };
+
+    wrap.addEventListener("pointerleave", hide);
+    addEventListener("scroll", function () { if (activeBucket !== -1) hide(); }, { passive: true });
+
+    /* ── the toggles ───────────────────────────────────────────────── */
+    var pick = function (attr, key) {
+      chartRoot.querySelectorAll("[" + attr + "]").forEach(function (link) {
+        link.addEventListener("click", function (e) {
+          e.preventDefault();
+          state[key] = link.getAttribute(attr);
+          chartRoot.querySelectorAll("[" + attr + "]").forEach(function (other) {
+            other.classList.toggle("on", other === link);
+          });
+          /* Every other link's href has to follow, or the two toggles would disagree about
+             what the page currently shows the moment scripting stops. */
+          var url = chartRoot.dataset.url + "?period=" + state.period + "&series=" + state.series;
+          history.replaceState(null, "", url);
+          chartRoot.querySelectorAll("[data-period-pick]").forEach(function (a) {
+            a.href = chartRoot.dataset.url + "?period=" + a.getAttribute("data-period-pick") +
+                     "&series=" + state.series;
+          });
+          chartRoot.querySelectorAll("[data-series-pick]").forEach(function (a) {
+            a.href = chartRoot.dataset.url + "?period=" + state.period +
+                     "&series=" + a.getAttribute("data-series-pick");
+          });
+          draw();
+        });
+      });
+    };
+    pick("data-period-pick", "period");
+    pick("data-series-pick", "series");
+
+    /* Redrawn once on load so the hit columns and the guide exist. The server already put a
+       chart here, so nothing visibly changes. */
+    draw();
+  }
+
   /* ── monthly or yearly ───────────────────────────────────────────── */
   /* Both plans are in the page already. This only decides which one is on show, so with the
      script missing the page is two cards side by side rather than nothing. */

@@ -13,6 +13,7 @@ is deliberately re-checked per request rather than trusted from the session:
   can't aim the bot at a channel somewhere else.
 """
 
+import json
 import math
 import os
 import secrets
@@ -617,6 +618,9 @@ def guild_settings(guild_id: int):
 # sums written in Jinja would not be.
 CHART = {"w": 720, "h": 210, "left": 38, "right": 12, "top": 12, "bottom": 30}
 
+# What one point covers, for the line under the heading.
+UNIT_WORDS = {"daily": "day", "weekly": "week", "monthly": "month"}
+
 
 def count_axis(peak: int) -> tuple:
     """A top value and tick marks for a chart counting people.
@@ -663,30 +667,52 @@ def activity_chart(activity: dict, series: str = store.DEFAULT_SERIES) -> dict:
     def y_of(value):
         return CHART["top"] + (1 - value / top) * plot_h
 
-    wanted = ("joins", "leaves") if series == "both" else (series,)
-    lines = []
-    for name in wanted:
-        lines.append({
+    # Both series are always worked out, whichever is being shown. The browser switches
+    # between them without asking the server again, so it needs all of it up front.
+    lines = {}
+    for name in ("joins", "leaves"):
+        lines[name] = {
             "name": name,
             "label": store.SERIES[name],
             "total": activity[name],
             "points": [{"x": round(x_of(i), 1), "y": round(y_of(p[name]), 1),
                         "value": p[name], "label": p["label"]}
                        for i, p in enumerate(points)],
-        })
+        }
 
     every = max(1, len(points) // 8)
     labels = [{"x": round(x_of(i), 1), "text": p["label"]}
               for i, p in enumerate(points)
               if i % every == 0 or i == len(points) - 1]
 
+    # One invisible column per bucket, so hovering anywhere above a point works. Aiming at a
+    # 3.5px dot with a finger is not a thing anybody should have to do.
+    half = (plot_w / span / 2) if len(points) > 1 else plot_w / 2
+    hits = []
+    for i, point in enumerate(points):
+        centre = x_of(i)
+        left = max(CHART["left"], centre - half)
+        right = min(CHART["w"] - CHART["right"], centre + half)
+        hits.append({"x": round(left, 1), "w": round(right - left, 1),
+                     "centre": round(centre, 1), "label": point["label"],
+                     "joins": point["joins"], "leaves": point["leaves"]})
+
     return {
         **CHART,
         "series": series,
+        "period": activity["period"],
+        "heading": activity["heading"],
+        "unit": UNIT_WORDS[activity["period"]],
         "lines": lines,
+        # What the template loops over: only the series on show, in draw order.
+        "shown": [lines[n] for n in (("joins", "leaves") if series == "both" else (series,))],
         "labels": labels,
+        "hits": hits,
         "gridlines": [{"y": round(y_of(t), 1), "value": t} for t in ticks],
         "baseline": round(y_of(0), 1),
+        "top": CHART["top"],
+        "totals": {"joins": activity["joins"], "leaves": activity["leaves"],
+                   "net": activity["joins"] - activity["leaves"]},
         # Nobody has joined or left in the whole period, so the lines would all sit flat on
         # the floor and say nothing. The page draws the axis and explains instead.
         "empty": activity["joins"] == 0 and activity["leaves"] == 0,
@@ -710,8 +736,14 @@ def guild_insights(guild_id: int):
     if series not in store.SERIES:
         series = store.DEFAULT_SERIES
     data = store.insights(guild_id, period)
+    # Every period's geometry, so the toggles can redraw in the browser rather than asking for
+    # the page again. The one asked for is also rendered server side, so the chart is there
+    # before any script runs and the links still work without one.
+    charts = {name: activity_chart(activity, series)
+              for name, activity in data["activity"].items()}
     return render_template("insights.html", guild=guild, data=data,
-                           chart=activity_chart(data["activity"], series),
+                           chart=charts[period if period in charts else store.DEFAULT_TREND],
+                           charts=charts, chart_json=json.dumps(charts),
                            series=series, all_series=store.SERIES,
                            periods=store.TREND_PERIODS)
 

@@ -53,28 +53,32 @@
 </div>
 
 {# ── joins and leaves ───────────────────────────────────────────── #}
-{% set activity = data.activity %}
-<div class="card chart-card">
+{#- Every period's geometry is on the page, so the toggles redraw in the browser instead of
+    fetching the whole page again. The view that was asked for is also rendered server side,
+    so the chart is there before any script runs, and the toggles stay real links that work
+    without one. -#}
+<script type="application/json" data-chart-data>{{ chart_json | safe }}</script>
+<div class="card chart-card" data-chart-root
+     data-period="{{ chart.period }}" data-series="{{ chart.series }}"
+     data-url="{{ url_for('guild_insights', guild_id=guild.id) }}">
   <div class="chart-top">
     <div>
       <h2>Joined and left</h2>
-      <p class="fine">{{ activity.heading }}. Each point is one
-        {{ {"daily": "day", "weekly": "week", "monthly": "month"}[activity.period] }}.</p>
+      <p class="fine"><span data-chart-heading>{{ chart.heading }}</span>. Each point is one
+        <span data-chart-unit>{{ chart.unit }}</span>.</p>
     </div>
-    {#- Both toggles are links rather than buttons: each view is its own url, so a chart can
-        be sent to somebody and the back button behaves. Neither needs scripting. -#}
     <div class="chart-controls">
       <nav class="periods" aria-label="How to group the days">
         {% for key, spec in periods.items() %}
-          <a class="seg{{ ' on' if key == activity.period }}"
+          <a class="seg{{ ' on' if key == chart.period }}" data-period-pick="{{ key }}"
              href="{{ url_for('guild_insights', guild_id=guild.id, period=key, series=series) }}">
             {{ key|capitalize }}</a>
         {% endfor %}
       </nav>
       <nav class="periods series" aria-label="Which lines to show">
         {% for key, label in all_series.items() %}
-          <a class="seg {{ key }}{{ ' on' if key == series }}"
-             href="{{ url_for('guild_insights', guild_id=guild.id, period=activity.period, series=key) }}">
+          <a class="seg {{ key }}{{ ' on' if key == series }}" data-series-pick="{{ key }}"
+             href="{{ url_for('guild_insights', guild_id=guild.id, period=chart.period, series=key) }}">
             {{ label }}</a>
         {% endfor %}
       </nav>
@@ -84,9 +88,9 @@
   {#- Always drawn, empty or not. Axes with nothing on them say "no data yet" better than a
       sentence where a chart should be, and the page keeps its shape the moment one arrives. -#}
   <div class="chart-wrap">
-    <svg class="trend {{ chart.series }}{{ ' bare' if chart.empty }}"
+    <svg class="trend {{ chart.series }}{{ ' bare' if chart.empty }}" data-activity
          viewBox="0 0 {{ chart.w }} {{ chart.h }}" role="img"
-         aria-label="Members joined and left, {{ activity.heading|lower }}">
+         aria-label="Members joined and left, {{ chart.heading|lower }}">
       {%- for line in chart.gridlines %}
         <line class="gridline" x1="{{ chart.left }}" y1="{{ line.y }}"
               x2="{{ chart.w - chart.right }}" y2="{{ line.y }}"></line>
@@ -97,18 +101,20 @@
       {%- if not chart.empty %}
         {#- Filled down to the baseline so the shape reads as a quantity rather than as a
             squiggle. Areas go under every line, so an overlap doesn't hide one of them. -#}
-        {%- for line in chart.lines %}
+        {%- for line in chart.shown %}
           <polygon class="area {{ line.name }}" points="{{ line.points[0].x }},{{ chart.baseline }}
             {%- for p in line.points %} {{ p.x }},{{ p.y }}{% endfor %}
             {{- " " }}{{ line.points[-1].x }},{{ chart.baseline }}"></polygon>
         {%- endfor %}
-        {%- for line in chart.lines %}
+        {%- for line in chart.shown %}
           <polyline class="line {{ line.name }}"
                     points="{% for p in line.points %}{{ p.x }},{{ p.y }} {% endfor %}"></polyline>
         {%- endfor %}
-        {%- for line in chart.lines %}
+        {%- for line in chart.shown %}
           {%- for p in line.points %}
             <circle class="dot {{ line.name }}" cx="{{ p.x }}" cy="{{ p.y }}" r="3.5">
+              {#- The native tooltip, which the script replaces with a readable one. It stays
+                  because it is what a page with no scripting has. -#}
               <title>{{ p.label }}: {{ p.value }} {{ line.label|lower }}</title>
             </circle>
           {%- endfor %}
@@ -127,18 +133,24 @@
               y="{{ chart.top + (chart.h - chart.top - chart.bottom) / 2 }}"
               text-anchor="middle">Nobody joined or left in this period</text>
       {%- endif %}
+
+      {#- The guide and the hit columns are built by the script. Aiming a finger at a 3.5px
+          dot is not something anybody should have to do, so the whole column above a point
+          is the target instead. -#}
+      <g data-chart-guide></g>
+      <g data-chart-hits></g>
     </svg>
+    <div class="tip" data-chart-tip hidden></div>
   </div>
 
-  <div class="legend">
-    {% for line in chart.lines %}
+  <div class="legend" data-chart-legend>
+    {% for line in chart.shown %}
       <span class="key {{ line.name }}"><i></i>{{ line.label }}
         <b>{{ line.total }}</b></span>
     {% endfor %}
-    {% if chart.series == "both" and activity.joins >= activity.leaves %}
-      <span class="key net">Net <b>+{{ activity.joins - activity.leaves }}</b></span>
-    {% elif chart.series == "both" %}
-      <span class="key net down">Net <b>{{ activity.joins - activity.leaves }}</b></span>
+    {% if chart.series == "both" %}
+      <span class="key net{{ ' down' if chart.totals.net < 0 }}">Net
+        <b>{{ "+" if chart.totals.net >= 0 }}{{ chart.totals.net }}</b></span>
     {% endif %}
   </div>
 </div>

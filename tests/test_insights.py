@@ -1,17 +1,19 @@
-"""The insights page: the trend chart, the survival bars and the by-invite table.
+"""The insights page: the joins and leaves chart, the survival bars and the by-invite table.
 
-The maths is the part worth pinning down, because every figure here is a ratio and the
-denominator is where these go wrong. Somebody who joined yesterday cannot tell you anything
+The maths is the part worth pinning down, because most of these figures are ratios and the
+denominator is where they go wrong. Somebody who joined yesterday cannot tell you anything
 about 30 day retention, and counting them as a survivor flatters every number on the page.
 
-The chart has a second trap: a group too young to measure has no rate at all. Drawing that as
-zero would show a collapse that never happened, so it has to be a gap.
+The chart is the exception, and has its own trap. Its numbers are counts rather than rates, so
+zero is a real answer and the axis has to be worked out from the data instead of being 0 to
+100. It also has to draw the same whether there is anything to plot or not, and it ships every
+period at once so the toggles can redraw without going back to the server.
 """
 import pathlib as _pathlib
 ROOT = _pathlib.Path(__file__).resolve().parents[1]
 WEB_DIR = str(ROOT / "web")
 
-import datetime, html, os, sys, types
+import datetime, html, json, os, sys, types
 sys.path.insert(0, WEB_DIR)
 
 os.environ.update({
@@ -235,7 +237,10 @@ def main():
     # real zero. The line has to stay unbroken or it would imply missing data.
     load(spell(35, None), spell(7, None))
     chart = dashboard.activity_chart(store.activity_trend(111, "weekly"), "joins")
-    line = chart["lines"][0]
+    # "lines" holds both series whatever is on show, since the browser switches between them
+    # without asking again. "shown" is the ones actually drawn.
+    assert set(chart["lines"]) == {"joins", "leaves"}, chart["lines"].keys()
+    line = chart["shown"][0]
     assert len(line["points"]) == 12, "every bucket gets a point"
     assert sum(1 for p in line["points"] if p["value"] == 0) == 10, line["points"]
     assert all(p["y"] == chart["baseline"] for p in line["points"] if p["value"] == 0)
@@ -246,12 +251,17 @@ def main():
     for period in store.TREND_PERIODS:
         for series in store.SERIES:
             chart = dashboard.activity_chart(store.activity_trend(111, period), series)
-            expected_lines = 2 if series == "both" else 1
-            assert len(chart["lines"]) == expected_lines, (period, series, chart["lines"])
-            for line in chart["lines"]:
+            expected = 2 if series == "both" else 1
+            assert len(chart["shown"]) == expected, (period, series, chart["shown"])
+            assert len(chart["hits"]) == len(chart["lines"]["joins"]["points"]), period
+            for line in chart["shown"]:
                 for point in line["points"]:
                     assert chart["top"] <= point["y"] <= chart["h"] - chart["bottom"], point
                     assert chart["left"] <= point["x"] <= chart["w"] - chart["right"], point
+            # The hit columns tile the plot without overlapping, or a hover would land on the
+            # wrong bucket somewhere along the axis.
+            for a, b in zip(chart["hits"], chart["hits"][1:]):
+                assert round(a["x"] + a["w"], 1) <= round(b["x"], 1) + 0.2, (a, b)
         # The count of labels doesn't matter, the spacing does: "18 May" is about 38px wide,
         # so anything tighter than that would collide with the next one.
         labels = chart["labels"]
@@ -292,6 +302,34 @@ def main():
     assert "Net" in body, "and the combined view does the subtraction"
     print("  both: two lines and a net figure OK")
 
+    print("\n=== every period ships with the page, so switching needs no round trip ===")
+    body = c.get("/servers/111/insights").data.decode()
+    blob = body.split("data-chart-data>", 1)[1].split("</script>", 1)[0]
+    embedded = json.loads(blob)
+    assert set(embedded) == set(store.TREND_PERIODS), embedded.keys()
+    for name, drawn in embedded.items():
+        # Both series in every period, whichever one the server happened to render: the
+        # toggles switch between them in the browser and cannot go back for the other.
+        assert set(drawn["lines"]) == {"joins", "leaves"}, (name, drawn["lines"].keys())
+        assert drawn["hits"] and len(drawn["hits"]) == len(drawn["lines"]["joins"]["points"])
+        # Everything the script rewrites has to be in here, or a switch would leave the page
+        # half updated: the caption, the legend totals and the axis.
+        for key in ("heading", "unit", "totals", "gridlines", "baseline", "empty"):
+            assert key in drawn, (name, key)
+        assert set(drawn["totals"]) == {"joins", "leaves", "net"}, drawn["totals"]
+        assert drawn["totals"]["net"] == drawn["totals"]["joins"] - drawn["totals"]["leaves"]
+    print(f"  {len(embedded)} periods, both series each, with hits and totals OK")
+
+    print("\n=== and the toggles stay real links for a page without scripting ===")
+    # They are what the server renders against, so they cannot become buttons.
+    for period in store.TREND_PERIODS:
+        assert f'data-period-pick="{period}"' in body, period
+        assert f"period={period}" in body, period
+    for series in store.SERIES:
+        assert f'data-series-pick="{series}"' in body, series
+        assert f"series={series}" in body, series
+    print("  every period and series reachable by url OK")
+
     print("\n=== a bogus series falls back rather than erroring ===")
     for bad in ("nonsense", "", "'; drop--"):
         r = c.get(f"/servers/111/insights?series={bad}")
@@ -317,7 +355,7 @@ def main():
     assert "Nobody joined or left in this period" in body
     # Empty means empty: axes and labels, but nothing plotted on them.
     assert "polyline" not in body and "<circle" not in body, "nothing to plot"
-    assert body.count("gridline") == 5, "the axis lines are still there"
+    assert body.count('class="gridline"') == 5, "the axis lines are still there"
     # Whole numbers on the axis even with nothing to scale to, rather than 0.25 of a person.
     chart = dashboard.activity_chart(store.activity_trend(111), "joins")
     assert [g["value"] for g in chart["gridlines"]] == [0, 1, 2, 3, 4], chart["gridlines"]

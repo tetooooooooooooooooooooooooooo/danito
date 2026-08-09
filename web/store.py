@@ -804,10 +804,16 @@ def insights(guild_id: int, period: str = DEFAULT_TREND) -> dict:
         "joins": len(spells),
         "still_here": sum(1 for s in spells if s.get("left_at") is None),
         "survival": [survival[d] for d in INSIGHT_WINDOWS],
+        # Every period, not just the one asked for. The chart switches between them in the
+        # browser without going back to the server, so they all have to be on the page, and
+        # they all come off the one read of the spells above.
+        "activity": {name: activity_trend(guild_id, name, spells) for name in TREND_PERIODS},
         # Retention still feeds the headline figure and its direction. It stopped being the
         # chart because joins and leaves are what somebody opens this page to see.
-        "trend": retention_trend(guild_id, period, spells),
-        "activity": activity_trend(guild_id, period, spells),
+        #
+        # Fixed to weekly rather than following the chart's period, so switching the chart
+        # cannot leave a stale figure sitting above it.
+        "trend": retention_trend(guild_id, DEFAULT_TREND, spells),
         "invites": retention_by_invite(guild_id, spells),
         "window_days": SPELL_WINDOW_DAYS,
         "capped": len(spells) >= MAX_SPELLS_READ,

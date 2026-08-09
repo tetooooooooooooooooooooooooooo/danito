@@ -1863,6 +1863,39 @@ svg.trend .dot.leaves { fill: var(--danger); }
 /* Bigger than it looks, so the tooltip is catchable with a finger as well as a pointer. */
 svg.trend .dot:hover { r: 6; }
 
+/* Transparent columns, one per bucket, spanning the full height of the plot. The dots are
+   3.5px across and nobody should have to aim at one. */
+svg.trend .hit { fill: transparent; }
+svg.trend .guide { stroke: var(--line-bright); stroke-width: 1; stroke-dasharray: 3 3; }
+
+/* Positioned against the wrapper rather than the svg, because the svg scales and the wrapper
+   is what scrolls. */
+.chart-wrap { position: relative; }
+
+.tip {
+  position: absolute;
+  z-index: 3;
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 12px));
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(12, 19, 17, .95);
+  border: 1px solid var(--line-bright);
+  box-shadow: 0 16px 34px -18px #000;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: nowrap;
+  backdrop-filter: blur(6px);
+}
+.tip-when { color: var(--faint); font-size: 12px; letter-spacing: .2px; }
+.tip-row { display: flex; align-items: center; gap: 7px; color: var(--dim); }
+.tip-row i { width: 9px; height: 9px; border-radius: 50%; background: var(--mint); }
+.tip-row i.leaves { background: var(--danger); }
+.tip-row b { color: var(--text); font-weight: 650; }
+
 .chart-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 
 /* The selected series is coloured like the line it switches on, so the toggle says which is
