@@ -35,15 +35,38 @@ class FakeColl:
 
     def create_index(self, *a, **k): pass
 
+    @staticmethod
+    def _read(doc, path):
+        """Follows a dotted key the way Mongo does, so "picks.7" reaches into a sub-document."""
+        current = doc
+        for part in path.split("."):
+            if not isinstance(current, dict):
+                return None
+            current = current.get(part)
+        return current
+
+    @staticmethod
+    def _write(doc, path, value):
+        parts = path.split(".")
+        current = doc
+        for part in parts[:-1]:
+            current = current.setdefault(part, {})
+        current[parts[-1]] = value
+
     def _match(self, doc, query):
         for key, value in query.items():
-            if key == "partners" and isinstance(doc.get(key), list):
-                if value not in doc[key]:
+            held = self._read(doc, key)
+            if key == "partners" and isinstance(held, list):
+                if value not in held:
                     return False
             elif isinstance(value, dict) and "$gte" in value:
-                if not (doc.get(key) is not None and doc[key] >= value["$gte"]):
+                if not (held is not None and held >= value["$gte"]):
                     return False
-            elif doc.get(key) != value:
+            elif isinstance(value, dict) and "$exists" in value:
+                # The one that matters for the duel: only record a pick if there isn't one.
+                if (held is not None) != value["$exists"]:
+                    return False
+            elif held != value:
                 return False
         return True
 
@@ -80,6 +103,8 @@ class FakeColl:
             doc.setdefault(field, [])
             if value not in doc[field]:
                 doc[field].append(value)
+        for field, value in ops.get("$set", {}).items():
+            self._write(doc, field, value)
         return doc
 
 
@@ -143,10 +168,43 @@ class Reply:
         return "\n".join(out)
 
 
-def role(name, value=0, default=False):
-    return types.SimpleNamespace(
-        name=name, mention=f"@{name}", colour=types.SimpleNamespace(value=value),
-        is_default=lambda: default)
+def stub_fetch(value):
+    """Stands in for a coroutine method that just hands something back."""
+    async def fetch(*a, **k):
+        return value
+    return fetch
+
+
+class FakeRole:
+    """A class rather than a namespace because roleinfo compares roles by position, and
+    SimpleNamespace can't carry the comparison operators that needs."""
+
+    def __init__(self, name, value=0, default=False, position=1):
+        self.id = 40000 + position
+        self.name = name
+        self.mention = f"@{name}"
+        # A real Colour, because the embed refuses anything else and that is
+        # exactly what discord.py hands the command in production.
+        self.colour = discord.Colour(value)
+        self.position = position
+        self.created_at = datetime.datetime(2023, 3, 1, tzinfo=datetime.timezone.utc)
+        self.hoist = self.mentionable = self.managed = False
+        self.members = []
+        self.permissions = None
+        self._default = default
+
+    def is_default(self):
+        return self._default
+
+    def __ge__(self, other):
+        return self.position >= other.position
+
+    def __lt__(self, other):
+        return self.position < other.position
+
+
+def role(name, value=0, default=False, position=1):
+    return FakeRole(name, value, default, position)
 
 
 def permissions(**granted):
@@ -162,7 +220,7 @@ def member(uid, name="someone", bot=False, joined=True, roles=None, nick=None,
         id=uid, bot=bot, display_name=nick or name, name=name.lower(), global_name=name,
         nick=nick,
         mention=f"<@{uid}>",
-        colour=types.SimpleNamespace(value=0),
+        colour=discord.Colour(0),
         display_avatar=types.SimpleNamespace(url="http://x/a.png"),
         created_at=datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc),
         joined_at=(datetime.datetime(2024, 1, 1, tzinfo=datetime.timezone.utc)
@@ -538,15 +596,196 @@ async def main():
     DB.c["memberships"].docs = kept
     print("  an explanation rather than a row of zeroes OK")
 
+    print("\n=== the eight ball answers, and leans yes ===")
+    moods = [m for m, _ in F.EIGHT_BALL]
+    assert len(F.EIGHT_BALL) == 20, len(F.EIGHT_BALL)
+    # An eight ball that says no half the time stops being fun on the second question.
+    assert moods.count("yes") == 10 and moods.count("no") == 5, moods
+    assert set(moods) <= set(F.EIGHT_BALL_COLOURS), set(moods)
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.eight_ball.callback(cog, i, "will this work")
+    card = i.response.sent[0]["embed"]
+    assert card.author.name == "will this work", card.author.name
+    assert any(answer in card.description for _, answer in F.EIGHT_BALL), card.description
+    print("  20 answers, 10 of them yes, and it quotes the question OK")
+
+    print("\n=== and a long question can't turn it into a billboard ===")
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.eight_ball.callback(cog, i, "x" * 900)
+    assert len(i.response.sent[0]["embed"].author.name) <= 256
+    print("  cut to fit rather than refused by Discord OK")
+
+    print("\n=== rock paper scissors knows who beats what ===")
+    for throw in F.THROWS:
+        assert cog._outcome(throw, throw) == 0, throw
+        assert cog._outcome(throw, F.BEATS[throw]) == 1, throw
+        assert cog._outcome(F.BEATS[throw], throw) == -1, throw
+    print("  every pairing, both ways round OK")
+
+    print("\n=== against the bot, and only for whoever asked ===")
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.rps.callback(cog, i, None)
+    ids = [b.custom_id for b in i.response.sent[0]["view"].children]
+    assert ids == ["rps:solo:rock:1", "rps:solo:paper:1", "rps:solo:scissors:1"], ids
+
+    butt = FakeInteraction(sam, custom_id="rps:solo:rock:1", guild_members=everyone)
+    await cog.on_interaction(butt)
+    assert "somebody else's game" in butt.text, butt.text
+    assert not butt.response.edited, "and it must not resolve the game"
+
+    mine = FakeInteraction(alex, custom_id="rps:solo:rock:1", guild_members=everyone)
+    await cog.on_interaction(mine)
+    result = mine.response.edited[0]["embed"]
+    assert result.title in ("You win", "A draw", "I win"), result.title
+    assert "Rock" in result.description, result.description
+    assert mine.response.edited[0]["view"] is None, "the buttons have to go"
+    print(f"  a stranger is turned away, the owner gets: {result.title}")
+
+    print("\n=== a duel waits for both, and tells neither ===")
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.rps.callback(cog, i, sam)
+    game_id = i._original.id
+    ids = [b.custom_id for b in i.response.sent[0]["view"].children]
+    assert all(cid.startswith("rps:duel:") and cid.endswith(":0") for cid in ids), ids
+    stored = DB["rps_games"].find_one({"_id": game_id})
+    assert stored and stored["players"] == [1, 2] and stored["picks"] == {}
+
+    outsider = FakeInteraction(kit, custom_id="rps:duel:rock:0", message_id=game_id,
+                               guild_members=everyone)
+    await cog.on_interaction(outsider)
+    assert "not in this one" in outsider.text, outsider.text
+
+    one = FakeInteraction(alex, custom_id="rps:duel:rock:0", message_id=game_id,
+                          guild_members=everyone)
+    await cog.on_interaction(one)
+    # Privately, or pressing a button would tell the other player what you picked.
+    assert one.response.sent and one.response.sent[0]["ephemeral"] is True
+    assert not one.response.edited, "nothing on the message until both have gone"
+    assert "Waiting" in one.text, one.text
+    print("  an outsider is refused, and the first pick is kept quiet OK")
+
+    print("\n=== pressing twice doesn't change your mind ===")
+    twice = FakeInteraction(alex, custom_id="rps:duel:paper:0", message_id=game_id,
+                            guild_members=everyone)
+    await cog.on_interaction(twice)
+    assert "already gone" in twice.text, twice.text
+    assert DB["rps_games"].find_one({"_id": game_id})["picks"] == {"1": "rock"}
+    print("  the first pick stands OK")
+
+    print("\n=== and the second pick settles it ===")
+    two = FakeInteraction(sam, custom_id="rps:duel:scissors:0", message_id=game_id,
+                          guild_members=everyone)
+    await cog.on_interaction(two)
+    final = two.response.edited[0]["embed"]
+    # Rock beats scissors, so the challenger takes it.
+    assert "<@1> wins" in final.description, final.description
+    assert "Rock" in final.description and "Scissors" in final.description
+    assert two.response.edited[0]["view"] is None
+    assert DB["rps_games"].find_one({"_id": game_id}) is None, "a finished game is cleared"
+    print("  revealed both, named the winner, and cleaned up OK")
+
+    print("\n=== a game the database has forgotten says so ===")
+    lost = FakeInteraction(alex, custom_id="rps:duel:rock:0", message_id=555444,
+                           guild_members=everyone)
+    await cog.on_interaction(lost)
+    assert "too old" in lost.text, lost.text
+    print("  told quietly rather than the button doing nothing OK")
+
+    print("\n=== and you can't duel yourself or a bot ===")
+    for target, expect in ((alex, "at what cost"), (robot, "Leave it out")):
+        i = FakeInteraction(alex, guild_members=everyone)
+        await cog.rps.callback(cog, i, target)
+        assert expect in i.text, (target.display_name, i.text)
+        assert i.response.sent[0]["ephemeral"] is True
+    print("  both refused OK")
+
+    print("\n=== roleinfo ===")
+    top = role("Bot", position=90)              # the bot's own highest
+    admins = role("Admins", value=0xFF0000, position=5)
+    admins.hoist = True
+    admins.members = [alex, sam]
+    admins.permissions = permissions(ban_members=True, manage_messages=True)
+
+    i = FakeInteraction(alex, guild_members=everyone)
+    i.guild.me = types.SimpleNamespace(top_role=top)
+    await cog.roleinfo.callback(cog, i, admins)
+    card = i.response.sent[0]["embed"]
+    body = f"{card.author.name} {card.description} " + " ".join(
+        f"{f.name} {f.value}" for f in card.fields)
+    for expected in ("Admins", "#ff0000", "Has it (2)", "Alex", "Sam", "Ban",
+                     "Shown separately", "Only people with Mention Everyone"):
+        assert expected in body, (expected, body)
+    print("  colour, holders, permissions and the two display flags OK")
+
+    print("\n=== and it warns when the bot couldn't hand it out ===")
+    managed = role("Integration", position=9)
+    managed.managed = True
+    managed.permissions = permissions()
+    i = FakeInteraction(alex, guild_members=everyone)
+    i.guild.me = types.SimpleNamespace(top_role=top)
+    await cog.roleinfo.callback(cog, i, managed)
+    body = " ".join(f"{f.name} {f.value}" for f in i.response.sent[0]["embed"].fields)
+    assert "Managed by an integration" in body, body
+    assert "Nobody yet" in body, "an empty role has to say so"
+
+    # And the other reason the bot can't hand one out: it sits too high.
+    above = role("Owner only", position=99)
+    above.permissions = permissions()
+    i = FakeInteraction(alex, guild_members=everyone)
+    i.guild.me = types.SimpleNamespace(top_role=top)
+    await cog.roleinfo.callback(cog, i, above)
+    body = " ".join(f"{f.name} {f.value}" for f in i.response.sent[0]["embed"].fields)
+    assert "above my highest role" in body, body
+    print("  both reasons the dashboard would grey it out, said in Discord OK")
+
+    print("\n=== avatar, including a server-only one ===")
+    plain = member(11, "Plain")
+    plain.guild_avatar, plain.avatar = None, None
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.avatar.callback(cog, i, plain)
+    card = i.response.sent[0]["embed"]
+    assert card.image.url == plain.display_avatar.url
+    assert "Their account one" not in (card.description or "")
+
+    dual = member(12, "Dual")
+    dual.guild_avatar = types.SimpleNamespace(url="http://x/server.png")
+    dual.avatar = types.SimpleNamespace(url="http://x/global.png")
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.avatar.callback(cog, i, dual)
+    card = i.response.sent[0]["embed"]
+    assert "Their account one" in card.description, card.description
+    assert "just for this server" in (card.footer.text or "")
+    print("  one link normally, both when they differ OK")
+
+    print("\n=== banner, whether or not they have one ===")
+    class FetchedUser:
+        def __init__(self, banner=None, accent=None):
+            self.banner = banner
+            self.accent_colour = accent
+
+    bot.fetch_user = stub_fetch(FetchedUser(
+        banner=types.SimpleNamespace(url="http://x/banner.png")))
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.banner.callback(cog, i, sam)
+    card = i.followup.sent[0]["embed"]
+    assert card.image.url == "http://x/banner.png"
+    assert "Full size" in card.description
+
+    bot.fetch_user = stub_fetch(FetchedUser())
+    i = FakeInteraction(alex, guild_members=everyone)
+    await cog.banner.callback(cog, i, sam)
+    assert "hasn't set a banner" in i.followup.sent[0]["embed"].description
+    print("  the image when there is one, a sentence when there isn't OK")
+
     print("\n=== every collection it touches is per guild ===")
     # Both are named in Lifecycle so a server removing the bot takes them with it. The
     # lifecycle suite enforces that; this checks the names haven't drifted apart.
     import importlib
     lifecycle = importlib.import_module("Cogs.Lifecycle")
-    for name in ("marriages", "wyr_polls"):
+    for name in ("marriages", "wyr_polls", "rps_games"):
         assert name in lifecycle.BY_GUILD_ID, f"{name} would be left behind on removal"
         assert DB.c.get(name) is not None, f"{name} was never written to by these tests"
-    print("  marriages and wyr_polls both cleaned up on removal OK")
+    print("  marriages, wyr_polls and rps_games all cleaned up on removal OK")
 
     print("\n=== a click that isn't ours is left alone ===")
     other = FakeInteraction(alex, custom_id="rr:abc:123", guild_members=everyone)

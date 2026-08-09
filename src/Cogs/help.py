@@ -32,6 +32,7 @@ CATEGORIES = {
     "Utility": ("🔧", "Utility", "Small tools for server admins."),
     "Fun": ("🎲", "Profiles & Fun",
             "Look somebody up, ask the room a question, and get married."),
+    "Reminders": ("⏰", "Reminders", "Be told about something later."),
     "Help": ("❓", "Help", "This menu."),
 }
 FALLBACK = ("▫️", None, "")

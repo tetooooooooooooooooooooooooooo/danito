@@ -41,6 +41,8 @@ BY_GUILD_ID = [
     "ping_events",    # the survey reminder log
     "marriages",      # who /marry paired up, which means nothing outside this server
     "wyr_polls",      # votes on would-you-rather questions
+    "rps_games",      # a game in progress, meaningless once the message is gone
+    "reminders",      # set in a server, and they name a channel in it
 ]
 # These two key on the guild id itself rather than a guild_id field.
 BY_ID = ["config_dirty"]

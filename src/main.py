@@ -87,6 +87,7 @@ class Bot(commands.Bot):
             "Cogs.stats",
             "Cogs.utility",
             "Cogs.Fun",
+            "Cogs.Reminders",
             "Cogs.ImageSpamFilter",
             "Cogs.MediaLog",
             "Cogs.Logging",

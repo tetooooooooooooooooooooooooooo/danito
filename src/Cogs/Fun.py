@@ -41,6 +41,30 @@ POLL_TTL_DAYS = 30
 MARRY_ID = re.compile(r"^marry:(\d+):(\d+):(yes|no)$")
 # wyr:<a|b>
 WYR_ID = re.compile(r"^wyr:([ab])$")
+# rps:<solo|duel>:<rock|paper|scissors>:<who may press, 0 for either player>
+RPS_ID = re.compile(r"^rps:(solo|duel):(rock|paper|scissors):(\d+)$")
+
+# Games are disposable, like the polls.
+GAME_TTL_DAYS = 7
+
+THROWS = {"rock": "🪨", "paper": "📄", "scissors": "✂️"}
+# What beats what. Only needs one direction: the reverse is a loss and a match is a draw.
+BEATS = {"rock": "scissors", "paper": "rock", "scissors": "paper"}
+
+# Twenty, the way the toy has them: ten yes, five maybe, five no. Weighted that way on
+# purpose, because an eight ball that says no half the time stops being fun immediately.
+EIGHT_BALL = [
+    ("yes", "It is certain."), ("yes", "Without a doubt."), ("yes", "You may rely on it."),
+    ("yes", "Yes, definitely."), ("yes", "As I see it, yes."), ("yes", "Most likely."),
+    ("yes", "Outlook good."), ("yes", "Signs point to yes."), ("yes", "Yes."),
+    ("yes", "Absolutely, and don't let anyone tell you otherwise."),
+    ("maybe", "Reply hazy, try again."), ("maybe", "Ask again later."),
+    ("maybe", "Better not tell you now."), ("maybe", "Cannot predict now."),
+    ("maybe", "Concentrate and ask again."),
+    ("no", "Don't count on it."), ("no", "My reply is no."), ("no", "My sources say no."),
+    ("no", "Outlook not so good."), ("no", "Very doubtful."),
+]
+EIGHT_BALL_COLOURS = {"yes": 0x3DDC97, "maybe": 0xF0B45F, "no": 0xF27272}
 
 # Deliberately safe for a server anybody can join, and deliberately not topical: a question
 # that needs context stops being funny the moment somebody reads it a month later.
@@ -219,6 +243,10 @@ class Fun(commands.Cog, name="Fun"):
         polls.create_index("asked_at", expireAfterSeconds=POLL_TTL_DAYS * 86400,
                            name="ttl_asked")
         polls.create_index([("guild_id", 1)], name="guild")
+        games = self._db["rps_games"]
+        games.create_index("started_at", expireAfterSeconds=GAME_TTL_DAYS * 86400,
+                           name="ttl_started")
+        games.create_index([("guild_id", 1)], name="guild")
 
     # ── who somebody is ──────────────────────────────────────────────
     @app_commands.command(name="userinfo", description="Everything the bot knows about somebody")
@@ -502,6 +530,252 @@ class Fun(commands.Cog, name="Fun"):
                          f"**{len(scores)}** {'person' if len(scores) == 1 else 'people'}")
         return lines
 
+    # ── what a role is ───────────────────────────────────────────────
+    @app_commands.command(name="roleinfo", description="Everything about one role")
+    @app_commands.describe(role="The role to look at")
+    @app_commands.checks.cooldown(5, 30.0)
+    @app_commands.guild_only()
+    async def roleinfo(self, interaction: discord.Interaction, role: discord.Role):
+        guild = interaction.guild
+        holders = role.members
+        colour = role.colour if role.colour.value else COLOR
+
+        embed = discord.Embed(colour=colour, description=role.mention)
+        embed.set_author(name=role.name)
+        embed.set_footer(text=f"ID {role.id}")
+
+        embed.add_field(name="Made", value=f"{stamp(role.created_at)}\n"
+                                           f"{stamp(role.created_at, 'R')}")
+        embed.add_field(name="Colour",
+                        value=f"`#{role.colour.value:06x}`" if role.colour.value
+                              else "-# none, so it inherits")
+        embed.add_field(name="Position",
+                        value=f"**{role.position}**\n-# of {len(guild.roles) - 1}")
+
+        embed.add_field(
+            name=f"Has it ({len(holders)})",
+            value=(", ".join(m.display_name for m in holders[:20])
+                   + (f" and {len(holders) - 20} more" if len(holders) > 20 else ""))
+                  if holders else "Nobody yet",
+            inline=False)
+
+        perms = [label for attr, label in NOTABLE if getattr(role.permissions, attr, False)]
+        if perms:
+            if "Administrator" in perms:
+                perms = ["Administrator, which is everything"]
+            embed.add_field(name="Grants", value=", ".join(perms[:8]), inline=False)
+
+        notes = [f"{'Shown' if role.hoist else 'Not shown'} separately in the member list",
+                 f"{'Anyone' if role.mentionable else 'Only people with Mention Everyone'} "
+                 f"can ping it"]
+        # The same rule the dashboard enforces, said here so it can be found without opening
+        # the website: Discord refuses these assignments with a bare 403 and no explanation.
+        if role.managed:
+            notes.append("⚠️ Managed by an integration, so nobody can assign it by hand")
+        elif guild.me and role >= guild.me.top_role:
+            notes.append("⚠️ Sits at or above my highest role, so I can't hand it out")
+        embed.add_field(name="Worth knowing", value="\n".join(f"-# {n}" for n in notes),
+                        inline=False)
+        await interaction.response.send_message(embed=embed)
+
+    # ── pictures ─────────────────────────────────────────────────────
+    @app_commands.command(name="avatar", description="Somebody's avatar, full size")
+    @app_commands.describe(member="Whose. Defaults to you.")
+    @app_commands.checks.cooldown(5, 30.0)
+    @app_commands.guild_only()
+    async def avatar(self, interaction: discord.Interaction, member: discord.Member = None):
+        member = member or interaction.user
+        embed = discord.Embed(colour=member.colour if member.colour.value else COLOR)
+        embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+        embed.set_image(url=member.display_avatar.url)
+
+        # A per-server avatar is a different picture from the account one, and somebody
+        # asking for an avatar usually wants whichever they didn't just see.
+        links = [f"[Shown here]({member.display_avatar.url})"]
+        if member.guild_avatar and member.avatar:
+            links.append(f"[Their account one]({member.avatar.url})")
+            embed.set_footer(text="They've set a different avatar just for this server.")
+        embed.description = " · ".join(links)
+        await interaction.response.send_message(embed=embed)
+
+    @app_commands.command(name="banner", description="Somebody's banner, if they have one")
+    @app_commands.describe(member="Whose. Defaults to you.")
+    @app_commands.checks.cooldown(5, 30.0)
+    @app_commands.guild_only()
+    async def banner(self, interaction: discord.Interaction, member: discord.Member = None):
+        member = member or interaction.user
+        await interaction.response.defer()
+
+        # Banners are not on the cached member, only on a freshly fetched user. There is no
+        # way round the extra call, which is why this defers first.
+        try:
+            user = await self.bot.fetch_user(member.id)
+        except discord.HTTPException:
+            await interaction.followup.send(
+                "Discord wouldn't tell me. Try again in a moment.", ephemeral=True)
+            return
+
+        embed = discord.Embed(colour=user.accent_colour or member.colour or COLOR)
+        embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
+        if user.banner:
+            embed.set_image(url=user.banner.url)
+            embed.description = f"[Full size]({user.banner.url})"
+        elif user.accent_colour:
+            embed.description = (f"No banner, just a colour: "
+                                 f"`#{user.accent_colour.value:06x}`")
+        else:
+            embed.description = f"{member.display_name} hasn't set a banner."
+        await interaction.followup.send(embed=embed)
+
+    # ── the eight ball ───────────────────────────────────────────────
+    @app_commands.command(name="8ball", description="Ask it something. It answers badly.")
+    @app_commands.describe(question="What you want to know")
+    @app_commands.checks.cooldown(5, 30.0)
+    @app_commands.guild_only()
+    async def eight_ball(self, interaction: discord.Interaction, question: str):
+        mood, answer = random.choice(EIGHT_BALL)
+        embed = discord.Embed(colour=EIGHT_BALL_COLOURS[mood],
+                              description=f"🎱 **{answer}**")
+        # Their words, quoted rather than repeated, so a long question can't be used to make
+        # the bot post a wall of text with its name on it.
+        embed.set_author(name=question[:250], icon_url=interaction.user.display_avatar.url)
+        await interaction.response.send_message(embed=embed)
+
+    # ── rock paper scissors ──────────────────────────────────────────
+    @app_commands.command(name="rps", description="Rock paper scissors, against me or anyone")
+    @app_commands.describe(member="Who to challenge. Leave it out to play me.")
+    @app_commands.checks.cooldown(4, 30.0)
+    @app_commands.guild_only()
+    async def rps(self, interaction: discord.Interaction, member: discord.Member = None):
+        if member and member.id == interaction.user.id:
+            await interaction.response.send_message(
+                "You'd win, but at what cost.", ephemeral=True)
+            return
+        if member and member.bot:
+            await interaction.response.send_message(
+                "Leave it out. Run it without anybody to play me.", ephemeral=True)
+            return
+
+        if member is None:
+            # Nothing to remember: I pick when you click, and the id says who may click.
+            view = self._throws("solo", interaction.user.id)
+            embed = discord.Embed(
+                colour=COLOR, title="🪨 📄 ✂️",
+                description=f"{interaction.user.mention}, pick one. I'll go at the same time.")
+            await interaction.response.send_message(embed=embed, view=view)
+            return
+
+        view = self._throws("duel", 0)
+        embed = discord.Embed(
+            colour=COLOR, title="🪨 📄 ✂️",
+            description=f"{interaction.user.mention} challenges {member.mention}.\n"
+                        f"Both pick. Nobody sees anything until you both have.")
+        await interaction.response.send_message(content=member.mention, embed=embed, view=view)
+        posted = await interaction.original_response()
+        try:
+            await self._run(self._db["rps_games"].insert_one, {
+                "_id": posted.id,
+                "guild_id": interaction.guild.id,
+                "players": [interaction.user.id, member.id],
+                "picks": {},
+                "started_at": datetime.datetime.now(datetime.timezone.utc),
+            })
+        except Exception as e:
+            print(f"[Fun] couldn't record the game: {e}")
+
+    @staticmethod
+    def _throws(mode: str, who: int) -> discord.ui.View:
+        view = discord.ui.View(timeout=None)
+        for throw, emoji in THROWS.items():
+            view.add_item(discord.ui.Button(
+                label=throw.title(), emoji=emoji, style=discord.ButtonStyle.secondary,
+                custom_id=f"rps:{mode}:{throw}:{who}"))
+        return view
+
+    @staticmethod
+    def _outcome(mine: str, theirs: str) -> int:
+        """1 if the first wins, -1 if the second does, 0 for a draw."""
+        if mine == theirs:
+            return 0
+        return 1 if BEATS[mine] == theirs else -1
+
+    async def _play_solo(self, interaction: discord.Interaction, throw: str, who: int):
+        if interaction.user.id != who:
+            await interaction.response.send_message(
+                "That's somebody else's game. Run `/rps` for your own.", ephemeral=True)
+            return
+        mine = random.choice(list(THROWS))
+        result = self._outcome(throw, mine)
+        embed = discord.Embed(
+            colour={1: 0x3DDC97, 0: 0xF0B45F, -1: 0xF27272}[result],
+            title={1: "You win", 0: "A draw", -1: "I win"}[result],
+            description=f"{THROWS[throw]} **{throw.title()}**  vs  "
+                        f"**{mine.title()}** {THROWS[mine]}")
+        embed.set_author(name=interaction.user.display_name,
+                         icon_url=interaction.user.display_avatar.url)
+        await interaction.response.edit_message(embed=embed, view=None)
+
+    async def _play_duel(self, interaction: discord.Interaction, throw: str):
+        try:
+            game = await self._run(self._db["rps_games"].find_one,
+                                   {"_id": interaction.message.id})
+        except Exception as e:
+            print(f"[Fun] game lookup failed: {e}")
+            game = None
+
+        if not game:
+            await interaction.response.send_message(
+                "That game is too old to finish. Start a new one with `/rps`.", ephemeral=True)
+            return
+        if interaction.user.id not in game["players"]:
+            await interaction.response.send_message(
+                "You're not in this one.", ephemeral=True)
+            return
+
+        me = str(interaction.user.id)
+        if me in (game.get("picks") or {}):
+            await interaction.response.send_message(
+                f"You've already gone. You picked {THROWS[game['picks'][me]]}.", ephemeral=True)
+            return
+
+        try:
+            game = await self._run(
+                self._db["rps_games"].find_one_and_update,
+                {"_id": interaction.message.id, f"picks.{me}": {"$exists": False}},
+                {"$set": {f"picks.{me}": throw}}, return_document=True)
+        except Exception as e:
+            print(f"[Fun] couldn't record the pick: {e}")
+            game = None
+        if not game:
+            # Somebody double clicked and the other press won. Nothing to add.
+            await interaction.response.send_message("Already counted.", ephemeral=True)
+            return
+
+        picks = game.get("picks") or {}
+        one, two = game["players"]
+        if len(picks) < 2:
+            # Told privately, so pressing a button doesn't leak which one to the other player.
+            await interaction.response.send_message(
+                f"{THROWS[throw]} locked in. Waiting for the other one.", ephemeral=True)
+            return
+
+        first, second = picks[str(one)], picks[str(two)]
+        result = self._outcome(first, second)
+        if result == 0:
+            title, colour = "A draw", 0xF0B45F
+        else:
+            winner = one if result == 1 else two
+            title, colour = f"<@{winner}> wins", 0x3DDC97
+        embed = discord.Embed(
+            colour=colour, title="🪨 📄 ✂️",
+            description=f"{title}\n\n<@{one}> {THROWS[first]} **{first.title()}**\n"
+                        f"<@{two}> {THROWS[second]} **{second.title()}**")
+        await interaction.response.edit_message(content=None, embed=embed, view=None)
+        try:
+            await self._run(self._db["rps_games"].delete_one, {"_id": interaction.message.id})
+        except Exception as e:
+            print(f"[Fun] couldn't clear the finished game: {e}")
+
     # ── would you rather ─────────────────────────────────────────────
     @app_commands.command(name="wouldyourather", description="A question, and two buttons")
     @app_commands.checks.cooldown(3, 60.0, key=lambda i: i.channel_id)
@@ -769,6 +1043,15 @@ class Fun(commands.Cog, name="Fun"):
         if proposal:
             await self._answer_proposal(interaction, int(proposal.group(1)),
                                         int(proposal.group(2)), proposal.group(3))
+            return
+
+        game = RPS_ID.match(custom_id)
+        if game:
+            mode, throw, who = game.group(1), game.group(2), int(game.group(3))
+            if mode == "solo":
+                await self._play_solo(interaction, throw, who)
+            else:
+                await self._play_duel(interaction, throw)
 
 
 async def setup(bot: commands.Bot):

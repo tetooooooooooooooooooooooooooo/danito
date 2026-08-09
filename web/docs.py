@@ -481,11 +481,17 @@ SECTIONS = [
             "If a command looks missing or out of date in Discord's picker, run "
             "<code>/sync</code>. If it still looks wrong, fully close and reopen Discord: the "
             "app caches the command list and does not always refresh on its own.",
+            "<code>/emoji</code> takes an emoji pasted from any server you are in and adds a "
+            "copy here. Animated and still emoji have separate allowances, and it says which "
+            "one is full rather than letting Discord refuse it with no explanation. Pass "
+            "<code>name</code> if this server already has one by that name.",
         ],
         "commands": [
             ("/toggleimagespam", "", "Turn the image spam filter on or off.", MANAGE_SERVER),
             ("/imagespamstatus", "", "Whether the filter is currently running.", MANAGE_SERVER),
             ("/sync", "", "Force this server's command list to refresh.", MANAGE_SERVER),
+            ("/emoji", "<emoji> [name]", "Copy an emoji from another server into this one.",
+             "Manage Expressions"),
             ("/say", "<message>", "Make the bot post a message.", "Manage Messages"),
             ("/help", "", "A browsable list of everything.", EVERYONE),
         ],
@@ -530,6 +536,38 @@ SECTIONS = [
             ("/marry", "<member>", "Propose to somebody. They have to accept.", EVERYONE),
             ("/divorce", "", "End your marriage in this server.", EVERYONE),
             ("/ship", "<member> [other]", "A compatibility score that never changes.",
+             EVERYONE),
+            ("/roleinfo", "<role>", "Colour, position, who has it, what it grants, and "
+                                    "whether I could hand it out.", EVERYONE),
+            ("/avatar", "[member]", "Their avatar, full size.", EVERYONE),
+            ("/banner", "[member]", "Their banner, if they have one.", EVERYONE),
+            ("/8ball", "<question>", "Ask it something. It answers badly.", EVERYONE),
+            ("/rps", "[member]", "Rock paper scissors, against me or anybody else.",
+             EVERYONE),
+        ],
+    },
+    {
+        "id": "reminders",
+        "icon": "⏰",
+        "title": "Reminders",
+        "blurb": "Ask to be told about something later.",
+        "setup": [],
+        "notes": [
+            "Say how long from now rather than a date: <code>10m</code>, <code>2h30m</code>, "
+            "<code>3d</code>, <code>1w</code>. Anything from 30 seconds to a year. If it "
+            "can't read what you typed it says so instead of guessing, because a reminder at "
+            "a time you didn't ask for is worse than none.",
+            "Reminders arrive as a direct message. If yours are closed it posts in the "
+            "channel you set it in and pings you there, so a closed inbox doesn't mean a "
+            "reminder that never comes.",
+            "Twenty five waiting each. <code>/reminders</code> lists yours with a number "
+            "beside each one, and <code>/reminders cancel:2</code> calls that one off. The "
+            "numbers are positions in your own list, so there is no number that reaches "
+            "anybody else's.",
+        ],
+        "commands": [
+            ("/remindme", "<when> <what>", "Be told about something later.", EVERYONE),
+            ("/reminders", "[cancel]", "What you're waiting on, and how to call one off.",
              EVERYONE),
         ],
     },
