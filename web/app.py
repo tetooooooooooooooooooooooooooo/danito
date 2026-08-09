@@ -425,6 +425,9 @@ def premium():
     plans = premium_plans()
     return render_template("premium.html", plans=plans,
                            features=PREMIUM_FEATURES, free=PREMIUM_FREE,
+                           # The free column prices itself at zero, in the same currency as
+                           # the paid ones, so the three read as one row rather than three.
+                           currency=PREMIUM_CURRENCY,
                            # With no checkout link there is nothing to send anybody to, so the
                            # page drops the buy buttons rather than showing dead ones.
                            on_sale=any(p["checkout"] for p in plans))

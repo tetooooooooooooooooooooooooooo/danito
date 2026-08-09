@@ -1552,15 +1552,45 @@ body.status-page main { max-width: 760px; }
 .pip.down { background: var(--danger); box-shadow: 0 0 0 3px rgba(242, 114, 114, .18); }
 
 /* ── premium ─────────────────────────────────────────────────────── */
-body.premium-page main { max-width: 860px; }
+/* Wider than the settings pages, like the landing page and for the same reason: this one is
+   read once by somebody deciding something, not stared at while they work. */
+body.premium-page main { max-width: 1060px; }
+
+.premium-hero { text-align: center; padding: 58px 0 46px; margin-bottom: 0; }
+.premium-hero h1 {
+  font-size: clamp(28px, 4.2vw, 40px);
+  line-height: 1.14;
+  margin: 0 0 16px;
+  background: linear-gradient(118deg, #fff 20%, var(--mint-bright) 66%, var(--mint));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.premium-hero .lead {
+  color: var(--dim);
+  font-size: 15.4px;
+  max-width: 54ch;
+  margin: 0 auto;
+}
+
+.premium-page .warn { max-width: 62ch; margin-inline: auto; }
+
+.pricing { text-align: center; margin-bottom: 64px; }
+.section-lead {
+  color: var(--dim);
+  text-align: center;
+  max-width: 58ch;
+  margin: -18px auto 26px;
+  font-size: 14.6px;
+}
 
 /* The monthly/yearly switch. Hidden without scripting, because the only thing it does is hide
-   a plan, and both plans on the page at once say the same thing. */
+   a plan, and all three columns on the page at once say the same thing. */
 .billing { display: none; }
 .js .billing {
   display: inline-flex;
   gap: 4px;
-  margin: 0 0 16px;
+  margin: 0 0 26px;
   padding: 4px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -1598,55 +1628,100 @@ body.premium-page main { max-width: 860px; }
 }
 .seg.on .chip { background: rgba(5, 34, 26, .22); color: #05221a; }
 
-.plans { display: grid; gap: 13px; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); }
-.plans .card { margin: 0; }
+/* Free sits beside the paid plans rather than in a section of its own further down. The
+   comparison is the honest part of this page, so it should be the thing you look at. */
+.plan-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+  text-align: left;
+}
+/* Stretched rather than start-aligned, so the columns match height and the flex: 1 on each
+   list drops every button onto the same line however many things are in it. */
+.plan-grid > * { align-self: stretch; }
+/* With scripting the toggle picks one paid column, leaving two. Without it all three are
+   there, which is the same information in one more column. */
+.js .plan-grid { grid-template-columns: repeat(2, minmax(0, 318px)); justify-content: center; }
+.js .plan.paid { display: none; }
+.js .plan.paid.on { display: flex; }
 
-/* With scripting the toggle picks one. Without it, neither is hidden and both stay. */
-.js .plan { display: none; }
-.js .plan.on { display: block; }
-/* One card left in an auto-fit grid stretches the full width of the page, which turns a price
-   into a banner. Once the toggle is doing the choosing, hold it to a card's width instead. */
-.js .plans { grid-template-columns: minmax(0, 330px); justify-content: center; }
+.plan {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 26px 24px;
+}
 
-.plan.best { border-color: var(--line-bright); }
-.plan.best::before { opacity: 1; }
+/* The paid column is the one being offered, so it gets the mint edge and a little lift. The
+   free column stays quiet on purpose: it is a promise, not a pitch. */
+.plan.paid {
+  border-color: var(--line-bright);
+  background:
+    radial-gradient(420px 200px at 50% 0%, rgba(61, 220, 151, .09), transparent 70%),
+    linear-gradient(180deg, var(--surface), var(--surface-2));
+  box-shadow: 0 22px 50px -34px #000;
+}
+.plan.paid::before { opacity: 1; }
+
+.plan h2 { font-size: 15px; letter-spacing: .2px; text-transform: uppercase; color: var(--dim); }
+.plan.paid h2 { color: var(--mint-bright); }
+.cadence-name { text-transform: none; letter-spacing: 0; color: var(--faint); font-weight: 500; }
 
 .best-tag {
   position: absolute;
-  top: -1px;
-  right: 16px;
+  top: 0;
+  right: 18px;
   transform: translateY(-50%);
-  padding: 3px 10px;
+  padding: 4px 11px;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--mint), var(--mint-deep));
+  background: linear-gradient(135deg, var(--mint-bright), var(--mint-deep));
   color: #05221a;
   font-size: 11.5px;
   font-weight: 700;
+  letter-spacing: .2px;
+  box-shadow: 0 6px 16px -8px var(--mint);
 }
 
-.price { display: flex; align-items: baseline; gap: 7px; margin: 12px 0 0; }
-.price strong { font-size: 34px; letter-spacing: -1.2px; line-height: 1; }
+.price { display: flex; align-items: baseline; gap: 8px; margin: 14px 0 0; }
+.price strong { font-size: 36px; letter-spacing: -1.4px; line-height: 1; }
 .price span { color: var(--dim); font-size: 13.5px; }
 
-.plan .fine { margin-bottom: 18px; }
-/* Full width inside a plan card, so the two cards' buttons line up whatever the label says. */
-.plan .button { width: 100%; }
+.plan-blurb {
+  color: var(--dim);
+  font-size: 13.6px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
 
-.grid.perks { grid-template-columns: repeat(auto-fit, minmax(238px, 1fr)); margin-top: 14px; }
-.grid.perks .card { margin: 0; }
-
-.perk-icon { font-size: 22px; line-height: 1; margin-bottom: 9px; }
-.perk h3 { margin: 0; font-size: 14.8px; letter-spacing: -.2px; }
-
-ul.ticks { list-style: none; padding: 0; margin: 14px 0; }
-ul.ticks li { position: relative; padding-left: 24px; margin-bottom: 9px; font-size: 14.2px; }
+ul.ticks { list-style: none; padding: 0; margin: 18px 0 22px; }
+/* Pushes the button to the bottom edge, so the two columns' buttons line up however many
+   things each list has in it. */
+.plan ul.ticks { flex: 1; }
+ul.ticks li {
+  position: relative;
+  padding-left: 25px;
+  margin-bottom: 10px;
+  font-size: 13.9px;
+  line-height: 1.5;
+  color: var(--dim);
+}
 ul.ticks li::before {
   content: "✓";
   position: absolute;
   left: 0;
+  top: -1px;
   color: var(--mint);
   font-weight: 700;
 }
+/* The line that says the paid plan carries the free one, rather than replacing it. */
+ul.ticks li.carried { color: var(--text); font-weight: 600; }
+
+/* Full width, so the columns' buttons line up whatever their labels say. */
+.plan .button { width: 100%; }
+
+.pricing-foot { max-width: 58ch; margin: 22px auto 0; }
 
 /* ── unsaved changes ─────────────────────────────────────────────── */
 /* Built by the script, so it never appears on a page that can't clear it. */
@@ -1913,9 +1988,10 @@ footer p { margin: 0; }
   .hero { padding: 52px 0 40px; }
   .who span { display: none; }
   .grid { grid-template-columns: 1fr; }
-  /* A lone plan card lines up with the rest of the page rather than sitting inset by a few
-     pixels, which is all the centred column buys you at this width. */
-  .js .plans { grid-template-columns: 1fr; }
+  /* The plan columns stack, so they line up with the rest of the page rather than sitting
+     inset by a few pixels, which is all a centred column buys you at this width. */
+  .js .plan-grid, .plan-grid { grid-template-columns: 1fr; }
+  .premium-hero { padding: 38px 0 32px; }
 
   /* The nav scrolls rather than pushing the account block off the page. min-width: 0 is the
      part that matters: without it a flex child refuses to shrink below its content, so every

@@ -1,84 +1,97 @@
 {% extends "base.html" %}
 {% block bodyclass %}premium-page{% endblock %}
 {% block title %}Premium · {{ brand }}{% endblock %}
-{% block description %}{{ brand }} Premium: the extras, what they cost monthly and yearly, and
-the long list of things that stay free whether you pay or not.{% endblock %}
+{% block description %}{{ brand }} Premium: what it costs monthly and yearly, what it adds, and
+the list of things that stay free whether you ever pay or not.{% endblock %}
 
 {% block content %}
-<header class="page-head">
-  <div>
-    <h1>Premium</h1>
-    <p class="fine">Everything {{ brand }} does today stays free. Premium is for the extras on
-      top.</p>
-  </div>
-</header>
+<section class="premium-hero" data-reveal>
+  <span class="pill">Premium</span>
+  <h1>Everything it does today stays free</h1>
+  <p class="lead">Premium is the extras on top, not the features you already rely on. Nothing
+     that works now moves behind it later.</p>
+</section>
 
 {% if not on_sale %}
   {#- No checkout link is set, so there is nothing to sell yet. Say that plainly instead of
-      showing a button that goes nowhere. -#}
+      showing a button that leads nowhere. -#}
   <div class="warn">Premium isn't open yet. The prices below are what it will cost, and the
     list of extras is still being put together.</div>
 {% endif %}
 
-{#- The toggle only appears with scripting, because it is the thing that hides a plan. With no
-    script both plans are on the page side by side, which is the same information. -#}
-<div class="billing" role="group" aria-label="How often you pay" data-billing>
-  {% for plan in plans %}
-    <button type="button" class="seg{{ ' on' if loop.first }}" data-period="{{ plan.id }}"
-            aria-pressed="{{ 'true' if loop.first else 'false' }}">
-      {{ plan.name }}{% if plan.saving %} <span class="chip">{{ plan.saving }}</span>{% endif %}
-    </button>
-  {% endfor %}
-</div>
+<section class="pricing" data-reveal>
+  {#- The toggle only appears with scripting, because the only thing it does is hide a plan.
+      Without it all three columns are on the page, which says the same thing. -#}
+  <div class="billing" role="group" aria-label="How often you pay" data-billing>
+    {% for plan in plans %}
+      <button type="button" class="seg{{ ' on' if loop.first }}" data-period="{{ plan.id }}"
+              aria-pressed="{{ 'true' if loop.first else 'false' }}">
+        {{ plan.name }}{% if plan.saving %} <span class="chip">{{ plan.saving }}</span>{% endif %}
+      </button>
+    {% endfor %}
+  </div>
 
-<div class="plans">
-  {% for plan in plans %}
-    <div class="card plan{{ ' on' if loop.first }}{{ ' best' if plan.saving }}"
-         data-plan="{{ plan.id }}">
-      {#- The saving itself is on the toggle and in the blurb, so the badge only has to say
-          which one to look at. -#}
-      {% if plan.saving %}<span class="best-tag">Best value</span>{% endif %}
-      <h2>{{ plan.name }}</h2>
-      <p class="price"><strong>{{ plan.price }}</strong> <span>{{ plan.cadence }}</span></p>
-      <p class="fine">{{ plan.blurb }}</p>
-
-      {% if plan.checkout %}
-        <a class="button block" rel="noopener" href="{{ plan.checkout }}">
-          Get Premium {{ plan.name.lower() }}</a>
-      {% else %}
-        <span class="button block disabled" aria-disabled="true">Not open yet</span>
-      {% endif %}
+  <div class="plan-grid">
+    <div class="card plan">
+      <h2>Free</h2>
+      <p class="price"><strong>{{ currency }}0</strong> <span>always</span></p>
+      <p class="plan-blurb">Every server, every feature listed here, with nothing that expires
+         and no card to put down.</p>
+      <ul class="ticks">
+        {% for item in free %}<li>{{ item }}</li>{% endfor %}
+      </ul>
+      <a class="button ghost block" rel="noopener" href="{{ invite_url() }}">
+        Add {{ brand }} to Discord</a>
     </div>
-  {% endfor %}
-</div>
 
-<h2 class="section-head" id="whats-in-it">What Premium adds</h2>
-<p class="fine">Placeholders while the list is being settled. Nothing here is on sale, and
-  nothing that works today is moving into it.</p>
-<div class="grid perks">
-  {% for icon, title, body in features %}
-    <div class="card perk">
-      <div class="perk-icon" aria-hidden="true">{{ icon }}</div>
-      <h3>{{ title }}</h3>
-      <p class="fine">{{ body }}</p>
-    </div>
-  {% endfor %}
-</div>
+    {% for plan in plans %}
+      <div class="card plan paid{{ ' on' if loop.first }}" data-plan="{{ plan.id }}">
+        {#- The saving itself is on the toggle and in the blurb, so the badge only has to say
+            which one to look at. -#}
+        {% if plan.saving %}<span class="best-tag">Best value</span>{% endif %}
+        <h2>Premium <span class="cadence-name">{{ plan.name.lower() }}</span></h2>
+        <p class="price"><strong>{{ plan.price }}</strong> <span>{{ plan.cadence }}</span></p>
+        <p class="plan-blurb">{{ plan.blurb }}</p>
+        <ul class="ticks">
+          <li class="carried">Everything in Free</li>
+          {% for icon, title, body in features %}<li>{{ title }}</li>{% endfor %}
+        </ul>
+        {% if plan.checkout %}
+          <a class="button block" rel="noopener" href="{{ plan.checkout }}">
+            Get Premium {{ plan.name.lower() }}</a>
+        {% else %}
+          <span class="button block disabled" aria-disabled="true">Not open yet</span>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
 
-<h2 class="section-head" id="free">What stays free</h2>
-<div class="card">
-  <p class="fine">All of this works now, on every server, with no payment and no trial running
-    out. It stays that way.</p>
-  <ul class="ticks">
-    {% for item in free %}<li>{{ item }}</li>{% endfor %}
-  </ul>
-  <p class="fine">Every feature is still off until you switch it on, paid or not.</p>
-</div>
+  <p class="fine pricing-foot">Every feature is still off until you switch it on, paid or
+     not. {{ brand }} never charges for anything it was already doing for free.</p>
+</section>
 
-<div class="card empty">
-  <div class="empty-icon" aria-hidden="true">💬</div>
-  <h2>Questions about any of this</h2>
-  <p class="fine">Ask before you pay rather than after. Tickets get an answer in Discord.</p>
-  <a class="button" href="{{ url_for('support') }}">Open a ticket</a>
-</div>
+<section>
+  <h2 class="section" data-reveal>What Premium adds</h2>
+  <p class="section-lead" data-reveal>Placeholders while the list is being settled. None of it
+     is on sale yet, and nothing that works today is moving into it.</p>
+  <div class="features">
+    {% for icon, title, body in features %}
+      <div class="feature" data-reveal data-delay="{{ loop.index0 % 3 * 60 }}">
+        <div class="icon">{{ icon }}</div>
+        <h3>{{ title }}</h3>
+        <p>{{ body }}</p>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="closing" data-reveal>
+  <h2>Questions before you pay, not after</h2>
+  <p>If you're weighing it up and something isn't clear, ask. Tickets get an answer in
+     Discord, and you don't need to be paying to open one.</p>
+  <div class="cta">
+    <a class="button ghost" href="{{ url_for('support') }}">Open a ticket</a>
+    <a class="button ghost" href="{{ url_for('documentation') }}">Read the docs</a>
+  </div>
+</section>
 {% endblock %}

@@ -129,12 +129,21 @@ def main():
     assert "Placeholder" in body
     print(f"  {len(dashboard.PREMIUM_FEATURES)} slots, all saying they're placeholders OK")
 
-    print("\n=== what's free is listed, and promised to stay free ===")
+    print("\n=== free is a column beside the paid ones, not a footnote ===")
     assert dashboard.PREMIUM_FREE, "the free column isn't a placeholder"
     for item in dashboard.PREMIUM_FREE:
         assert item in body, item
     assert "stays free" in body
-    print(f"  {len(dashboard.PREMIUM_FREE)} free features listed OK")
+    # Priced at zero in the same currency, so the columns read as one row to compare rather
+    # than a pitch with a disclaimer under it.
+    assert dashboard.PREMIUM_CURRENCY + "0" in body
+    # And it carries the invite, because the answer to "what do I get for nothing" is a bot
+    # you can add right now.
+    assert dashboard.invite_url() in body, "the free column links the invite"
+    # The paid columns have to say they carry the free one rather than replace it.
+    assert "Everything in Free" in body
+    print(f"  {len(dashboard.PREMIUM_FREE)} free features, priced at "
+          f"{dashboard.PREMIUM_CURRENCY}0, with the invite on it OK")
 
     print("\n=== both plans are there without scripting ===")
     # The toggle only hides one of them, so a page with no script has to carry both. Neither
