@@ -36,6 +36,10 @@ MAX_CACHE_ENTRIES = 400
 CACHE_TTL = 12 * 3600                   # drop entries this old
 MAX_FILES_PER_LOG = 10                  # Discord's per-message attachment limit
 MAX_BULK_LOGS = 8                       # individual logs before collapsing to a summary
+# An embed holds one image. Several embeds in the same message that carry the same `url` are
+# drawn by the client as one embed with a grid of pictures, which is the only way to show more
+# than one. Four is where the grid stops.
+GALLERY_MAX = 4
 AUDIT_DELAY = 1.5
 AUDIT_WINDOW = 20
 
@@ -432,16 +436,21 @@ class MediaLog(commands.Cog):
             return
 
         retained = [f for f in entry.files if f.data is not None]
-        files, inline_image = [], None
+        files, shown, used = [], [], set()
 
-        for f in retained[:MAX_FILES_PER_LOG]:
+        for i, f in enumerate(retained[:MAX_FILES_PER_LOG]):
             safe = UNSAFE_NAME.sub("_", f.filename) or "file"
+            # Two files can sanitise to the same name, and then attachment:// picks whichever
+            # Discord decides. "IMG 1.png" and "IMG_1.png" is all it takes.
+            if safe in used:
+                safe = f"{i}_{safe}"
+            used.add(safe)
             files.append(discord.File(io.BytesIO(f.data), filename=safe, spoiler=f.spoiler))
-            # Referencing an attachment renders it inside the embed rather than as a
-            # separate block. Spoilers are skipped so they stay blurred.
-            if (inline_image is None and not f.spoiler
-                    and (f.content_type or "").lower().startswith("image/")):
-                inline_image = f"attachment://{safe}"
+            # Referencing an attachment draws it inside the embed rather than as a separate
+            # block below it. Spoilers are left out so they stay blurred.
+            if (not f.spoiler and (f.content_type or "").lower().startswith("image/")
+                    and len(shown) < GALLERY_MAX):
+                shown.append(f"attachment://{safe}")
 
         # The whole entry in two lines and a picture. It used to be a grid of five fields, three
         # of which repeated the author header or said "no text, just the file" on every single
@@ -462,14 +471,26 @@ class MediaLog(commands.Cog):
         if entry.content:
             embed.add_field(name="Caption", value=entry.content[:1000], inline=False)
 
-        if inline_image:
-            embed.set_image(url=inline_image)
+        # Every picture, not just the first. Embeds sharing a url are drawn as one embed with
+        # a grid, so the extras carry nothing but the url and their image. The url is a link
+        # to the channel it happened in, which is always valid and worth clicking, and it is
+        # only set when there is a grid to make so single entries look exactly as before.
+        gallery = []
+        if shown:
+            embed.set_image(url=shown[0])
+        if len(shown) > 1:
+            link = f"https://discord.com/channels/{entry.guild_id}/{entry.channel_id}"
+            embed.url = link
+            for ref in shown[1:]:
+                extra = discord.Embed(url=link)
+                extra.set_image(url=ref)
+                gallery.append(extra)
 
         missing = len(entry.files) - len(retained)
-        # A single picture is already shown above, and naming it underneath tells nobody
-        # anything. The list earns its place once there is more than one, or one that isn't
-        # there to look at.
-        if not (len(entry.files) == 1 and not missing and inline_image):
+        # The list earns its place only when something is not already on show: a file we could
+        # not keep, a video, a spoiler, or more pictures than the grid holds. Naming files that
+        # are visible directly underneath tells nobody anything.
+        if len(shown) != len(entry.files):
             lines = [f"`{f.filename}` · {_fmt_size(f.size)}"
                      + ("" if f.data is not None else f" · {_not_kept(f)}")
                      for f in entry.files]
@@ -484,7 +505,7 @@ class MediaLog(commands.Cog):
         embed.set_footer(text=" · ".join(note))
 
         try:
-            await channel.send(embed=embed, files=files,
+            await channel.send(embeds=[embed, *gallery], files=files,
                                allowed_mentions=discord.AllowedMentions.none())
             self.stats["logged"] += 1
         except discord.Forbidden:

@@ -127,7 +127,7 @@ async def main():
 
     await cog._send(None, {"medialog_channel": 999}, entry, "Mod#1 (`77`)", discord.utils.utcnow())
 
-    e = sent["embed"]
+    e = sent["embeds"][0]
     print(f"  title: {e.title}")
     print(f"  desc:  {e.description}")
     for f in e.fields:
@@ -168,7 +168,7 @@ async def main():
         files=[F("one.png", png, "image/png", len(png), False)],
         nbytes=len(png), cached_at=time.monotonic())
     await cog._send(None, {"medialog_channel": 999}, solo, None, discord.utils.utcnow())
-    e3 = sent["embed"]
+    e3 = sent["embeds"][0]
     assert e3.image.url, "it is still shown"
     assert e3.fields == [], f"nothing to say twice: {[f.name for f in e3.fields]}"
     assert "probably the author" in e3.description, "an unnamed deleter is the ordinary case"
@@ -183,7 +183,7 @@ async def main():
         files=[F("nsfw.png", png, "image/png", len(png), True)],
         nbytes=len(png), cached_at=time.monotonic())
     await cog._send(None, {"medialog_channel": 999}, entry2, None, discord.utils.utcnow())
-    e2 = sent["embed"]
+    e2 = sent["embeds"][0]
     assert e2.image.url is None, "spoilers must stay blurred, not inlined"
     assert sent["files"][0].filename.startswith("SPOILER_")
     assert e2.author.name.endswith("· bot"), f"bot uploader should be marked: {e2.author.name}"
@@ -193,6 +193,87 @@ async def main():
     # The spoiler was not inlined, so the list has to name it or nothing does.
     assert [f.name for f in e2.fields] == ["Files"], [f.name for f in e2.fields]
     print("  spoiler not inlined, bot flagged in the header, no empty caption row OK")
+
+    print("\n=== several pictures all show, not one plus a list of names ===")
+    sent.clear()
+    four = ML.CachedMessage(
+        guild_id=17, channel_id=222, author_id=333, author_tag="someone#0001",
+        author_avatar=None, author_bot=False, content="",
+        created_at=discord.utils.utcnow(),
+        files=[F(f"pic{i}.png", png, "image/png", len(png), False) for i in range(4)],
+        nbytes=len(png) * 4, cached_at=time.monotonic())
+    await cog._send(None, {"medialog_channel": 999}, four, None, discord.utils.utcnow())
+    embeds = sent["embeds"]
+    assert len(embeds) == 4, f"one embed per picture, got {len(embeds)}"
+    # The client only draws them as one grid when every embed carries the same url.
+    urls = {e.url for e in embeds}
+    assert len(urls) == 1 and None not in urls, urls
+    assert urls.pop() == "https://discord.com/channels/17/222", embeds[0].url
+    # Each one carries a different picture, and every attachment is referenced exactly once.
+    refs = [e.image.url for e in embeds]
+    assert len(set(refs)) == 4, refs
+    assert set(refs) == {f"attachment://{f.filename}" for f in sent["files"]}
+    # The extras are images and nothing else, or the grid renders as four stacked embeds.
+    for extra in embeds[1:]:
+        assert extra.title is None and extra.description is None and not extra.fields
+    # Nothing is named underneath, because all four are on show.
+    assert not any(f.name == "Files" for f in embeds[0].fields), \
+        [f.name for f in embeds[0].fields]
+    print(f"  4 pictures, 4 embeds, one shared url, no list of names OK")
+
+    print("\n=== a single picture is left exactly as it was ===")
+    sent.clear()
+    await cog._send(None, {"medialog_channel": 999}, solo, None, discord.utils.utcnow())
+    assert len(sent["embeds"]) == 1, "no gallery, no extra embeds"
+    assert sent["embeds"][0].url is None, "and no link on the title where there was none before"
+    print("  one embed, no url set OK")
+
+    print("\n=== past the fourth picture the rest are named ===")
+    sent.clear()
+    six = ML.CachedMessage(
+        guild_id=17, channel_id=222, author_id=333, author_tag="someone#0001",
+        author_avatar=None, author_bot=False, content="",
+        created_at=discord.utils.utcnow(),
+        files=[F(f"p{i}.png", png, "image/png", len(png), False) for i in range(6)],
+        nbytes=len(png) * 6, cached_at=time.monotonic())
+    await cog._send(None, {"medialog_channel": 999}, six, None, discord.utils.utcnow())
+    assert len(sent["embeds"]) == ML.GALLERY_MAX, len(sent["embeds"])
+    assert len(sent["files"]) == 6, "all six are still attached, just not all in the grid"
+    listed = [f.value for f in sent["embeds"][0].fields if f.name == "Files"]
+    assert listed and "p5.png" in listed[0], listed
+    print(f"  grid caps at {ML.GALLERY_MAX}, the other 2 are listed OK")
+
+    print("\n=== two files that sanitise to the same name stay distinct ===")
+    sent.clear()
+    clash = ML.CachedMessage(
+        guild_id=17, channel_id=222, author_id=333, author_tag="someone#0001",
+        author_avatar=None, author_bot=False, content="",
+        created_at=discord.utils.utcnow(),
+        files=[F("IMG 1.png", png, "image/png", len(png), False),
+               F("IMG_1.png", png, "image/png", len(png), False)],
+        nbytes=len(png) * 2, cached_at=time.monotonic())
+    await cog._send(None, {"medialog_channel": 999}, clash, None, discord.utils.utcnow())
+    names = [f.filename for f in sent["files"]]
+    assert len(set(names)) == 2, f"attachment:// would pick whichever: {names}"
+    assert len({e.image.url for e in sent["embeds"]}) == 2, "and each embed points at its own"
+    print(f"  {names} OK")
+
+    print("\n=== a spoiler is never put in the grid ===")
+    sent.clear()
+    mixed = ML.CachedMessage(
+        guild_id=17, channel_id=222, author_id=333, author_tag="someone#0001",
+        author_avatar=None, author_bot=False, content="",
+        created_at=discord.utils.utcnow(),
+        files=[F("safe.png", png, "image/png", len(png), False),
+               F("nsfw.png", png, "image/png", len(png), True)],
+        nbytes=len(png) * 2, cached_at=time.monotonic())
+    await cog._send(None, {"medialog_channel": 999}, mixed, None, discord.utils.utcnow())
+    assert len(sent["embeds"]) == 1, "the spoiler must not become a second embed"
+    assert "nsfw" not in (sent["embeds"][0].image.url or "")
+    assert any(f.filename.startswith("SPOILER_") for f in sent["files"])
+    # It is not on show, so it has to be named or it vanishes.
+    assert any(f.name == "Files" for f in sent["embeds"][0].fields)
+    print("  spoiler attached and named, never displayed OK")
 
     print("\n=== a file we couldn't hold says which reason ===")
     assert "over 8 MB" in ML._not_kept(F("big.png", None, "image/png", 9 * 1024 * 1024, False))
@@ -250,9 +331,10 @@ async def main():
 
     # One summary, then one entry per message. Three messages went, so three get logged.
     assert len(posts) == 4, f"summary plus three entries, got {len(posts)}: " \
-                            f"{[p['embed'].title for p in posts]}"
+                            f"{[p['embeds'][0].title for p in posts]}"
+    # The summary is one embed on its own; each entry after it may be a gallery.
     assert posts[0]["embed"].title == "Bulk delete"
-    named = [p["embed"] for p in posts[1:]]
+    named = [p["embeds"][0] for p in posts[1:]]
     listed = " ".join(str([f.value for f in e.fields]) + (e.image.url or "") for e in named)
     for expected in ("a.png", "b.png", "c.png"):
         assert expected in listed, f"{expected} missing from the log: {listed}"
@@ -263,7 +345,7 @@ async def main():
 
     print("\n=== and never logs the same message twice ===")
     # 1001 is in both caches. It must not produce two entries.
-    titles = [p["embed"].title for p in posts[1:]]
+    titles = [p["embeds"][0].title for p in posts[1:]]
     assert len(titles) == 3, titles
     print("  the one held in both caches appears once OK")
 
