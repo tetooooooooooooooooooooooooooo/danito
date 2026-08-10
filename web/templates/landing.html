@@ -12,10 +12,7 @@
 {% endmacro %}
 
 {% block content %}
-{#- `tight` when the numbers are there, because the hero's own bottom padding plus the gap
-    every section carries leaves about a screen of nothing between the buttons and the first
-    figure. -#}
-<section class="hero-grid{{ ' tight' if numbers }}">
+<section class="hero-grid">
   <div class="hero-copy" data-reveal>
     <span class="pill">Built for Server Discovery</span>
     <h1>Get found by people who aren't in your server yet</h1>
@@ -65,28 +62,6 @@
     </div>
   </div>
 </section>
-
-{#- Real figures, straight off the bot's own heartbeat. The whole band disappears rather than
-    claiming anything when the bot has never checked in, and each tile drops out on its own
-    when its number is zero: "0 members" is a worse thing to say than nothing. -#}
-{% if numbers %}
-  <section class="tallies" data-reveal aria-label="What the bot is doing right now">
-    {% if numbers.servers %}
-      <div class="tally">
-        <span class="tally-icon" aria-hidden="true">🗄️</span>
-        <span class="tally-label">Servers</span>
-        <strong>{{ compact(numbers.servers) }}</strong>
-      </div>
-    {% endif %}
-    {% if numbers.members %}
-      <div class="tally">
-        <span class="tally-icon" aria-hidden="true">👥</span>
-        <span class="tally-label">Members watched</span>
-        <strong>{{ compact(numbers.members) }}</strong>
-      </div>
-    {% endif %}
-  </section>
-{% endif %}
 
 <section class="spotlight" data-reveal>
   <h2 class="section">Why retention is the number that matters</h2>

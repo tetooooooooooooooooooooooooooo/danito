@@ -836,61 +836,6 @@ section { margin-bottom: 72px; }
 .cost p { color: var(--dim); font-size: 14px; margin: 12px 0 0; line-height: 1.6; }
 .cost a.fine { display: inline-block; color: var(--mint); margin-top: 12px; }
 
-/* ── the counts, under the hero ──────────────────────────────────── */
-/* Three tiles rather than a sentence. A number nobody can picture is worth less than one
-   they can, which is why these are compact: 996k, not 996,214.
-
-   Called tally rather than count because .count is already the character counter on the
-   message builder, further down this file, and was quietly winning. */
-.tallies {
-  display: grid;
-  /* Capped rather than 1fr. Two tiles stretched across a 1060px page are mostly empty box,
-     and left aligned they line up with the hero copy above them. */
-  grid-template-columns: repeat(auto-fit, minmax(200px, 330px));
-  gap: 13px;
-  margin-bottom: 64px;
-}
-
-/* The hero already ends in 76px of its own padding and every section adds 72 more. Fine when
-   the next thing is a heading; far too much when it is a row of numbers meant to read as
-   part of the hero. */
-.hero-grid.tight { padding-bottom: 20px; margin-bottom: 0; }
-
-.tally {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  grid-template-rows: auto auto;
-  align-items: center;
-  column-gap: 14px;
-  padding: 20px 22px;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  background: linear-gradient(180deg, var(--surface), var(--surface-2));
-  transition: border-color .2s var(--ease), transform .2s var(--ease);
-}
-.tally:hover { border-color: var(--line-bright); transform: translateY(-2px); }
-
-.tally-icon {
-  grid-row: 1 / span 2;
-  width: 42px; height: 42px;
-  display: grid; place-items: center;
-  border-radius: 11px;
-  background: rgba(61, 220, 151, .1);
-  border: 1px solid rgba(61, 220, 151, .22);
-  font-size: 19px;
-}
-.tally-label {
-  color: var(--faint);
-  font-size: 12.4px;
-  letter-spacing: .3px;
-  text-transform: uppercase;
-}
-.tally strong {
-  font-size: 27px;
-  letter-spacing: -.8px;
-  line-height: 1.1;
-}
-
 .closing { text-align: center; margin-bottom: 40px; }
 .closing h2 { font-size: 24px; letter-spacing: -.4px; margin-bottom: 10px; }
 .closing p { color: var(--dim); margin-bottom: 22px; }

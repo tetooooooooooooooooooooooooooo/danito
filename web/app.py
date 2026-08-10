@@ -209,8 +209,7 @@ def index():
     # The prices are on the landing page as well as on /premium. Somebody who reads the whole
     # pitch and never learns there is a paid tier is a worse outcome than one who sees the
     # number early and decides it is fine.
-    return render_template("landing.html", plans=premium_plans(), premium_on_sale=on_sale(),
-                           numbers=store.headline_numbers(), compact=store.compact)
+    return render_template("landing.html", plans=premium_plans(), premium_on_sale=on_sale())
 
 
 @app.route("/docs")
