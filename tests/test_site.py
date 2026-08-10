@@ -24,10 +24,18 @@ os.environ.update({
 })
 
 
+# What the bot's heartbeat has written, if anything. The front page reads this.
+RUNTIME = {}
+SPELL_COUNT = 0
+
+
 class FakeColl:
     def __init__(self, name): self.name = name
-    def find_one(self, *a, **k): return None
+    def find_one(self, *a, **k):
+        return dict(RUNTIME) if self.name == "runtime" and RUNTIME else None
     def find(self, *a, **k): return []
+    def estimated_document_count(self, *a, **k):
+        return SPELL_COUNT if self.name == "memberships" else 0
     def update_one(self, *a, **k): return types.SimpleNamespace(matched_count=1)
 
 
@@ -152,6 +160,49 @@ def main():
         assert plan["price"] in body, plan["price"]
     assert "/premium" in body
     print(f"  the landing page names {plans[0]['price']} and {plans[1]['price']} OK")
+
+    print("\n=== the front page claims nothing until the bot has checked in ===")
+    global RUNTIME, SPELL_COUNT
+    assert not RUNTIME, "this suite has run so far with no heartbeat at all"
+    assert store.headline_numbers() == {}, store.headline_numbers()
+    body = html.unescape(c.get("/").data.decode())
+    assert 'class="tallies"' not in body, "a fresh install must not advertise zeroes"
+    print("  no heartbeat, no numbers, no band OK")
+
+    print("\n=== and shows them once it has ===")
+    import datetime
+    RUNTIME.update({"_id": "bot", "guild_count": 7, "member_count": 104382,
+                    "last_seen": datetime.datetime.now(datetime.timezone.utc)})
+    SPELL_COUNT = 4213
+    numbers = store.headline_numbers()
+    assert numbers == {"servers": 7, "members": 104382, "joins": 4213}, numbers
+    body = html.unescape(c.get("/").data.decode())
+    assert 'class="tallies"' in body
+    for expected in ("Servers", "7", "Members watched", "104k", "Joins recorded", "4.2k"):
+        assert expected in body, expected
+    print("  7 servers, 104k members and 4.2k joins, all compact OK")
+
+    print("\n=== a number it doesn't have is left out rather than shown as nought ===")
+    RUNTIME["member_count"] = 0
+    SPELL_COUNT = 0
+    assert store.headline_numbers() == {"servers": 7}, store.headline_numbers()
+    body = html.unescape(c.get("/").data.decode())
+    assert "Servers" in body and 'class="tallies"' in body
+    assert "Members watched" not in body, "0 members is worse than no claim"
+    assert "Joins recorded" not in body
+    print("  only the tile that has a real number survives OK")
+    RUNTIME.clear()
+    SPELL_COUNT = 0
+
+    print("\n=== the numbers are written the way people read them ===")
+    for value, expected in ((0, "0"), (7, "7"), (999, "999"), (1000, "1k"), (1234, "1.2k"),
+                            (12345, "12k"), (996214, "996k"), (1234567, "1.2M"),
+                            (2_500_000_000, "2.5B")):
+        assert store.compact(value) == expected, (value, store.compact(value), expected)
+    # Anything that isn't a number at all becomes nothing, not the word None.
+    for junk in (None, "", "lots", [1]):
+        assert store.compact(junk) == "", junk
+    print("  996214 reads as 996k, and junk reads as nothing OK")
 
     print("\n=== and the docs say which parts are free ===")
     import docs

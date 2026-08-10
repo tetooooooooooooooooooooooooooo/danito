@@ -214,6 +214,51 @@ def bot_status() -> dict:
     }
 
 
+def compact(number) -> str:
+    """996000 -> 996k, 1234 -> 1.2k, 1234567 -> 1.2M.
+
+    A decimal only below ten thousand, where it is the difference between 1.2k and 1k and
+    somebody can still picture the number. Above that it is noise.
+    """
+    try:
+        value = int(number)
+    except (TypeError, ValueError):
+        return ""
+    if value < 1000:
+        return str(value)
+    for cut, suffix in ((1_000_000_000, "B"), (1_000_000, "M"), (1000, "k")):
+        if value >= cut:
+            scaled = value / cut
+            return (f"{scaled:.1f}".rstrip("0").rstrip(".") if scaled < 10
+                    else f"{scaled:.0f}") + suffix
+    return str(value)
+
+
+def headline_numbers() -> dict:
+    """What the bot is doing, for the front page.
+
+    Empty when the bot has never checked in, so a new deployment shows nothing rather than a
+    row of zeroes claiming it is in no servers and watching nobody.
+    """
+    status = bot_status()
+    if status["state"] == "unknown":
+        return {}
+
+    numbers = {"servers": status.get("guilds") or 0,
+               "members": status.get("members") or 0}
+    try:
+        # An estimate rather than a count: this is a marketing figure on a page anybody can
+        # load, and estimated_document_count reads collection metadata instead of walking
+        # every document.
+        numbers["joins"] = _memberships().estimated_document_count()
+    except Exception as e:
+        print(f"[headline] couldn't count joins: {e}")
+        numbers["joins"] = 0
+    # Anything still at zero is left out rather than shown. "0 members" is worse than no
+    # claim at all, and on a fresh install every one of these is zero.
+    return {key: value for key, value in numbers.items() if value}
+
+
 def clean(field: str, raw, valid_channels: set, valid_roles: set = frozenset()):
     """Coerce one submitted value, rejecting anything that isn't allowed.
 

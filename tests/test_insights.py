@@ -158,7 +158,9 @@ def main():
     print("\n=== the trend buckets by period and leaves gaps ===")
     load(
         spell(30, None), spell(30, 1),          # five weeks back: 50%
-        spell(1, None),                          # this week: too young to measure
+        # Zero days rather than one. A join "a day ago" is in last week's bucket every Monday,
+        # which made this assertion fail one morning in seven.
+        spell(0, None),                          # this week: too young to measure
     )
     trend = store.retention_trend(111, "weekly")
     assert trend["period"] == "weekly"
