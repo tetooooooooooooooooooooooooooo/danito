@@ -21,7 +21,7 @@ import traceback
 
 import discord
 
-COLOR = 0xF27272
+from Brand import MINT
 
 # How long the same fault stays quiet after being reported once. Long enough that a per
 # message failure reports once rather than continuously, short enough to notice it recurring.
@@ -122,7 +122,7 @@ class ErrorLog:
         embed = discord.Embed(
             title=f"{type(exc).__name__} in {where}"[:256],
             description=f"```py\n{trace}\n```",
-            colour=COLOR,
+            colour=MINT,
             timestamp=datetime.datetime.now(datetime.timezone.utc))
 
         for name, value in (context or {}).items():

@@ -34,7 +34,6 @@ MAX_PANELS = 10
 PUBLISH_EVERY = 12          # seconds between checks for panels the dashboard has changed
 
 COLOR_PANEL = MINT
-COLOR_WARN = 0xE67E22
 
 # Ours, and cheap to recognise. Every component click in every server reaches on_interaction,
 # so this string test is what keeps role panels off the database for clicks that aren't theirs.
@@ -466,7 +465,6 @@ class RoleButtons(commands.Cog, name="RoleButtons"):
             lines.append("Roles: " + (", ".join(names) if names else "*none yet*"))
             if panel.get("publish_error"):
                 lines.append(f"⚠️ {panel['publish_error']}")
-                embed.color = COLOR_WARN
             elif panel.get("needs_publish"):
                 lines.append("Updating in a moment.")
             lines.append(f"`{panel['_id']}`")

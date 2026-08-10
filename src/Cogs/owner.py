@@ -147,8 +147,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
         embed = discord.Embed(
             title="🔄 Reload",
             description="\n".join(results)[:4000],
-            color=MINT if all(r.startswith("✅") for r in results)
-            else discord.Color.red(),
+            color=MINT,
         )
         embed.set_footer(text="Slash command definitions still need /sync to change.")
         await interaction.followup.send(embed=embed, ephemeral=True)

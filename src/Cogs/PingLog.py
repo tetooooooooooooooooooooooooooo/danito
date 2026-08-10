@@ -28,9 +28,6 @@ from Brand import MINT
 EVENT_TTL_DAYS = 30
 SUMMARY_DAYS = 7
 
-COLOR_PING = 0xF39C12
-COLOR_BIG = 0xE74C3C
-COLOR_WARN = 0xE67E22
 
 BIG_PING = 50          # coloured red above this, purely cosmetic
 
@@ -107,7 +104,7 @@ class PingTracker(commands.Cog, name="Ping Tracking"):
         embed = discord.Embed(
             title="Survey reminder sent",
             description=f"Reached **{reach}** {'member' if reach == 1 else 'members'}",
-            color=COLOR_BIG if reach >= BIG_PING else COLOR_PING,
+            color=MINT,
             timestamp=message.created_at,
         )
         # The cohort role is named after the date its members joined.

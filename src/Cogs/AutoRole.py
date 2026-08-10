@@ -18,8 +18,6 @@ from Brand import MINT
 
 MAX_ROLES = 10           # more than anyone needs, and keeps the join handler to one API call
 
-COLOR_WARN = 0xE67E22
-
 
 class AutoRole(commands.Cog, name="AutoRole"):
     """Give people roles automatically when they arrive."""
@@ -166,7 +164,6 @@ class AutoRole(commands.Cog, name="AutoRole"):
                              else "**Off.** These are saved but nothing is being handed out:")
         embed.add_field(name="Roles", value="\n".join(lines), inline=False)
         if broken:
-            embed.color = COLOR_WARN
             embed.set_footer(text="Some roles need attention. Deleted ones are removed by "
                                   "themselves the next time somebody joins.")
         await interaction.response.send_message(embed=embed, ephemeral=True)

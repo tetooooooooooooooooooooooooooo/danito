@@ -32,8 +32,6 @@ import Database
 from Cogs.Invites import VANITY
 from Brand import MINT
 
-COLOR = MINT
-COLOR_LOVE = 0xE85D9C
 
 # Polls are disposable. Mongo drops them rather than keeping every question ever asked.
 POLL_TTL_DAYS = 30
@@ -65,7 +63,6 @@ EIGHT_BALL = [
     ("no", "Don't count on it."), ("no", "My reply is no."), ("no", "My sources say no."),
     ("no", "Outlook not so good."), ("no", "Very doubtful."),
 ]
-EIGHT_BALL_COLOURS = {"yes": MINT, "maybe": 0xF0B45F, "no": 0xF27272}
 
 # Deliberately safe for a server anybody can join, and deliberately not topical: a question
 # that needs context stops being funny the moment somebody reads it a month later.
@@ -150,24 +147,25 @@ def bar(percent: int, width: int = 10) -> str:
     return "❤️" * filled + "🤍" * (width - filled)
 
 
-# score floor -> (emoji, colour, what to say about it). Read from the top down, first match
-# wins, so the order matters more than the numbers.
+# score floor -> (emoji, what to say about it). Read from the top down, first match wins,
+# so the order matters more than the numbers. The emoji carries the whole scale now that
+# every embed is the same colour.
 VERDICTS = [
-    (95, "💞", 0xFF4D8D, "a formality at this point"),
-    (80, "💖", 0xFF4D8D, "alarmingly strong"),
-    (60, "💗", 0xE85D9C, "genuinely quite good"),
-    (45, "💓", 0xE85D9C, "some promise"),
-    (25, "💔", 0xF0B45F, "not impossible, with work"),
-    (10, "🥀", 0x8BA79B, "a lost cause"),
-    (0, "🧊", 0x8BA79B, "nothing at all"),
+    (95, "💞", "a formality at this point"),
+    (80, "💖", "alarmingly strong"),
+    (60, "💗", "genuinely quite good"),
+    (45, "💓", "some promise"),
+    (25, "💔", "not impossible, with work"),
+    (10, "🥀", "a lost cause"),
+    (0, "🧊", "nothing at all"),
 ]
 
 
 def verdict(score: int) -> tuple:
-    """The emoji, colour and wording for a score."""
-    for floor, emoji, colour, words in VERDICTS:
+    """The emoji and the wording for a score."""
+    for floor, emoji, words in VERDICTS:
         if score >= floor:
-            return emoji, colour, words
+            return emoji, words
     return VERDICTS[-1][1:]
 
 
@@ -266,7 +264,7 @@ class Fun(commands.Cog, name="Fun"):
             titles.append(f"nicknamed here, otherwise {member.global_name or member.name}")
 
         embed = discord.Embed(
-            colour=member.colour if member.colour.value else COLOR,
+            colour=MINT,
             description=f"{member.mention}\n" + " · ".join(titles[:2])
                         + (f"\n-# {titles[2]}" if len(titles) > 2 else ""))
         embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
@@ -407,7 +405,7 @@ class Fun(commands.Cog, name="Fun"):
         humans = sum(1 for m in guild.members if not m.bot)
         bots = guild.member_count - humans
 
-        embed = discord.Embed(colour=COLOR, description=guild.description or None)
+        embed = discord.Embed(colour=MINT, description=guild.description or None)
         embed.set_author(name=guild.name,
                          icon_url=guild.icon.url if guild.icon else None)
         if guild.icon:
@@ -539,7 +537,7 @@ class Fun(commands.Cog, name="Fun"):
     async def roleinfo(self, interaction: discord.Interaction, role: discord.Role):
         guild = interaction.guild
         holders = role.members
-        colour = role.colour if role.colour.value else COLOR
+        colour = MINT
 
         embed = discord.Embed(colour=colour, description=role.mention)
         embed.set_author(name=role.name)
@@ -586,7 +584,7 @@ class Fun(commands.Cog, name="Fun"):
     @app_commands.guild_only()
     async def avatar(self, interaction: discord.Interaction, member: discord.Member = None):
         member = member or interaction.user
-        embed = discord.Embed(colour=member.colour if member.colour.value else COLOR)
+        embed = discord.Embed(colour=MINT)
         embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
         embed.set_image(url=member.display_avatar.url)
 
@@ -616,7 +614,7 @@ class Fun(commands.Cog, name="Fun"):
                 "Discord wouldn't tell me. Try again in a moment.", ephemeral=True)
             return
 
-        embed = discord.Embed(colour=user.accent_colour or member.colour or COLOR)
+        embed = discord.Embed(colour=MINT)
         embed.set_author(name=member.display_name, icon_url=member.display_avatar.url)
         if user.banner:
             embed.set_image(url=user.banner.url)
@@ -634,8 +632,8 @@ class Fun(commands.Cog, name="Fun"):
     @app_commands.checks.cooldown(5, 30.0)
     @app_commands.guild_only()
     async def eight_ball(self, interaction: discord.Interaction, question: str):
-        mood, answer = random.choice(EIGHT_BALL)
-        embed = discord.Embed(colour=EIGHT_BALL_COLOURS[mood],
+        _mood, answer = random.choice(EIGHT_BALL)
+        embed = discord.Embed(colour=MINT,
                               description=f"🎱 **{answer}**")
         # Their words, quoted rather than repeated, so a long question can't be used to make
         # the bot post a wall of text with its name on it.
@@ -661,14 +659,14 @@ class Fun(commands.Cog, name="Fun"):
             # Nothing to remember: I pick when you click, and the id says who may click.
             view = self._throws("solo", interaction.user.id)
             embed = discord.Embed(
-                colour=COLOR, title="🪨 📄 ✂️",
+                colour=MINT, title="🪨 📄 ✂️",
                 description=f"{interaction.user.mention}, pick one. I'll go at the same time.")
             await interaction.response.send_message(embed=embed, view=view)
             return
 
         view = self._throws("duel", 0)
         embed = discord.Embed(
-            colour=COLOR, title="🪨 📄 ✂️",
+            colour=MINT, title="🪨 📄 ✂️",
             description=f"{interaction.user.mention} challenges {member.mention}.\n"
                         f"Both pick. Nobody sees anything until you both have.")
         await interaction.response.send_message(content=member.mention, embed=embed, view=view)
@@ -708,7 +706,7 @@ class Fun(commands.Cog, name="Fun"):
         mine = random.choice(list(THROWS))
         result = self._outcome(throw, mine)
         embed = discord.Embed(
-            colour={1: MINT, 0: 0xF0B45F, -1: 0xF27272}[result],
+            colour=MINT,
             title={1: "You win", 0: "A draw", -1: "I win"}[result],
             description=f"{THROWS[throw]} **{throw.title()}**  vs  "
                         f"**{mine.title()}** {THROWS[mine]}")
@@ -763,7 +761,7 @@ class Fun(commands.Cog, name="Fun"):
         first, second = picks[str(one)], picks[str(two)]
         result = self._outcome(first, second)
         if result == 0:
-            title, colour = "A draw", 0xF0B45F
+            title, colour = "A draw", MINT
         else:
             winner = one if result == 1 else two
             title, colour = f"<@{winner}> wins", MINT
@@ -783,7 +781,7 @@ class Fun(commands.Cog, name="Fun"):
     @app_commands.guild_only()
     async def wouldyourather(self, interaction: discord.Interaction):
         left, right = random.choice(QUESTIONS)
-        embed = discord.Embed(title="Would you rather…", colour=COLOR,
+        embed = discord.Embed(title="Would you rather…", colour=MINT,
                               description=f"🅰️ {left}\n\n🅱️ {right}")
         embed.set_footer(text="Nobody has voted yet")
 
@@ -873,10 +871,10 @@ class Fun(commands.Cog, name="Fun"):
             custom_id=f"marry:{interaction.user.id}:{member.id}:no"))
 
         score = compatibility(interaction.user.id, member.id)
-        emoji, _colour, words = verdict(score)
+        emoji, words = verdict(score)
         embed = discord.Embed(
             title="💍  A proposal",
-            colour=COLOR_LOVE,
+            colour=MINT,
             description=f"**{interaction.user.display_name}** has asked "
                         f"**{member.display_name}** to marry them.")
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
@@ -898,7 +896,7 @@ class Fun(commands.Cog, name="Fun"):
         if answer == "no":
             embed = discord.Embed(
                 title="🥀  Turned down",
-                colour=0x8BA79B,
+                colour=MINT,
                 description=f"<@{target_id}> said no to <@{proposer_id}>.\n"
                             f"These things happen. There are other servers.")
             await interaction.response.edit_message(content=None, embed=embed, view=None)
@@ -931,7 +929,7 @@ class Fun(commands.Cog, name="Fun"):
         score = compatibility(proposer_id, target_id)
         embed = discord.Embed(
             title="💒  Married",
-            colour=COLOR_LOVE,
+            colour=MINT,
             description=f"<@{proposer_id}>  💞  <@{target_id}>\n\n"
                         f"Since <t:{int(now.timestamp())}:D>. The numbers said **{score}%**, "
                         f"and nobody asked them.")
@@ -959,7 +957,7 @@ class Fun(commands.Cog, name="Fun"):
             return
 
         embed = discord.Embed(
-            title="📄  Divorced", colour=0x8BA79B,
+            title="📄  Divorced", colour=MINT,
             description=f"{interaction.user.mention} and <@{other}> are no longer married."
                         if other else f"{interaction.user.mention} is single again.")
         # How long it lasted is the only detail anybody wants, and it costs nothing: the date
@@ -990,12 +988,12 @@ class Fun(commands.Cog, name="Fun"):
 
         await interaction.response.defer()
         score = compatibility(member.id, other.id)
-        emoji, colour, words = verdict(score)
+        emoji, words = verdict(score)
         name = ship_name(member.display_name, other.display_name)
 
         embed = discord.Embed(
             title=f"{emoji}  {name}",
-            colour=colour,
+            colour=MINT,
             description=f"{member.mention}  ×  {other.mention}\n\n"
                         f"{bar(score)}\n"
                         f"### {score}%\n"

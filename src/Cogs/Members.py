@@ -41,7 +41,6 @@ PERIODS = {
 }
 DEFAULT_PERIOD = "daily"
 
-COLOR_WARN = 0xE67E22
 
 # What Discovery asks for. Discord moves these, and only some of them are visible to a bot at
 # all: the engagement figures it actually judges a server on live in Server Insights and are
@@ -418,7 +417,6 @@ class Members(commands.Cog, name="Members"):
                 "Nothing recorded yet.\n\n"
                 "Joins and leaves are tracked from now on, so this fills in as people come and "
                 "go. The 7 day figure needs a week of data, the 30 day figure needs a month.")
-            embed.color = COLOR_WARN
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -602,19 +600,17 @@ class Members(commands.Cog, name="Members"):
 
         listed = "DISCOVERABLE" in guild.features
         if listed:
-            color, headline = MINT, "✅ **This server is already listed in Discovery.**"
+            headline = "✅ **This server is already listed in Discovery.**"
         elif blocking:
-            color = COLOR_WARN
             headline = (f"**{len(blocking)} thing{'' if len(blocking) == 1 else 's'} to sort "
                         f"out** before you can apply.")
         else:
-            color = MINT
-            headline = ("✅ **Ready to apply.** Server Settings, then Discovery.")
+            headline = "✅ **Ready to apply.** Server Settings, then Discovery."
 
         embed = discord.Embed(
             title="Discovery readiness",
             description=f"{headline}\n-# {len(done)} of {len(checks)} checks passing",
-            color=color, timestamp=now)
+            color=MINT, timestamp=now)
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
 

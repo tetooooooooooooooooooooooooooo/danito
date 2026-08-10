@@ -49,14 +49,6 @@ EVENTS = [
 ]
 EVENT_KEYS = [key for key, _, _ in EVENTS]
 
-# Three colours, and they are a legend rather than decoration: red for something destroyed,
-# amber for something altered, grey for somebody gone. Every other event is MINT, the same as
-# the rest of the bot, so scanning a busy log channel means looking for the three that stand
-# out rather than reading every title.
-RED = 0xED4245
-AMBER = 0xE67E22
-GREY = 0x99AAB5
-
 MAX_FIELD = 1000            # an embed field caps at 1024; leave room for the code fence
 AUDIT_WINDOW = 15           # seconds an audit entry can lag the event and still be the cause
 
@@ -202,7 +194,7 @@ class Logging(commands.Cog, name="Logging"):
             return
 
         embed = discord.Embed(
-            title="Message deleted", color=RED,
+            title="Message deleted", color=MINT,
             description=f"In {message.channel.mention}")
         if message.content:
             embed.add_field(name="Content", value=_block(message.content), inline=False)
@@ -228,7 +220,7 @@ class Logging(commands.Cog, name="Logging"):
             return
 
         embed = discord.Embed(
-            title="Message edited", color=AMBER,
+            title="Message edited", color=MINT,
             description=f"In {after.channel.mention} · [jump]({after.jump_url})")
         embed.add_field(name="Before", value=_block(before.content or "*empty*"), inline=False)
         embed.add_field(name="After", value=_block(after.content or "*empty*"), inline=False)
@@ -252,7 +244,7 @@ class Logging(commands.Cog, name="Logging"):
                  sorted(authors.items(), key=lambda kv: -kv[1])[:10]]
 
         embed = discord.Embed(
-            title="Messages purged", color=RED,
+            title="Messages purged", color=MINT,
             description=f"**{len(messages)}** messages removed from {first.channel.mention}",
             timestamp=discord.utils.utcnow())
         embed.add_field(name="Who they were from", value="\n".join(lines) or "unknown",
@@ -276,7 +268,7 @@ class Logging(commands.Cog, name="Logging"):
         if await self._wanted(member.guild, "member_leave") is None:
             return
         held = [r.mention for r in member.roles if not r.is_default()]
-        embed = discord.Embed(title="Member left", color=GREY,
+        embed = discord.Embed(title="Member left", color=MINT,
                               description=f"{member.mention} left the server")
         if member.joined_at:
             embed.add_field(name="They joined",
@@ -294,7 +286,7 @@ class Logging(commands.Cog, name="Logging"):
         entry = await self._actor(guild, discord.AuditLogAction.ban, user.id)
         if self._own_action(cfg, entry):
             return
-        embed = discord.Embed(title="Member banned", color=RED,
+        embed = discord.Embed(title="Member banned", color=MINT,
                               description=f"{user.mention} was banned")
         if entry is not None:
             embed.add_field(name="By", value=entry.user.mention if entry.user else "unknown",
@@ -364,7 +356,7 @@ class Logging(commands.Cog, name="Logging"):
                                   description=f"{member.mention} joined "
                                               f"**{after.channel.name}**")
         elif after.channel is None:
-            embed = discord.Embed(title="Left voice", color=GREY,
+            embed = discord.Embed(title="Left voice", color=MINT,
                                   description=f"{member.mention} left "
                                               f"**{before.channel.name}**")
         else:
@@ -381,7 +373,7 @@ class Logging(commands.Cog, name="Logging"):
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
-        await self._channel_event(channel, "deleted", RED)
+        await self._channel_event(channel, "deleted", MINT)
 
     async def _channel_event(self, channel, what: str, colour: int):
         cfg = await self._wanted(channel.guild, "channel_changes")
@@ -414,7 +406,7 @@ class Logging(commands.Cog, name="Logging"):
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
-        await self._role_event(role.guild, f"**{role.name}** was deleted", "Role deleted", RED)
+        await self._role_event(role.guild, f"**{role.name}** was deleted", "Role deleted", MINT)
 
     @commands.Cog.listener()
     async def on_guild_role_update(self, before, after):
@@ -577,12 +569,12 @@ class Logging(commands.Cog, name="Logging"):
         if modlog is not None:
             notes.append(f"Moderation cases now go to {modlog.mention} too.")
         if not can_hide:
-            embed.color = AMBER
+            embed.color = MINT
             notes.append("⚠️ I don't have Manage Roles, so these channels are visible to "
                          "everyone. Hide the category yourself, or the whole server will be "
                          "able to read your deleted messages.")
         if failed is not None:
-            embed.color = AMBER
+            embed.color = MINT
             notes.append(f"⚠️ I had to stop early: {failed}")
         if notes:
             embed.add_field(name="Notes", value="\n".join(notes)[:1024], inline=False)

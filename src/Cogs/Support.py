@@ -28,9 +28,6 @@ DASHBOARD_URL = (os.environ.get("DASHBOARD_URL") or "").strip().rstrip("/")
 CHECK_EVERY = 15
 MAX_BODY = 2000
 
-COLOR_OPEN = 0xE67E22
-COLOR_ANSWERED = MINT
-COLOR_CLOSED = 0x99AAB5
 
 CATEGORIES = {
     "broken": "Something isn't working",
@@ -39,7 +36,7 @@ CATEGORIES = {
     "data": "Data, privacy or deletion",
     "other": "Something else",
 }
-STATUS_COLORS = {"open": COLOR_OPEN, "answered": COLOR_ANSWERED, "closed": COLOR_CLOSED}
+STATUS_COLORS = {"open": MINT, "answered": MINT, "closed": MINT}
 
 
 def _trim(text: str, limit: int = 1024) -> str:
@@ -89,7 +86,7 @@ class Support(commands.GroupCog, name="Support", group_name="tickets",
         status = doc.get("status", "open")
         embed = discord.Embed(
             title=f"#{doc.get('number')} · {_trim(doc.get('subject'), 200)}",
-            color=STATUS_COLORS.get(status, COLOR_OPEN),
+            color=STATUS_COLORS.get(status, MINT),
             timestamp=discord.utils.utcnow())
         embed.add_field(name="From",
                         value=f"{doc.get('user_tag', 'somebody')}\n`{doc.get('user_id')}`",
@@ -167,7 +164,7 @@ class Support(commands.GroupCog, name="Support", group_name="tickets",
         embed = discord.Embed(
             title=f"Ticket #{doc['number']} · {_trim(doc.get('subject'), 200)}",
             description=_trim(body, 4000),
-            color=COLOR_CLOSED if closed else COLOR_ANSWERED,
+            color=MINT if closed else MINT,
             timestamp=discord.utils.utcnow())
         if closed:
             embed.set_footer(text="This ticket is now closed.")
@@ -202,7 +199,7 @@ class Support(commands.GroupCog, name="Support", group_name="tickets",
             await interaction.followup.send(f"Couldn't read them: {e}", ephemeral=True)
             return
 
-        embed = discord.Embed(title="Support tickets", color=COLOR_ANSWERED,
+        embed = discord.Embed(title="Support tickets", color=MINT,
                               timestamp=discord.utils.utcnow())
         if not found:
             embed.description = ("Nothing waiting." if chosen == "open"

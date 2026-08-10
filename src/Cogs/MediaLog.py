@@ -452,9 +452,6 @@ class MediaLog(commands.Cog):
         # The whole entry in two lines and a picture. It used to be a grid of five fields, three
         # of which repeated the author header or said "no text, just the file" on every single
         # image anybody ever deleted. What is left is what somebody scrolling the log needs.
-        # Mint, not red. Red earns its place in the server log, where it separates a deletion
-        # from the dozen other kinds of event landing in the same channel. Nothing but
-        # deletions ever reaches this one, so a red entry was distinguishing it from nothing.
         embed = discord.Embed(title="Media deleted", color=MINT, timestamp=when)
         embed.set_author(
             name=entry.author_tag + (" · bot" if entry.author_bot else ""),

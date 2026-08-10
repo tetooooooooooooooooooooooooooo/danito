@@ -27,10 +27,6 @@ import Database
 import GuildConfig
 from Brand import MINT
 
-COLOR_BAN = 0xE74C3C
-COLOR_KICK = 0xE67E22
-COLOR_TIMEOUT = 0xF1C40F
-COLOR_WARN = 0xF39C12
 
 MAX_TIMEOUT_DAYS = 28          # Discord's hard ceiling
 MAX_PURGE = 200
@@ -38,14 +34,15 @@ MAX_PURGE = 200
 DURATION_RE = re.compile(r"(\d+)\s*([smhdw])", re.IGNORECASE)
 UNIT_SECONDS = {"s": 1, "m": 60, "h": 3600, "d": 86400, "w": 604800}
 
+# (emoji, label). Every case embed is MINT, so there is no colour column to carry.
 ACTION_STYLE = {
-    "ban": ("🔨", "Ban", COLOR_BAN),
-    "unban": ("♻️", "Unban", MINT),
-    "kick": ("👢", "Kick", COLOR_KICK),
-    "timeout": ("⏳", "Timeout", COLOR_TIMEOUT),
-    "untimeout": ("✅", "Timeout removed", MINT),
-    "warn": ("⚠️", "Warning", COLOR_WARN),
-    "purge": ("🧹", "Purge", MINT),
+    "ban": ("🔨", "Ban"),
+    "unban": ("♻️", "Unban"),
+    "kick": ("👢", "Kick"),
+    "timeout": ("⏳", "Timeout"),
+    "untimeout": ("✅", "Timeout removed"),
+    "warn": ("⚠️", "Warning"),
+    "purge": ("🧹", "Purge"),
 }
 
 
@@ -165,10 +162,10 @@ class Moderation(commands.Cog):
         if channel is None:
             return
 
-        emoji, label, color = ACTION_STYLE.get(action, ("📌", action.title(), MINT))
+        emoji, label = ACTION_STYLE.get(action, ("📌", action.title()))
         embed = discord.Embed(
             title=f"{emoji} {label}" + (f" · Case #{case_id}" if case_id else ""),
-            color=color,
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         if target is not None:
@@ -220,7 +217,7 @@ class Moderation(commands.Cog):
             embed = discord.Embed(
                 title=f"You were {action} in {guild_name}",
                 description=(reason or "*No reason given*")[:2000],
-                color=ACTION_STYLE.get(action, ("", "", MINT))[2],
+                color=MINT,
                 timestamp=discord.utils.utcnow(),
             )
             if duration:
@@ -506,7 +503,7 @@ class Moderation(commands.Cog):
         embed = discord.Embed(
             title="🔒 Channel locked" if locked else "🔓 Channel unlocked",
             description=(reason or None),
-            color=COLOR_BAN if locked else MINT,
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         embed.set_footer(text=f"by {interaction.user}")
@@ -580,7 +577,7 @@ class Moderation(commands.Cog):
             title=f"⚠️ Warnings for {member}",
             description=f"**{len(rows)}** active warning(s)" if rows
             else "No active warnings. 🎉",
-            color=COLOR_WARN if rows else MINT,
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         embed.set_thumbnail(url=member.display_avatar.url)

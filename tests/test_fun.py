@@ -315,15 +315,16 @@ async def main():
     print("\n=== every score gets a verdict, and they get warmer ===")
     seen = []
     for score in range(0, 101):
-        emoji, colour, words = F.verdict(score)
-        assert emoji and words and isinstance(colour, int), score
+        emoji, words = F.verdict(score)
+        assert emoji and words, score
         seen.append((emoji, words))
     assert len(set(seen)) == len(F.VERDICTS), set(seen)
-    # The bands have to be in order, or a 90% would read colder than a 30%.
-    assert F.verdict(0)[2] != F.verdict(100)[2]
-    assert F.verdict(100)[1] == 0xFF4D8D, "the top band is the brightest"
-    print(f"  {len(set(seen))} bands, 0% is '{F.verdict(0)[2]}', "
-          f"100% is '{F.verdict(100)[2]}'")
+    # The emoji carries the whole scale now that every embed is the same colour, so the bands
+    # have to differ by emoji as well as wording or a 90% reads the same as a 30%.
+    assert F.verdict(0) != F.verdict(100)
+    assert F.verdict(100)[0] == "💞" and F.verdict(0)[0] == "🧊"
+    print(f"  {len(set(seen))} bands, 0% is '{F.verdict(0)[1]}', "
+          f"100% is '{F.verdict(100)[1]}'")
 
     print("\n=== ship refuses one person twice ===")
     i = FakeInteraction(alex, guild_members=everyone)
@@ -601,7 +602,9 @@ async def main():
     assert len(F.EIGHT_BALL) == 20, len(F.EIGHT_BALL)
     # An eight ball that says no half the time stops being fun on the second question.
     assert moods.count("yes") == 10 and moods.count("no") == 5, moods
-    assert set(moods) <= set(F.EIGHT_BALL_COLOURS), set(moods)
+    # The mood no longer picks a colour, every embed being mint, but it still has to be one of
+    # the three the table is built around or the yes/no balance above is measuring nothing.
+    assert set(moods) == {"yes", "maybe", "no"}, set(moods)
     i = FakeInteraction(alex, guild_members=everyone)
     await cog.eight_ball.callback(cog, i, "will this work")
     card = i.response.sent[0]["embed"]

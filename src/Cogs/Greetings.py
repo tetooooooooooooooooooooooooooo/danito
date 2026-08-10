@@ -36,8 +36,6 @@ import GuildConfig
 from Brand import MINT
 
 MAX_MESSAGE = 1500          # comfortably inside both the 2000 content and 4096 embed limits
-COLOR_WELCOME = MINT
-COLOR_GOODBYE = 0xE67E22
 
 PLACEHOLDERS = {
     "{user}": "mentions them, e.g. @someone",
@@ -142,7 +140,7 @@ class Greetings(commands.Cog, name="Greetings"):
             return
 
         content, embed = self._build(
-            text, member, member.guild, cfg.get("welcome_embed", False), COLOR_WELCOME)
+            text, member, member.guild, cfg.get("welcome_embed", False), MINT)
 
         channel_id = cfg.get("welcome_channel")
         if channel_id:
@@ -203,7 +201,7 @@ class Greetings(commands.Cog, name="Greetings"):
             return
 
         content, embed = self._build(
-            text, member, member.guild, cfg.get("goodbye_embed", False), COLOR_GOODBYE)
+            text, member, member.guild, cfg.get("goodbye_embed", False), MINT)
         try:
             await channel.send(content=content, embed=embed, allowed_mentions=SAFE_MENTIONS)
         except discord.Forbidden:
@@ -267,7 +265,7 @@ class Greetings(commands.Cog, name="Greetings"):
         await self._send_preview(
             interaction,
             f"Welcome messages are on, going to {where}. Here's how it'll look:",
-            message, embed, COLOR_WELCOME)
+            message, embed, MINT)
 
     @welcome.command(name="off", description="Stop greeting new members")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -281,7 +279,7 @@ class Greetings(commands.Cog, name="Greetings"):
     @app_commands.checks.has_permissions(manage_guild=True)
     async def welcome_show(self, interaction: discord.Interaction):
         cfg = await GuildConfig.get(self.bot, interaction.guild.id)
-        await self._show(interaction, cfg, "welcome", COLOR_WELCOME)
+        await self._show(interaction, cfg, "welcome", MINT)
 
     # ── /goodbye ─────────────────────────────────────────────────────
     @goodbye.command(name="set", description="Write the message posted when someone leaves")
@@ -310,7 +308,7 @@ class Greetings(commands.Cog, name="Greetings"):
         await self._send_preview(
             interaction,
             f"Goodbye messages are on, going to {channel.mention}. Here's how it'll look:",
-            message, embed, COLOR_GOODBYE)
+            message, embed, MINT)
 
     @goodbye.command(name="off", description="Stop posting when someone leaves")
     @app_commands.checks.has_permissions(manage_guild=True)
@@ -323,7 +321,7 @@ class Greetings(commands.Cog, name="Greetings"):
     @app_commands.checks.has_permissions(manage_guild=True)
     async def goodbye_show(self, interaction: discord.Interaction):
         cfg = await GuildConfig.get(self.bot, interaction.guild.id)
-        await self._show(interaction, cfg, "goodbye", COLOR_GOODBYE)
+        await self._show(interaction, cfg, "goodbye", MINT)
 
     # ── show, shared by both ─────────────────────────────────────────
     async def _show(self, interaction: discord.Interaction, cfg: dict, kind: str, color: int):

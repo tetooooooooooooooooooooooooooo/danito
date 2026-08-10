@@ -94,7 +94,6 @@ NOTICE_SECONDS = 6
 PRUNE_MINUTES = 10
 WORD_CACHE_SIZE = 64      # distinct banned word lists kept compiled
 
-COLOR_WARN = 0xE67E22
 
 INVITE = re.compile(
     r"(?:discord(?:app)?\.com/invite|discord\.gg|discord\.me|dsc\.gg|invite\.gg)/[\w-]+",

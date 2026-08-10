@@ -4,6 +4,8 @@ import re
 from discord import app_commands
 from discord.ext import commands
 
+from Brand import MINT
+
 class ImageSpamFilter(commands.Cog):
     """Auto-deletes messages with 2+ attachments following a spam naming pattern"""
     
@@ -91,7 +93,7 @@ class ImageSpamFilter(commands.Cog):
                     "Attachments": filenames_str,
                     "Message Content": message.content[:200] if message.content else "(no text)"
                 },
-                color=0xe74c3c
+                color=MINT
             )
             
         except discord.Forbidden:

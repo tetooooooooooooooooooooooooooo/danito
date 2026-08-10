@@ -30,8 +30,6 @@ PING_AFTER_DAYS = 8
 CLEANUP_AFTER_DAYS = 9
 SCALE = 10
 
-COLOR_WARN = 0xE67E22
-
 # Explicit custom_ids are what make the score recoverable. Without them Discord generates
 # random ones and there is no way to tell a click on "3" from a click on "9".
 RATING_ID = re.compile(r"^rating:(\d{1,2})$")
@@ -281,7 +279,6 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
                    if configured else
                    "Run `/setchannel` in the channel where you want the survey to live.")
             )
-            embed.color = COLOR_WARN
             await interaction.followup.send(embed=embed, ephemeral=True)
             return
 
@@ -454,7 +451,6 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
 
         if channel is None:
             status = "**Not set up yet.** Run `/setchannel` in the channel you want the survey in."
-            embed.color = COLOR_WARN
         else:
             today = datetime.date.today()
             next_up = []
@@ -481,7 +477,6 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             ) if not ok]
             if missing:
                 status += f"\n\n**I'm missing {', '.join(missing)}**, so this can't work properly."
-                embed.color = COLOR_WARN
 
         embed.add_field(name="Status here", value=status, inline=False)
         embed.set_footer(text="/setchannel to set up  •  /ratings to see scores")
