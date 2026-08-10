@@ -244,18 +244,13 @@ def headline_numbers() -> dict:
     if status["state"] == "unknown":
         return {}
 
+    # Two figures, both already in the heartbeat, so the front page costs no extra database
+    # work at all. A join count used to be here as a third and was not worth a query on a
+    # page anybody can load: it is the smallest of the three and the least interesting.
     numbers = {"servers": status.get("guilds") or 0,
                "members": status.get("members") or 0}
-    try:
-        # An estimate rather than a count: this is a marketing figure on a page anybody can
-        # load, and estimated_document_count reads collection metadata instead of walking
-        # every document.
-        numbers["joins"] = _memberships().estimated_document_count()
-    except Exception as e:
-        print(f"[headline] couldn't count joins: {e}")
-        numbers["joins"] = 0
-    # Anything still at zero is left out rather than shown. "0 members" is worse than no
-    # claim at all, and on a fresh install every one of these is zero.
+    # Anything at zero is left out rather than shown. "0 members" is worse than no claim at
+    # all, and on a fresh install both of these are zero.
     return {key: value for key, value in numbers.items() if value}
 
 

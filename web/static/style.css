@@ -844,10 +844,17 @@ section { margin-bottom: 72px; }
    message builder, further down this file, and was quietly winning. */
 .tallies {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  /* Capped rather than 1fr. Two tiles stretched across a 1060px page are mostly empty box,
+     and left aligned they line up with the hero copy above them. */
+  grid-template-columns: repeat(auto-fit, minmax(200px, 330px));
   gap: 13px;
   margin-bottom: 64px;
 }
+
+/* The hero already ends in 76px of its own padding and every section adds 72 more. Fine when
+   the next thing is a heading; far too much when it is a row of numbers meant to read as
+   part of the hero. */
+.hero-grid.tight { padding-bottom: 20px; margin-bottom: 0; }
 
 .tally {
   display: grid;

@@ -12,7 +12,10 @@
 {% endmacro %}
 
 {% block content %}
-<section class="hero-grid">
+{#- `tight` when the numbers are there, because the hero's own bottom padding plus the gap
+    every section carries leaves about a screen of nothing between the buttons and the first
+    figure. -#}
+<section class="hero-grid{{ ' tight' if numbers }}">
   <div class="hero-copy" data-reveal>
     <span class="pill">Built for Server Discovery</span>
     <h1>Get found by people who aren't in your server yet</h1>
@@ -80,13 +83,6 @@
         <span class="tally-icon" aria-hidden="true">👥</span>
         <span class="tally-label">Members watched</span>
         <strong>{{ compact(numbers.members) }}</strong>
-      </div>
-    {% endif %}
-    {% if numbers.joins %}
-      <div class="tally">
-        <span class="tally-icon" aria-hidden="true">📈</span>
-        <span class="tally-label">Joins recorded</span>
-        <strong>{{ compact(numbers.joins) }}</strong>
       </div>
     {% endif %}
   </section>
