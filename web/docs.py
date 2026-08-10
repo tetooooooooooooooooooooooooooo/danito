@@ -10,6 +10,10 @@ change; the SECTIONS below are the single place to do it.
 EVERYONE = "Anyone"
 MANAGE_SERVER = "Manage Server"
 MANAGE_ROLES = "Manage Roles"
+# Not a Discord permission at all: whoever the application belongs to. Listed so the page is a
+# complete account of what exists, and excluded from the count below because nobody reading it
+# can run one.
+OWNER = "Bot owner"
 
 SETUP = [
     {
@@ -585,6 +589,47 @@ SECTIONS = [
         ],
     },
     {
+        "id": "support",
+        "icon": "🎟️",
+        "title": "Support tickets",
+        "blurb": "Asked on the website, answered in Discord.",
+        "setup": [
+            "Open the <a href=\"/support\">support page</a>, log in with Discord, and say what "
+            "happened. Pick the closest category, and name the server if it is about one.",
+            "Nothing to install and nothing to switch on. Anyone can open one, whether or not "
+            "they run a server the bot is in.",
+        ],
+        "notes": [
+            "The answer arrives as a direct message from the bot, and the same thread stays on "
+            "the support page. Closing the tab does not mean missing the reply.",
+            "If your direct messages are shut the reply is still on the page, and whoever "
+            "answered is told it could not be sent rather than assuming it landed.",
+            "Three open at a time, and a minute between new ones. Replying on the ticket you "
+            "already have is better than opening a second about the same thing anyway.",
+            "A ticket holds your Discord ID and username, the server you picked if you picked "
+            "one, and what you typed. Nothing else is taken from your account.",
+            "Tickets belong to you rather than to a server. Removing the bot from a server "
+            "does not close them or delete them, and they are kept until you ask for them to "
+            "go.",
+            "Either side can close one. Yours have a Close button on the support page, and a "
+            "reply that finishes the matter off may close it from the other end.",
+            "The four <code>/tickets</code> commands below are how the answer gets written. "
+            "They work only for whoever runs the bot, and only in its own server, so they will "
+            "not show up in your command list. They are here so this page is a full account of "
+            "what exists rather than only the parts you can use.",
+        ],
+        "commands": [
+            ("/tickets list", "[status]",
+             "Tickets waiting on a reply, or whichever status you ask for.", OWNER),
+            ("/tickets show", "<number>", "Read one in full, with everything said since.",
+             OWNER),
+            ("/tickets reply", "<number> <message>",
+             "Answer it. The reply goes to them as a direct message and onto the page.", OWNER),
+            ("/tickets close", "<number> [message]",
+             "Close it, with an optional last word sent to them as well.", OWNER),
+        ],
+    },
+    {
         "id": "premium",
         "icon": "✦",
         "title": "Premium",
@@ -607,6 +652,19 @@ SECTIONS = [
         "commands": [],
     },
 ]
+
+
+def command_count() -> int:
+    """How many commands this page actually documents for the person reading it.
+
+    Adding the table lengths up gets it wrong twice over. `/logging status` and three of its
+    siblings are listed in every section they are relevant to, so a plain sum counts them more
+    than once, and the owner-only ticket commands are not something a reader can run. Either
+    mistake puts a number on the page that nobody could reconcile with their own command list.
+    """
+    return len({row[0] for section in SECTIONS for row in section["commands"]
+                if row[3] != OWNER})
+
 
 TROUBLESHOOTING = [
     ("A command doesn't appear in Discord",

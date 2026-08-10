@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block bodyclass %}docs-page{% endblock %}
 {% block title %}Documentation · {{ brand }}{% endblock %}
-{% block description %}How to set Newt up and what all 61 commands do: ratings and retention, welcome messages, autorole, role buttons, moderation, automod and the server log.{% endblock %}
+{% block description %}How to set Newt up and what all {{ command_count }} commands do: ratings and retention, welcome messages, autorole, role buttons, moderation, automod and the server log.{% endblock %}
 
 {% macro command_table(rows) %}
   <div class="table-wrap">
@@ -47,7 +47,6 @@
     <p class="lead-text">How to set {{ brand }} up and what each command does. Everything is
       off until you switch it on, so nothing here happens by default.</p>
 
-    {%- set command_count = sections | map(attribute='commands') | map('length') | sum %}
     {# Sticky, because the thing you are searching for is usually further down than the box. #}
     <div class="docs-search">
       <input type="search" data-docs-search autocomplete="off" spellcheck="false"

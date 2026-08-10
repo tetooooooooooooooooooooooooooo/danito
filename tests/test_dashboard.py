@@ -332,13 +332,29 @@ def main():
     import re as _re
     docs = c.get("/docs").data.decode()
 
-    rows = docs.count("<tr>") - docs.count("<tr><th")
+    import docs as docpage
     command_rows = len(_re.findall(r'<td class="cmd">', docs))
     placeholder = _re.search(r'placeholder="Search (\d+) commands', docs)
     assert placeholder, "the search box should say how much it is searching"
-    assert int(placeholder.group(1)) == command_rows, \
-        (placeholder.group(1), command_rows)
-    print(f"  search box offers all {command_rows} commands OK")
+    counted = docpage.command_count()
+    assert int(placeholder.group(1)) == counted, (placeholder.group(1), counted)
+
+    # The number has to be the commands the reader can actually run, which is fewer than the
+    # rows on the page: some are listed in every section they matter to, and the ticket ones
+    # are owner only. Counting rows would print a total nothing in their Discord matches.
+    every = [row for s in docpage.SECTIONS for row in s["commands"]]
+    assert len(every) == command_rows, (len(every), command_rows)
+    assert counted == len({r[0] for r in every if r[3] != docpage.OWNER})
+    assert counted < command_rows, "nothing is being deduped, so the count is a plain sum"
+    assert any(r[3] == docpage.OWNER for r in every), \
+        "owner-only commands are still listed, just not counted"
+    print(f"  search box offers all {counted} commands, from {command_rows} rows OK")
+
+    # The whole of /tickets, not just the half a server owner can see.
+    for name in ("/tickets list", "/tickets show", "/tickets reply", "/tickets close"):
+        assert f"<code>{name}</code>" in docs, name
+    assert 'id="support"' in docs
+    print("  and the four /tickets commands are on it OK")
 
     # Every anchor has to point at an id that exists, or the permalink goes nowhere.
     ids = set(_re.findall(r'<(?:section|h3) id="([^"]+)"', docs))

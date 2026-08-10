@@ -218,7 +218,8 @@ def documentation():
     """Public on purpose: somebody deciding whether to add the bot should be able to read what
     it does without handing over an account first."""
     return render_template("docs.html", setup=docs.SETUP, sections=docs.SECTIONS,
-                           troubleshooting=docs.TROUBLESHOOTING)
+                           troubleshooting=docs.TROUBLESHOOTING,
+                           command_count=docs.command_count())
 
 
 # ── status ───────────────────────────────────────────────────────────
