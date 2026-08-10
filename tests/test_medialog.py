@@ -143,9 +143,37 @@ async def main():
     assert e.image.url == f"attachment://{sent['files'][0].filename}", \
         f"{e.image.url} != attachment://{sent['files'][0].filename}"
     assert " " not in sent["files"][0].filename, "spaces break attachment:// refs"
-    assert "not retained" in str([f.value for f in e.fields]), "oversized file should be marked"
+    assert "not kept" in str([f.value for f in e.fields]), "oversized file should be marked"
     assert e.footer.text and "1 file" in e.footer.text
+    assert "1 files" not in e.footer.text, "one file is not 1 files"
+    assert str(entry.author_id) in e.footer.text, "the id stays reachable, just out of the way"
     print("  inline attachment reference matches OK")
+
+    # The author is named once, in the header, rather than again in a field underneath.
+    assert e.author.name.startswith("someone#0001")
+    assert not any(f.name == "Uploaded by" for f in e.fields), "that field was a duplicate"
+    assert not any(f.name == "Posted" for f in e.fields), "the time is in the description now"
+    assert "posted <t:" in e.description and "deleted by Mod#1" in e.description
+    assert e.description.startswith("🖼️"), e.description
+    # A caption is shown when there is one, and this entry has one.
+    assert [f.value for f in e.fields if f.name == "Caption"] == ["check this out"]
+    print(f"  {len(e.fields)} fields, down from five OK")
+
+    print("\n=== one picture that survived needs no list under it ===")
+    sent.clear()
+    solo = ML.CachedMessage(
+        guild_id=1, channel_id=222, author_id=333, author_tag="someone#0001",
+        author_avatar="https://e.com/u.png", author_bot=False,
+        content="", created_at=discord.utils.utcnow(),
+        files=[F("one.png", png, "image/png", len(png), False)],
+        nbytes=len(png), cached_at=time.monotonic())
+    await cog._send(None, {"medialog_channel": 999}, solo, None, discord.utils.utcnow())
+    e3 = sent["embed"]
+    assert e3.image.url, "it is still shown"
+    assert e3.fields == [], f"nothing to say twice: {[f.name for f in e3.fields]}"
+    assert "probably the author" in e3.description, "an unnamed deleter is the ordinary case"
+    assert "couldn't be kept" not in (e3.footer.text or "")
+    print("  a lone retained image renders as the image and nothing else OK")
 
     # spoilered image must NOT be inlined
     sent.clear()
@@ -158,10 +186,21 @@ async def main():
     e2 = sent["embed"]
     assert e2.image.url is None, "spoilers must stay blurred, not inlined"
     assert sent["files"][0].filename.startswith("SPOILER_")
-    assert "(bot)" in [f.value for f in e2.fields][0], "bot uploader should be marked"
-    assert "Unknown" in [f.value for f in e2.fields][1]
-    assert "no text" in [f.value for f in e2.fields][3].lower(), "empty content placeholder"
-    print("  spoiler not inlined, bot flagged, empty-content placeholder OK")
+    assert e2.author.name.endswith("· bot"), f"bot uploader should be marked: {e2.author.name}"
+    assert "probably the author" in e2.description
+    # No caption on this one, so no field pretending there is one.
+    assert not any(f.name == "Caption" for f in e2.fields), "an empty caption is not a field"
+    # The spoiler was not inlined, so the list has to name it or nothing does.
+    assert [f.name for f in e2.fields] == ["Files"], [f.name for f in e2.fields]
+    print("  spoiler not inlined, bot flagged in the header, no empty caption row OK")
+
+    print("\n=== sizes read like sizes ===")
+    for n, want in ((0, "0 B"), (900, "900 B"), (1024, "1 KB"), (1536, "1.5 KB"),
+                    (1024 * 1024, "1 MB"), (3 * 1024 * 1024, "3 MB"),
+                    (int(3.25 * 1024 * 1024), "3.2 MB")):
+        got = ML._fmt_size(n)
+        assert got == want, (n, got, want)
+    print("  1 MB rather than 1.0 MB OK")
 
     print("\nALL CHECKS PASSED")
 

@@ -66,9 +66,9 @@ def _media_of(message: discord.Message) -> list:
 def _fmt_size(n: int) -> str:
     if n < 1024:
         return f"{n} B"
-    if n < 1024 * 1024:
-        return f"{n / 1024:.1f} KB"
-    return f"{n / (1024 * 1024):.1f} MB"
+    unit, scaled = ("KB", n / 1024) if n < 1024 * 1024 else ("MB", n / (1024 * 1024))
+    # 3 MB rather than 3.0 MB. The decimal is only worth printing when it says something.
+    return f"{scaled:.1f}".rstrip("0").rstrip(".") + f" {unit}"
 
 
 def _kind(content_type: Optional[str], filename: str) -> str:
@@ -88,6 +88,19 @@ def _summarise(items: list) -> str:
         k = _kind(i.content_type, i.filename)
         counts[k] = counts.get(k, 0) + 1
     return ", ".join(f"{n} {k}" if n == 1 else f"{n} {k}s" for k, n in counts.items()) or "media"
+
+
+# One glyph at the head of the line, so a channel full of these can be read down the left edge
+# instead of one title at a time. Mixed messages take the first kind they contain.
+KIND_ICONS = {"image": "🖼️", "video": "🎞️", "audio file": "🎧", "file": "📎"}
+
+
+def _lead_icon(items: list) -> str:
+    for i in items:
+        icon = KIND_ICONS.get(_kind(i.content_type, i.filename))
+        if icon:
+            return icon
+    return KIND_ICONS["file"]
 
 
 @dataclass
@@ -345,9 +358,10 @@ class MediaLog(commands.Cog):
 
         total_files = sum(len(e.files) for e in entries)
         summary = discord.Embed(
-            title="🗑️ Bulk Delete",
-            description=f"**{len(entries)}** message(s) with **{total_files}** media file(s) "
-                        f"were bulk-deleted in <#{payload.channel_id}>.",
+            title="Bulk delete",
+            description=f"**{len(entries)}** message{'' if len(entries) == 1 else 's'} carrying "
+                        f"**{total_files}** file{'' if total_files == 1 else 's'} went at once "
+                        f"in <#{payload.channel_id}>. Each one follows.",
             color=COLOR_DELETE,
             timestamp=now,
         )
@@ -409,43 +423,45 @@ class MediaLog(commands.Cog):
                     and (f.content_type or "").lower().startswith("image/")):
                 inline_image = f"attachment://{safe}"
 
-        embed = discord.Embed(
-            title="🗑️ Deleted Media",
-            description=f"**{_summarise(entry.files)}** in <#{entry.channel_id}>",
-            color=COLOR_DELETE,
-            timestamp=when,
-        )
-        if entry.author_avatar:
-            embed.set_author(name=entry.author_tag, icon_url=entry.author_avatar)
-
-        uploader = f"<@{entry.author_id}>\n`{entry.author_id}`"
-        if entry.author_bot:
-            uploader += "\n*(bot)*"
-        embed.add_field(name="Uploaded by", value=uploader, inline=True)
-        embed.add_field(name="Deleted by", value=who or "Unknown, probably the author", inline=True)
+        # The whole entry in two lines and a picture. It used to be a grid of five fields, three
+        # of which repeated the author header or said "no text, just the file" on every single
+        # image anybody ever deleted. What is left is what somebody scrolling the log needs.
+        embed = discord.Embed(title="Media deleted", color=COLOR_DELETE, timestamp=when)
+        embed.set_author(
+            name=entry.author_tag + (" · bot" if entry.author_bot else ""),
+            icon_url=entry.author_avatar or None)
 
         posted = int(entry.created_at.timestamp())
-        embed.add_field(name="Posted", value=f"<t:{posted}:f>\n<t:{posted}:R>", inline=True)
+        # Discord writes no audit entry when somebody deletes their own message, so unknown is
+        # the ordinary case rather than a failure. Say which it is without a field spent on it.
+        by = f"deleted by {who}" if who else "nobody named, so probably the author"
+        embed.description = (
+            f"{_lead_icon(entry.files)} **{_summarise(entry.files)}** in <#{entry.channel_id}>\n"
+            f"-# posted <t:{posted}:R> · {by}")
 
-        embed.add_field(
-            name="Message text",
-            value=entry.content[:1000] if entry.content else "*(no text, just the file)*",
-            inline=False,
-        )
-
-        lines = []
-        for f in entry.files:
-            mark = "" if f.data is not None else "  ⚠️ *not retained*"
-            lines.append(f"`{f.filename}` · {_fmt_size(f.size)}{mark}")
-        embed.add_field(name="Files", value="\n".join(lines)[:1024], inline=False)
+        if entry.content:
+            embed.add_field(name="Caption", value=entry.content[:1000], inline=False)
 
         if inline_image:
             embed.set_image(url=inline_image)
 
         missing = len(entry.files) - len(retained)
+        # A single picture is already shown above, and naming it underneath tells nobody
+        # anything. The list earns its place once there is more than one, or one that isn't
+        # there to look at.
+        if not (len(entry.files) == 1 and not missing and inline_image):
+            lines = [f"`{f.filename}` · {_fmt_size(f.size)}"
+                     + ("" if f.data is not None else " · not kept")
+                     for f in entry.files]
+            embed.add_field(name="Files", value="\n".join(lines)[:1024], inline=False)
+
+        # The id lives here rather than in a field of its own. It is wanted rarely, usually
+        # once the person has left and their mention is a dead link, and it is still copyable.
+        note = [f"ID {entry.author_id}"]
         if missing:
-            embed.set_footer(text=f"{missing} file(s) couldn't be retained "
-                                  f"(too large, or posted before the bot restarted)")
+            note.append(f"{missing} file{'' if missing == 1 else 's'} couldn't be kept, "
+                        f"too large or posted before a restart")
+        embed.set_footer(text=" · ".join(note))
 
         try:
             await channel.send(embed=embed, files=files,
