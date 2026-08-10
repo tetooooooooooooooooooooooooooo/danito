@@ -3,11 +3,15 @@
 {% block title %}{{ brand }} · get your server into Discord Discovery{% endblock %}
 {% block description %}Newt asks new members what they think about a week after they join, measures how many of them stay, and checks your server against everything Discord Server Discovery asks for. Free, and every feature is off until you turn it on.{% endblock %}
 
-{% macro feature(icon, title, body, delay) %}
+{#- The spec line is the point of this macro. A card that says "powerful moderation" and stops
+    is worth less than one that names the commands, the limits and the numbers, because the
+    person reading it is deciding whether this does the specific thing they came for. -#}
+{% macro feature(icon, title, body, delay, spec=None) %}
   <div class="feature" data-reveal data-delay="{{ delay }}">
     <div class="icon">{{ icon }}</div>
     <h3>{{ title }}</h3>
     <p>{{ body }}</p>
+    {% if spec %}<p class="feature-spec">{{ spec | safe }}</p>{% endif %}
   </div>
 {% endmacro %}
 
@@ -114,36 +118,109 @@
   <h2 class="section" data-reveal>Everything else it does</h2>
   <div class="features">
     {{ feature("📈", "Retention you can actually see",
-       "Of the people who joined a week ago, how many are still here. Grouped by hour, day,
-        week or month, per joining group, and honest about the figures it doesn't have enough
-        history for yet.", 0) }}
+       "Of the people who joined a week ago, how many are still here. Per joining group, and
+        honest about the figures it doesn't have enough history for yet.", 0,
+       "<code>/retention</code> <code>/discovery</code> <code>/discoveryhelp</code><br>
+        Grouped hourly, daily, weekly or monthly. Records kept 180 days, because the longest
+        window looks back 30.") }}
     {{ feature("⭐", "Ask what people think",
        "A one tap survey from 1 to 10, in a channel you choose. Scores are saved per member,
-        so changing your mind replaces your old answer rather than stuffing the ballot.", 60) }}
+        so changing your mind replaces your old answer rather than stuffing the ballot.", 60,
+       "<code>/setchannel</code> <code>/ratings</code> <code>/forcesurvey</code><br>
+        The average, the spread, the happy and unhappy split, and the most recent votes.") }}
     {{ feature("🔨", "Moderation that remembers",
-       "Ban, kick, timeout, purge and warn. Every action becomes a numbered case, so you can
-        see whether somebody is a repeat offender instead of reacting to each incident on
-        its own.", 120) }}
+       "Every action becomes a numbered case, so you can see whether somebody is a repeat
+        offender instead of reacting to each incident on its own.", 120,
+       "<code>/ban</code> <code>/unban</code> <code>/kick</code> <code>/timeout</code>
+        <code>/warn</code> <code>/warnings</code> <code>/delwarn</code> <code>/modlogs</code>
+        <code>/purge</code> <code>/slowmode</code> <code>/lock</code> <code>/unlock</code><br>
+        Durations written the way you'd say them: <code>10m</code>, <code>2h</code>,
+        <code>1h30m</code>. Clearing a warning marks it inactive rather than erasing the
+        trail.") }}
+    {{ feature("🛡️", "Automod, nine rules",
+       "Each one separate, each with its own response, and all of them off until you turn them
+        on. Only one rule acts per message, so a message that trips three is dealt with
+        once.", 0,
+       "Banned words · Discord invites · links · mass mentions · floods · repeats · shouting ·
+        emoji spam · walls of text<br>
+        Five responses, from delete to delete and ban. Kicks and bans are capped per hour, so
+        one wrong word on a list can't empty a server.") }}
+    {{ feature("🚪", "Turn away brand new accounts",
+       "A raid is almost always accounts registered minutes earlier, so an age floor stops most
+        of one before a single filter has to fire.", 60,
+       "<code>/automod minage</code><br>
+        A kick comes with a direct message saying how old an account has to be, so a real
+        person who arrived early can come back. Nobody turned away is counted as a join, so
+        raid accounts stay out of your retention figures.") }}
+    {{ feature("🔗", "Which invite they came in on",
+       "Every join is matched to the invite that brought them and who made it, so you can see
+        which link is bringing people who stay rather than just people who arrive.", 120,
+       "<code>/serverinfo</code> <code>/userinfo</code>, and the insights page on the
+        dashboard<br>
+        Joins and leaves over time, and retention broken down per invite. Needs Manage Server,
+        which is the only way Discord lets a bot read invite use counts.") }}
     {{ feature("🎛️", "Roles people give themselves",
        "A message with a button per role, built from the dashboard. Buttons rather than
         reactions, so nothing breaks when an emoji is deleted and everybody gets told why if a
-        click doesn't work. Plus roles handed out automatically on join.", 0) }}
+        click doesn't work.", 0,
+       "<code>/rolepanel create</code> <code>addrole</code> <code>removerole</code>
+        <code>list</code> <code>delete</code><br>
+        25 buttons a panel, Discord's limit. Set one to a single role and picking a second
+        swaps it. Plus up to 10 roles handed out automatically on join, in one request so a
+        rush of joins can't hit a rate limit.") }}
+    {{ feature("📋", "Four logs, not one",
+       "The server log records everything however it happened. The moderation log records only
+        what your staff did, with case numbers. Deleted media keeps the file. Survey reminders
+        record that a ping went out.", 60,
+       "<code>/logging setup</code> builds the channels and points each event at one<br>
+        Thirteen kinds of event, from deleted messages to voice moves. A ban placed with
+        <code>/ban</code> is written once as a case, not twice.") }}
     {{ feature("🗄️", "Deleted media, kept",
-       "When somebody deletes an image, video or voice memo, you get the file itself, not
-        just a filename. Along with who posted it, who deleted it and when.", 60) }}
+       "When somebody deletes an image, video or voice memo, you get the file itself, not just
+        a filename. Along with who posted it, who deleted it and when.", 120,
+       "Images, video and audio, up to 8MB<br>
+        Held in memory for a few hours and never written to a database. Delete several at once
+        and they come back as one entry with all of them.") }}
     {{ feature("👋", "Greet people in your words",
-       "Welcome and goodbye messages you write, in a channel or by direct message, plain or
-        as an embed. Nothing is ever sent that you didn't write.", 120) }}
+       "Welcome and goodbye messages you write, in a channel or by direct message, plain or as
+        an embed. Nothing is ever sent that you didn't write.", 0,
+       "<code>{user}</code> <code>{username}</code> <code>{tag}</code> <code>{server}</code>
+        <code>{count}</code> <code>{ordinal}</code><br>
+        Typing @everyone into one pings nobody. If your server has a rules screen the welcome
+        waits until they accept, rather than greeting somebody who can't see the channel
+        yet.") }}
+    {{ feature("⏰", "Reminders",
+       "Ask to be told about something later. It arrives as a direct message, or in the channel
+        you set it in if your inbox is closed.", 60,
+       "<code>/remindme</code> <code>/reminders</code><br>
+        From 30 seconds to a year, written as <code>10m</code>, <code>2h30m</code>,
+        <code>1w</code>. Twenty five waiting each. If it can't read what you typed it says so
+        rather than guessing.") }}
     {{ feature("📊", "Know your server",
-       "Which roles are most common, when your channels are busiest, who talks most, what
-        people are playing, and which profile badges your members carry.", 0) }}
-    {{ feature("🛡️", "Quiet spam removal",
-       "Batches of images posted with the giveaway filename patterns get removed on sight,
-        and the file is kept in your log so you can still see what it was.", 60) }}
-    {{ feature("🔔", "Nothing happens invisibly",
-       "The reminder deletes itself after two seconds, so it gets logged with how many members
-        it actually reached. You can tell it fired without taking it on trust.", 120) }}
+       "Read only, open to everyone, and worked out live rather than stored.", 120,
+       "<code>/stats roles</code> <code>activity</code> <code>playing</code>
+        <code>tags</code> <code>badges</code><br>
+        Most common roles, busiest hour, top posters, what people are playing, which guild tags
+        they wear and which profile badges they carry.") }}
+    {{ feature("🎲", "The ones nobody needs",
+       "A server people enjoy being in is the thing everything else here measures.", 0,
+       "<code>/userinfo</code> <code>/serverinfo</code> <code>/roleinfo</code>
+        <code>/avatar</code> <code>/banner</code> <code>/marry</code> <code>/divorce</code>
+        <code>/ship</code> <code>/8ball</code> <code>/rps</code>
+        <code>/wouldyourather</code><br>
+        <code>/userinfo</code> shows what Discord knows plus what only this does: their rating,
+        their invite, how many times they've joined.") }}
+    {{ feature("🧹", "What it stores, and for how long",
+       "No message content is ever written to a database. Everything else has an expiry, and
+        removing the bot starts the clock on all of it.", 60,
+       "Join and leave dates 180 days · reminder log 30 days · deleted files a few hours, in
+        memory<br>
+        Remove the bot and the whole server's data goes after 30 days. The delay is deliberate:
+        bots get kicked by accident. Add it back inside that and nothing was lost.") }}
   </div>
+  <p class="fine grid-foot">Seventy one commands in total, and the
+     <a href="{{ url_for('documentation') }}">documentation</a> lists every one with who can
+     run it. Nothing above is behind a payment.</p>
 </section>
 
 {#- Somebody who reads the whole pitch and only meets a price on the next page has been led
