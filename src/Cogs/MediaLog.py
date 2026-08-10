@@ -43,9 +43,6 @@ GALLERY_MAX = 4
 AUDIT_DELAY = 1.5
 AUDIT_WINDOW = 20
 
-COLOR_DELETE = 0xE74C3C
-COLOR_WARN = 0xE67E22
-
 MEDIA_TYPES = ("image/", "video/", "audio/")
 MEDIA_EXT = re.compile(
     r"\.(png|jpe?g|gif|webp|bmp|tiff?|heic|heif|avif"
@@ -386,7 +383,7 @@ class MediaLog(commands.Cog):
             description=f"**{len(entries)}** message{'' if len(entries) == 1 else 's'} carrying "
                         f"**{total_files}** file{'' if total_files == 1 else 's'} went at once "
                         f"in <#{payload.channel_id}>. Each one follows.",
-            color=COLOR_DELETE,
+            color=MINT,
             timestamp=now,
         )
         try:
@@ -455,7 +452,10 @@ class MediaLog(commands.Cog):
         # The whole entry in two lines and a picture. It used to be a grid of five fields, three
         # of which repeated the author header or said "no text, just the file" on every single
         # image anybody ever deleted. What is left is what somebody scrolling the log needs.
-        embed = discord.Embed(title="Media deleted", color=COLOR_DELETE, timestamp=when)
+        # Mint, not red. Red earns its place in the server log, where it separates a deletion
+        # from the dozen other kinds of event landing in the same channel. Nothing but
+        # deletions ever reaches this one, so a red entry was distinguishing it from nothing.
+        embed = discord.Embed(title="Media deleted", color=MINT, timestamp=when)
         embed.set_author(
             name=entry.author_tag + (" · bot" if entry.author_bot else ""),
             icon_url=entry.author_avatar or None)
