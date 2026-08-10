@@ -30,8 +30,9 @@ import Database
 # repeated. Two copies of a magic string is how one of them quietly stops matching, and the
 # only symptom here would be a card showing `vanity` as though it were an invite code.
 from Cogs.Invites import VANITY
+from Brand import MINT
 
-COLOR = 0x3DDC97
+COLOR = MINT
 COLOR_LOVE = 0xE85D9C
 
 # Polls are disposable. Mongo drops them rather than keeping every question ever asked.
@@ -64,7 +65,7 @@ EIGHT_BALL = [
     ("no", "Don't count on it."), ("no", "My reply is no."), ("no", "My sources say no."),
     ("no", "Outlook not so good."), ("no", "Very doubtful."),
 ]
-EIGHT_BALL_COLOURS = {"yes": 0x3DDC97, "maybe": 0xF0B45F, "no": 0xF27272}
+EIGHT_BALL_COLOURS = {"yes": MINT, "maybe": 0xF0B45F, "no": 0xF27272}
 
 # Deliberately safe for a server anybody can join, and deliberately not topical: a question
 # that needs context stops being funny the moment somebody reads it a month later.
@@ -707,7 +708,7 @@ class Fun(commands.Cog, name="Fun"):
         mine = random.choice(list(THROWS))
         result = self._outcome(throw, mine)
         embed = discord.Embed(
-            colour={1: 0x3DDC97, 0: 0xF0B45F, -1: 0xF27272}[result],
+            colour={1: MINT, 0: 0xF0B45F, -1: 0xF27272}[result],
             title={1: "You win", 0: "A draw", -1: "I win"}[result],
             description=f"{THROWS[throw]} **{throw.title()}**  vs  "
                         f"**{mine.title()}** {THROWS[mine]}")
@@ -765,7 +766,7 @@ class Fun(commands.Cog, name="Fun"):
             title, colour = "A draw", 0xF0B45F
         else:
             winner = one if result == 1 else two
-            title, colour = f"<@{winner}> wins", 0x3DDC97
+            title, colour = f"<@{winner}> wins", MINT
         embed = discord.Embed(
             colour=colour, title="🪨 📄 ✂️",
             description=f"{title}\n\n<@{one}> {THROWS[first]} **{first.title()}**\n"

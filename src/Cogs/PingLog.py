@@ -23,13 +23,13 @@ from discord.ext import commands
 
 import Database
 import GuildConfig
+from Brand import MINT
 
 EVENT_TTL_DAYS = 30
 SUMMARY_DAYS = 7
 
 COLOR_PING = 0xF39C12
 COLOR_BIG = 0xE74C3C
-COLOR_INFO = 0x5865F2
 COLOR_WARN = 0xE67E22
 
 BIG_PING = 50          # coloured red above this, purely cosmetic

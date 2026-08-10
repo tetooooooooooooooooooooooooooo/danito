@@ -2,6 +2,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from Brand import MINT
+
 # Display metadata per cog, keyed on the cog class name. Keeping this explicit rather than
 # deriving it from class names means categories can have proper names and a blurb explaining
 # what they're for — a bare cog name tells a server admin nothing.
@@ -148,7 +150,7 @@ class Help(commands.Cog):
             title=f"{self.bot.user.name} commands",
             description=f"**{total}** commands in **{len(by_cat)}** categories.\n"
                         f"Use the menu below to see a category in detail.",
-            color=discord.Color.blurple(),
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         for key in self.sorted_categories(by_cat):
@@ -168,7 +170,7 @@ class Help(commands.Cog):
         embed = discord.Embed(
             title=f"{emoji}  {label}",
             description=blurb or None,
-            color=discord.Color.blurple(),
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         # One field per command would blow the 25-field cap on a big category, so they're

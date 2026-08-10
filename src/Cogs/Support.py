@@ -19,6 +19,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 import Database
+from Brand import MINT
 
 OWNER_GUILD_ID = os.environ.get("OWNER_GUILD_ID")
 SUPPORT_CHANNEL_ID = os.environ.get("SUPPORT_CHANNEL_ID")
@@ -28,7 +29,7 @@ CHECK_EVERY = 15
 MAX_BODY = 2000
 
 COLOR_OPEN = 0xE67E22
-COLOR_ANSWERED = 0x3DDC97
+COLOR_ANSWERED = MINT
 COLOR_CLOSED = 0x99AAB5
 
 CATEGORIES = {

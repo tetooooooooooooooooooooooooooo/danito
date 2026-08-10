@@ -25,6 +25,7 @@ from discord.ext import commands
 
 import Database
 import GuildConfig
+from Brand import MINT
 
 REMINDER_DAYS = 30          # how far back /logging status looks for survey reminders
 
@@ -48,11 +49,13 @@ EVENTS = [
 ]
 EVENT_KEYS = [key for key, _, _ in EVENTS]
 
+# Three colours, and they are a legend rather than decoration: red for something destroyed,
+# amber for something altered, grey for somebody gone. Every other event is MINT, the same as
+# the rest of the bot, so scanning a busy log channel means looking for the three that stand
+# out rather than reading every title.
 RED = 0xED4245
 AMBER = 0xE67E22
-GREEN = 0x2ECC71
 GREY = 0x99AAB5
-BLURPLE = 0x5865F2
 
 MAX_FIELD = 1000            # an embed field caps at 1024; leave room for the code fence
 AUDIT_WINDOW = 15           # seconds an audit entry can lag the event and still be the cause
@@ -261,7 +264,7 @@ class Logging(commands.Cog, name="Logging"):
     async def on_member_join(self, member: discord.Member):
         if await self._wanted(member.guild, "member_join") is None:
             return
-        embed = discord.Embed(title="Member joined", color=GREEN,
+        embed = discord.Embed(title="Member joined", color=MINT,
                               description=f"{member.mention} is member number "
                                           f"{member.guild.member_count or 0:,}")
         embed.add_field(name="Account created",
@@ -308,7 +311,7 @@ class Logging(commands.Cog, name="Logging"):
         entry = await self._actor(guild, discord.AuditLogAction.unban, user.id)
         if self._own_action(cfg, entry):
             return
-        embed = discord.Embed(title="Member unbanned", color=GREEN,
+        embed = discord.Embed(title="Member unbanned", color=MINT,
                               description=f"{user.mention} was unbanned")
         if entry is not None and entry.user:
             embed.add_field(name="By", value=entry.user.mention, inline=True)
@@ -319,7 +322,7 @@ class Logging(commands.Cog, name="Logging"):
         # The noisiest event on the gateway, so both branches leave as early as they can.
         if before.nick != after.nick:
             if await self._wanted(after.guild, "member_nickname") is not None:
-                embed = discord.Embed(title="Nickname changed", color=BLURPLE)
+                embed = discord.Embed(title="Nickname changed", color=MINT)
                 embed.add_field(name="Before", value=before.nick or "*none*", inline=True)
                 embed.add_field(name="After", value=after.nick or "*none*", inline=True)
                 await self._send(after.guild, "member_nickname", self._stamp(embed, after))
@@ -331,7 +334,7 @@ class Logging(commands.Cog, name="Logging"):
             lost = [r for r in before.roles if r not in after.roles]
             if not (gained or lost):
                 return
-            embed = discord.Embed(title="Roles changed", color=BLURPLE)
+            embed = discord.Embed(title="Roles changed", color=MINT)
             if gained:
                 embed.add_field(name="Given",
                                 value=_trim(", ".join(r.mention for r in gained), 500),
@@ -357,7 +360,7 @@ class Logging(commands.Cog, name="Logging"):
             return
 
         if before.channel is None:
-            embed = discord.Embed(title="Joined voice", color=GREEN,
+            embed = discord.Embed(title="Joined voice", color=MINT,
                                   description=f"{member.mention} joined "
                                               f"**{after.channel.name}**")
         elif after.channel is None:
@@ -365,7 +368,7 @@ class Logging(commands.Cog, name="Logging"):
                                   description=f"{member.mention} left "
                                               f"**{before.channel.name}**")
         else:
-            embed = discord.Embed(title="Moved voice channel", color=BLURPLE,
+            embed = discord.Embed(title="Moved voice channel", color=MINT,
                                   description=f"{member.mention} moved from "
                                               f"**{before.channel.name}** to "
                                               f"**{after.channel.name}**")
@@ -374,7 +377,7 @@ class Logging(commands.Cog, name="Logging"):
     # ── the server itself ────────────────────────────────────────────
     @commands.Cog.listener()
     async def on_guild_channel_create(self, channel):
-        await self._channel_event(channel, "created", GREEN)
+        await self._channel_event(channel, "created", MINT)
 
     @commands.Cog.listener()
     async def on_guild_channel_delete(self, channel):
@@ -400,14 +403,14 @@ class Logging(commands.Cog, name="Logging"):
         cfg = await self._wanted(after.guild, "channel_changes")
         if cfg is None or self._skip_channel(cfg, after):
             return
-        embed = discord.Embed(title="Channel renamed", color=BLURPLE,
+        embed = discord.Embed(title="Channel renamed", color=MINT,
                               description=f"**#{before.name}** is now **#{after.name}**",
                               timestamp=discord.utils.utcnow())
         await self._send(after.guild, "channel_changes", embed)
 
     @commands.Cog.listener()
     async def on_guild_role_create(self, role):
-        await self._role_event(role.guild, f"**{role.name}** was created", "Role created", GREEN)
+        await self._role_event(role.guild, f"**{role.name}** was created", "Role created", MINT)
 
     @commands.Cog.listener()
     async def on_guild_role_delete(self, role):
@@ -418,7 +421,7 @@ class Logging(commands.Cog, name="Logging"):
         if before.name == after.name:
             return
         await self._role_event(after.guild, f"**{before.name}** is now **{after.name}**",
-                               "Role renamed", BLURPLE)
+                               "Role renamed", MINT)
 
     async def _role_event(self, guild, description: str, title: str, colour: int):
         if await self._wanted(guild, "role_changes") is None:
@@ -440,7 +443,7 @@ class Logging(commands.Cog, name="Logging"):
             changes.append(f"Ownership moved to <@{after.owner_id}>")
         if not changes:
             return
-        embed = discord.Embed(title="Server updated", color=BLURPLE,
+        embed = discord.Embed(title="Server updated", color=MINT,
                               description="\n".join(changes),
                               timestamp=discord.utils.utcnow())
         await self._send(after, "server_changes", embed)
@@ -552,7 +555,7 @@ class Logging(commands.Cog, name="Logging"):
         await GuildConfig.update(self.bot, guild.id, values)
 
         embed = discord.Embed(
-            title="Logging is set up", color=GREEN,
+            title="Logging is set up", color=MINT,
             description=f"Everything is switched on and going to **{parent.name}**.",
             timestamp=discord.utils.utcnow())
 
@@ -694,7 +697,7 @@ class Logging(commands.Cog, name="Logging"):
         await GuildConfig.update(self.bot, interaction.guild.id,
                                  {"medialog_enabled": True, "medialog_channel": channel.id})
         embed = discord.Embed(
-            title="Deleted media log is on", color=GREEN,
+            title="Deleted media log is on", color=MINT,
             description=f"Deleted images, video and audio go to {channel.mention} with the "
                         f"file itself attached, from members and bots alike.")
         if not interaction.guild.me.guild_permissions.view_audit_log:
@@ -804,7 +807,7 @@ class Logging(commands.Cog, name="Logging"):
             cid = cfg.get(key)
             return guild.get_channel(int(cid)) if cid else None
 
-        embed = discord.Embed(title=f"Logs in {guild.name}", color=BLURPLE,
+        embed = discord.Embed(title=f"Logs in {guild.name}", color=MINT,
                               timestamp=discord.utils.utcnow())
 
         # ── the server log, event by event ──

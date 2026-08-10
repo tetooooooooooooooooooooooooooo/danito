@@ -18,6 +18,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from Brand import MINT
+
 OWNER_GUILD_ID = os.environ.get("OWNER_GUILD_ID")
 
 
@@ -73,7 +75,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
             title=f"🌐 In {len(guilds)} server(s)",
             description=f"Total reach: **{total_members:,}** members"
                         if guilds else "Not in any servers.",
-            color=discord.Color.blurple(),
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         lines = [
@@ -100,7 +102,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
 
         embed = discord.Embed(
             title="🩺 Bot Health",
-            color=discord.Color.blurple(),
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         embed.add_field(name="Uptime", value=uptime, inline=True)
@@ -145,7 +147,7 @@ class Owner(commands.GroupCog, name="Owner", group_name="admin",
         embed = discord.Embed(
             title="🔄 Reload",
             description="\n".join(results)[:4000],
-            color=discord.Color.green() if all(r.startswith("✅") for r in results)
+            color=MINT if all(r.startswith("✅") for r in results)
             else discord.Color.red(),
         )
         embed.set_footer(text="Slash command definitions still need /sync to change.")

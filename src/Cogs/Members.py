@@ -22,6 +22,7 @@ from discord import app_commands
 from discord.ext import commands
 
 import Database
+from Brand import MINT
 
 # Spells are only needed for the retention window, so Mongo expires them rather than growing
 # forever on a public bot. Well past the longest bucket below.
@@ -40,9 +41,7 @@ PERIODS = {
 }
 DEFAULT_PERIOD = "daily"
 
-COLOR_INFO = 0x5865F2
 COLOR_WARN = 0xE67E22
-COLOR_GOOD = 0x2ECC71
 
 # What Discovery asks for. Discord moves these, and only some of them are visible to a bot at
 # all: the engagement figures it actually judges a server on live in Server Insights and are
@@ -377,7 +376,7 @@ class Members(commands.Cog, name="Members"):
             await interaction.followup.send(f"Couldn't read the data: {e}", ephemeral=True)
             return
 
-        embed = discord.Embed(title=f"Retention for {guild.name}", color=COLOR_INFO,
+        embed = discord.Embed(title=f"Retention for {guild.name}", color=MINT,
                               timestamp=now)
         if guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
@@ -571,13 +570,13 @@ class Members(commands.Cog, name="Members"):
 
         listed = "DISCOVERABLE" in guild.features
         if listed:
-            color, headline = COLOR_GOOD, "✅ **This server is already listed in Discovery.**"
+            color, headline = MINT, "✅ **This server is already listed in Discovery.**"
         elif blocking:
             color = COLOR_WARN
             headline = (f"**{len(blocking)} thing{'' if len(blocking) == 1 else 's'} to sort "
                         f"out** before you can apply.")
         else:
-            color = COLOR_GOOD
+            color = MINT
             headline = ("✅ **Ready to apply.** Server Settings, then Discovery.")
 
         embed = discord.Embed(

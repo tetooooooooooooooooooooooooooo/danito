@@ -28,13 +28,12 @@ from discord.ext import commands, tasks
 
 import Database
 import RoleTools
+from Brand import MINT
 
 MAX_PANELS = 10
 PUBLISH_EVERY = 12          # seconds between checks for panels the dashboard has changed
 
-COLOR_PANEL = 0x3DDC97
-COLOR_INFO = 0x5865F2
-COLOR_GOOD = 0x2ECC71
+COLOR_PANEL = MINT
 COLOR_WARN = 0xE67E22
 
 # Ours, and cheap to recognise. Every component click in every server reaches on_interaction,
@@ -448,7 +447,7 @@ class RoleButtons(commands.Cog, name="RoleButtons"):
         found = await self._run(lambda: list(
             self.panels.find({"guild_id": interaction.guild.id}).limit(MAX_PANELS)))
 
-        embed = discord.Embed(title="Role panels", color=COLOR_INFO)
+        embed = discord.Embed(title="Role panels", color=MINT)
         if not found:
             embed.description = ("There aren't any yet. Make one with `/rolepanel create`, or "
                                  "build it on the dashboard.")

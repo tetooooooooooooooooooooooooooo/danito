@@ -23,6 +23,7 @@ import discord
 from discord.ext import commands, tasks
 
 import Database
+from Brand import MINT
 
 # How long a departed server's data is kept before it is deleted. Long enough to cover an
 # accidental kick or a permissions fix, short enough that it isn't kept indefinitely.
@@ -48,7 +49,7 @@ BY_GUILD_ID = [
 BY_ID = ["config_dirty"]
 COUNTER_PREFIX = "case:"
 
-COLOR = 0x3DDC97
+COLOR = MINT
 
 
 class Lifecycle(commands.Cog, name="Lifecycle"):

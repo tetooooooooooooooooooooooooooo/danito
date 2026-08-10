@@ -33,6 +33,7 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 import GuildConfig
+from Brand import MINT
 
 # (key, icon, label). Mirrored in the dashboard's store.AUTOMOD_RULES; a test asserts the two
 # agree, since a typo means a rule the dashboard can switch on and the bot never runs.
@@ -93,9 +94,7 @@ NOTICE_SECONDS = 6
 PRUNE_MINUTES = 10
 WORD_CACHE_SIZE = 64      # distinct banned word lists kept compiled
 
-COLOR_INFO = 0x5865F2
 COLOR_WARN = 0xE67E22
-COLOR_GOOD = 0x2ECC71
 
 INVITE = re.compile(
     r"(?:discord(?:app)?\.com/invite|discord\.gg|discord\.me|dsc\.gg|invite\.gg)/[\w-]+",
@@ -612,7 +611,7 @@ class AutoMod(commands.Cog, name="AutoMod"):
         enabled = bool(automod.get("enabled"))
         embed = discord.Embed(
             title="Automod",
-            color=COLOR_GOOD if enabled and on_lines else COLOR_INFO,
+            color=MINT,
             description=("**On**" if enabled else
                          "**Off.** `/automod on` starts it, or set it up on the dashboard."))
 

@@ -27,6 +27,7 @@ from discord.ext import commands, tasks
 
 import Database
 import GuildConfig
+from Brand import MINT
 
 # Tuning. These bound memory: a public bot can't hold every upload from every server.
 MAX_FILE_BYTES = 8 * 1024 * 1024        # skip caching anything larger
@@ -39,7 +40,6 @@ AUDIT_DELAY = 1.5
 AUDIT_WINDOW = 20
 
 COLOR_DELETE = 0xE74C3C
-COLOR_INFO = 0x5865F2
 COLOR_WARN = 0xE67E22
 
 MEDIA_TYPES = ("image/", "video/", "audio/")

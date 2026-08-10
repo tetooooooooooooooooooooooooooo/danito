@@ -24,13 +24,12 @@ from discord.ext import commands, tasks
 
 import Database
 import GuildConfig
+from Brand import MINT
 
 PING_AFTER_DAYS = 8
 CLEANUP_AFTER_DAYS = 9
 SCALE = 10
 
-COLOR_INFO = 0x5865F2
-COLOR_GOOD = 0x2ECC71
 COLOR_WARN = 0xE67E22
 
 # Explicit custom_ids are what make the score recoverable. Without them Discord generates
@@ -84,7 +83,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             title="How's your experience been so far?",
             description=f"Tap a number from 1 to {SCALE}. It only takes a second, and only the "
                         f"server staff can see the results.",
-            color=COLOR_INFO,
+            color=MINT,
         )
 
     @staticmethod
@@ -267,7 +266,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
 
         embed = discord.Embed(
             title=f"Server ratings for {guild.name}",
-            color=COLOR_INFO,
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         if guild.icon:
@@ -406,7 +405,7 @@ class ServerRatings(commands.Cog, name="Server Ratings"):
             title="Server Ratings",
             description="Asks your members how they're finding the server, and gives people who "
                         "joined a week ago a quiet reminder to come and answer.",
-            color=COLOR_INFO,
+            color=MINT,
             timestamp=discord.utils.utcnow(),
         )
         if guild.icon:

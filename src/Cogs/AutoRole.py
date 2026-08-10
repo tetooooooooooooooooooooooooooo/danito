@@ -14,11 +14,10 @@ from discord.ext import commands
 
 import GuildConfig
 import RoleTools
+from Brand import MINT
 
 MAX_ROLES = 10           # more than anyone needs, and keeps the join handler to one API call
 
-COLOR_INFO = 0x5865F2
-COLOR_GOOD = 0x2ECC71
 COLOR_WARN = 0xE67E22
 
 
@@ -142,7 +141,7 @@ class AutoRole(commands.Cog, name="AutoRole"):
         ids = [int(r) for r in (cfg.get("autorole_ids") or [])]
         enabled = bool(cfg.get("autorole_enabled"))
 
-        embed = discord.Embed(title="Autorole", color=COLOR_GOOD if enabled and ids else COLOR_INFO)
+        embed = discord.Embed(title="Autorole", color=MINT)
         if not ids:
             embed.description = ("Nothing is handed out yet. Add a role with "
                                  "`/autorole add` and everybody who joins gets it.")

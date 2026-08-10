@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import Database
 import ErrorLog
 import GuildConfig
+from Brand import MINT
 from pymongo import MongoClient
 import certifi
 import datetime
@@ -179,7 +180,8 @@ class Bot(commands.Bot):
         except discord.HTTPException:
             pass
 
-    async def send_log(self, title: str, description: str = None, fields: dict = None, color=0x2b2d31):
+    async def send_log(self, title: str, description: str = None, fields: dict = None,
+                       color=MINT):
         """Send a formatted embed to the log channel"""
         channel = self.get_channel(self.log_channel_id)
         if not channel:

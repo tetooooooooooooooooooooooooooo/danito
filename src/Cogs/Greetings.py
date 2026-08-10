@@ -23,11 +23,11 @@ from discord import app_commands
 from discord.ext import commands
 
 import GuildConfig
+from Brand import MINT
 
 MAX_MESSAGE = 1500          # comfortably inside both the 2000 content and 4096 embed limits
-COLOR_WELCOME = 0x2ECC71
+COLOR_WELCOME = MINT
 COLOR_GOODBYE = 0xE67E22
-COLOR_INFO = 0x5865F2
 
 PLACEHOLDERS = {
     "{user}": "mentions them, e.g. @someone",
@@ -278,7 +278,7 @@ class Greetings(commands.Cog, name="Greetings"):
         embed = discord.Embed(
             title=f"{kind.title()} messages",
             description="**On**" if enabled else f"**Off.** Run `/{kind} set` to switch it on.",
-            color=color if enabled else COLOR_INFO,
+            color=color if enabled else MINT,
         )
         if kind == "welcome":
             destination = channel.mention if channel else (

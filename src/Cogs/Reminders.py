@@ -21,8 +21,9 @@ from discord import app_commands
 from discord.ext import commands, tasks
 
 import Database
+from Brand import MINT
 
-COLOR = 0x3DDC97
+COLOR = MINT
 
 CHECK_SECONDS = 30
 MAX_PENDING = 25            # per person, so nobody can queue a thousand

@@ -9,6 +9,8 @@ from discord.ext import commands
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
+from Brand import MINT
+
 BADGE_ATTRS = {
     "staff": "Discord Staff",
     "partner": "Discord Partner",
@@ -32,11 +34,6 @@ MAX_ACTIVITY_SCAN = 5000       # ceiling on messages pulled by /stats activity
 # one request per member, which rate-limits hard and takes minutes on a large server.
 MAX_TAG_FETCHES = 50
 
-COLOR_ROLES = discord.Color.blue()
-COLOR_ACTIVITY = discord.Color.green()
-COLOR_PLAYING = discord.Color.teal()
-COLOR_TAGS = discord.Color.blurple()
-COLOR_BADGES = discord.Color.gold()
 
 
 async def _badge_autocomplete(interaction: discord.Interaction, current: str):
@@ -74,8 +71,8 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         activity, so anything reading status or activity would silently return nothing."""
         return self.bot.intents.presences
 
-    def _base_embed(self, title: str, color: discord.Color, guild: discord.Guild) -> discord.Embed:
-        embed = discord.Embed(title=title, color=color, timestamp=discord.utils.utcnow())
+    def _base_embed(self, title: str, guild: discord.Guild) -> discord.Embed:
+        embed = discord.Embed(title=title, color=MINT, timestamp=discord.utils.utcnow())
         if guild and guild.icon:
             embed.set_thumbnail(url=guild.icon.url)
         return embed
@@ -114,7 +111,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
             for i, (role, count) in enumerate(top_roles, 1)
         ]
 
-        embed = self._base_embed(f"🏆 Top Roles", COLOR_ROLES, guild)
+        embed = self._base_embed(f"🏆 Top Roles", guild)
         embed.description = "\n".join(lines)
         embed.set_author(name=guild.name, icon_url=guild.icon.url if guild.icon else None)
         embed.add_field(name="Total members", value=f"{total_members:,}", inline=True)
@@ -169,7 +166,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
             top_chatters = user_counts.most_common(5)
             hour_counts = Counter(m.created_at.hour for m in messages)
 
-            embed = self._base_embed(f"📊 Activity in #{target_channel.name}", COLOR_ACTIVITY, interaction.guild)
+            embed = self._base_embed(f"📊 Activity in #{target_channel.name}", interaction.guild)
             embed.add_field(name="Messages", value=f"{total_messages:,}", inline=True)
             embed.add_field(name="Unique users", value=f"{unique_users:,}", inline=True)
             embed.add_field(name="Avg / hour", value=f"{total_messages / hours:.1f}", inline=True)
@@ -248,7 +245,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
                 if name:
                     game_players[name].append(member.display_name)
 
-        embed = self._base_embed("🎮 Currently Playing", COLOR_PLAYING, guild)
+        embed = self._base_embed("🎮 Currently Playing", guild)
 
         if not game_players:
             embed.description = "No one is playing a detectable game right now."
@@ -320,7 +317,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
                 tag_counts[primary.tag] += 1
                 total_tagged += 1
 
-        embed = self._base_embed("🏷️ Guild Tags", COLOR_TAGS, guild)
+        embed = self._base_embed("🏷️ Guild Tags", guild)
         embed.description = f"**{total_tagged}** tagged • {len(members):,} / {guild.member_count:,} members scanned"
 
         if tag_counts:
@@ -375,7 +372,7 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         if badge == "all":
             counts = {b: sum(has_badge(m, b) for m in members) for b in BADGE_ATTRS}
             counts = {b: c for b, c in counts.items() if c > 0}
-            embed = self._base_embed("🏅 Badge Counts", COLOR_BADGES, guild)
+            embed = self._base_embed("🏅 Badge Counts", guild)
             if counts:
                 ranked = sorted(counts.items(), key=lambda x: x[1], reverse=True)
                 embed.description = "\n".join(
@@ -391,14 +388,14 @@ class Stats(commands.GroupCog, name="Stats", group_name="stats",
         label = BADGE_ATTRS[badge]
 
         if not show_members:
-            embed = self._base_embed(f"🏅 {label}", COLOR_BADGES, guild)
+            embed = self._base_embed(f"🏅 {label}", guild)
             pct = (len(matches) / len(members) * 100) if members else 0
             embed.description = f"**{len(matches):,}** member(s) have this badge ({pct:.1f}% of the server)"
             self._footer(embed, interaction)
             await interaction.followup.send(embed=embed)
             return
 
-        embed = self._base_embed(f"🏅 {label}: members", COLOR_BADGES, guild)
+        embed = self._base_embed(f"🏅 {label}: members", guild)
         if not matches:
             embed.description = "No members have this badge."
         else:

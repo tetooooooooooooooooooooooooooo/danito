@@ -5,6 +5,8 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from Brand import MINT
+
 # <:name:id> or <a:name:id>. Anything else is either a plain unicode emoji, which every server
 # already has, or not an emoji at all.
 CUSTOM_EMOJI = re.compile(r"<(a?):([A-Za-z0-9_]{2,32}):(\d+)>")
@@ -135,7 +137,7 @@ class Utility(commands.Cog):
             return
 
         embed = discord.Embed(
-            colour=0x3DDC97,
+            colour=MINT,
             description=f"{made} added as `:{made.name}:`"
                         + (f"\n-# it was called `:{original}:` where it came from"
                            if made.name != original else ""))
