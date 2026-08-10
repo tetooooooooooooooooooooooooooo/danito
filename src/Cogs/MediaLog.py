@@ -95,6 +95,17 @@ def _summarise(items: list) -> str:
 KIND_ICONS = {"image": "🖼️", "video": "🎞️", "audio file": "🎧", "file": "📎"}
 
 
+def _not_kept(f) -> str:
+    """Why a file has no bytes behind it, worked out from what we know rather than stored.
+
+    Two very different causes used to share one word. Somebody deleting a phone photo wants to
+    be told it was over the size limit, not left wondering whether the bot is broken.
+    """
+    if f.size > MAX_FILE_BYTES:
+        return f"over {_fmt_size(MAX_FILE_BYTES)}, not kept"
+    return "not kept, posted before a restart"
+
+
 def _lead_icon(items: list) -> str:
     for i in items:
         icon = KIND_ICONS.get(_kind(i.content_type, i.filename))
@@ -336,17 +347,26 @@ class MediaLog(commands.Cog):
         if cfg is None:
             return
 
-        entries = []
+        entries, handled = [], set()
         for mid in payload.message_ids:
             e = self._drop(mid)
             if e is not None:
                 entries.append(e)
-        known = {e.author_id for e in entries}
+                handled.add(mid)
+
+        # Fall back to discord.py's cache for anything we had no bytes for. Deduped on the
+        # message id and nothing else: _drop has already emptied our own cache of everything
+        # above, so testing self._cache here finds nothing, and the author test that used to
+        # stand in for it threw away every other message the same person had in the batch. Ten
+        # images purged from one spammer logged the one we happened to hold and dropped the
+        # rest without a word.
         for m in payload.cached_messages:
-            if m.id not in self._cache and _media_of(m) and m.author.id not in known:
-                e = self._from_cached_message(m)
-                if e:
-                    entries.append(e)
+            if m.id in handled or not _media_of(m):
+                continue
+            e = self._from_cached_message(m)
+            if e:
+                entries.append(e)
+                handled.add(m.id)
         if not entries:
             return
 
@@ -451,7 +471,7 @@ class MediaLog(commands.Cog):
         # there to look at.
         if not (len(entry.files) == 1 and not missing and inline_image):
             lines = [f"`{f.filename}` · {_fmt_size(f.size)}"
-                     + ("" if f.data is not None else " · not kept")
+                     + ("" if f.data is not None else f" · {_not_kept(f)}")
                      for f in entry.files]
             embed.add_field(name="Files", value="\n".join(lines)[:1024], inline=False)
 
@@ -459,8 +479,8 @@ class MediaLog(commands.Cog):
         # once the person has left and their mention is a dead link, and it is still copyable.
         note = [f"ID {entry.author_id}"]
         if missing:
-            note.append(f"{missing} file{'' if missing == 1 else 's'} couldn't be kept, "
-                        f"too large or posted before a restart")
+            shown = len(entry.files) - missing
+            note.append(f"{shown} of {len(entry.files)} files kept")
         embed.set_footer(text=" · ".join(note))
 
         try:
