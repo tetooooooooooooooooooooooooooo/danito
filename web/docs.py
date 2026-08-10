@@ -110,6 +110,14 @@ SECTIONS = [
             "join, so a mistake there would be loud and repeated.",
             "Goodbye messages need a channel. Discord will not reliably let a bot message "
             "somebody who has already left.",
+            "If your server makes people accept rules before they can talk, the welcome waits "
+            "until they have accepted rather than firing the moment they appear. Somebody on "
+            "the rules screen cannot see the channel it is going to, and a good many of them "
+            "never accept at all. The same rule covers the way out: leave without accepting "
+            "and no goodbye is posted, because there was no welcome either.",
+            "Nobody turned away by the account age gate is welcomed, and their removal does "
+            "not post a goodbye. A raid would otherwise fill the channel with hellos and "
+            "farewells for accounts that were never let in.",
         ],
         "commands": [
             ("/welcome set", "<message> [channel] [embed]",

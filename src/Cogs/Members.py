@@ -110,6 +110,10 @@ class Members(commands.Cog, name="Members"):
         # was never a member, so counting them would put raid accounts into the retention
         # figures and make a server look like it loses everybody.
         if await self._turned_away(member):
+            # They are being removed as we speak, and Discord will report that as somebody
+            # leaving. Say so now or the server announces a goodbye for an account it never
+            # saw arrive.
+            self._tell_greetings("suppress_goodbye", member.id)
             return
 
         cohort = str(datetime.date.today())
@@ -122,8 +126,11 @@ class Members(commands.Cog, name="Members"):
         lookup = asyncio.create_task(self._resolve_invite(member.guild))
         spell_id = await self._open_spell(member, cohort)
         await self._assign_cohort_role(member, cohort)
+        # After the gate and the bookkeeping, before the invite lookup is waited on. A welcome
+        # that took as long as an http call to Discord would arrive noticeably late during a
+        # raid, and a welcome that failed must never cost the membership record.
+        await self._greet(member)
         await self._attach_invite(spell_id, await lookup)
-        # Greeting the member is the Greetings cog's job, and only if the server set one up.
 
     async def _turned_away(self, member: discord.Member) -> bool:
         """Whether the account age gate removed them. Same shape as the invite lookup: asked
@@ -136,6 +143,31 @@ class Members(commands.Cog, name="Members"):
         except Exception as e:
             print(f"[Members] age gate failed for {member.guild.id}: {e}")
             return False
+
+    async def _greet(self, member: discord.Member):
+        """Hand the join to Greetings, which decides whether there is anything to say.
+
+        Called from here rather than listened for there so it runs after the age gate rather
+        than alongside it. Greetings is what knows about rules screening, so a member still on
+        the rules screen is its problem, not this handler's.
+        """
+        cog = self.bot.get_cog("Greetings")
+        if cog is None:
+            return
+        try:
+            await cog.greet(member)
+        except Exception as e:
+            print(f"[Members] greeting failed for {member.guild.id}: {e}")
+
+    def _tell_greetings(self, method: str, *args):
+        """Best effort note to the Greetings cog, which may not be loaded."""
+        cog = self.bot.get_cog("Greetings")
+        if cog is None:
+            return
+        try:
+            getattr(cog, method)(*args)
+        except Exception as e:
+            print(f"[Members] couldn't reach Greetings.{method}: {e}")
 
     async def _resolve_invite(self, guild: discord.Guild) -> tuple:
         """Which invite this join came through, or blanks if it can't be known.

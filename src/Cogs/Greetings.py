@@ -8,14 +8,24 @@ being pitched somewhere else.
 
 Nothing is sent now unless a server sets it up, and what gets sent is that server's own words.
 
-A separate listener from the one in Members is deliberate. The pair that were merged earlier
-were two halves of the same job doing overlapping database writes; this is a distinct feature
-with its own settings, and it reads them from the shared config cache, so the extra listener
-costs a dictionary lookup.
+Two pieces of Discord behaviour decide when a welcome is actually welcome, and both of them
+are about people who are not really here yet.
+
+The first is membership screening, the same trivia AutoRole is built around. A server with a
+rules screen still fires the join event immediately, but the member arrives *pending*: they
+cannot post, usually cannot see the channel the welcome is going to, and plenty of them never
+accept at all. So the welcome waits for the transition out of pending rather than the arrival.
+
+The second is the account age gate. It kicks raid accounts on the way in, and it lives in the
+join handler in Members. A listener here would have run alongside that handler rather than
+after it, which meant a public welcome for somebody being removed a moment later. So there is
+no join listener in this file: Members calls `greet` once the gate has let them through, and
+tells us to swallow the goodbye when it has not.
 """
 
 import datetime
 import re
+import time
 from typing import Optional
 
 import discord
@@ -77,6 +87,8 @@ class Greetings(commands.Cog, name="Greetings"):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        # member id -> when the age gate turned them away, so the leave it causes stays quiet.
+        self._turned_away: dict[int, float] = {}
 
     welcome = app_commands.Group(
         name="welcome", description="Greet people when they join",
@@ -97,10 +109,31 @@ class Greetings(commands.Cog, name="Greetings"):
         embed.set_thumbnail(url=member.display_avatar.url)
         return None, embed
 
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
+    async def greet(self, member: discord.Member):
+        """The welcome, called by Members once the age gate has let somebody in.
+
+        Not a listener, deliberately. Listeners for the same event run alongside each other,
+        so one here would race the gate and welcome people on their way back out.
+        """
         if member.bot:
             return
+        if member.pending:
+            # Still on the rules screen, so they cannot see the channel this is going to and
+            # may never accept. on_member_update below picks them up if they do.
+            return
+        await self._welcome(member)
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        # Noisy event: every nickname, role and status change lands here. Leave at once unless
+        # it is the one transition that matters, screening finished.
+        if not (before.pending and not after.pending):
+            return
+        if after.bot:
+            return
+        await self._welcome(after)
+
+    async def _welcome(self, member: discord.Member):
         cfg = await GuildConfig.get(self.bot, member.guild.id)
         if not cfg.get("welcome_enabled"):
             return
@@ -130,9 +163,33 @@ class Greetings(commands.Cog, name="Greetings"):
             except (discord.Forbidden, discord.HTTPException):
                 pass          # plenty of people have DMs closed
 
+    # ── people who were never really here ────────────────────────────
+    # The age gate removes a raid account within a second of it arriving, and Discord reports
+    # that as a member leaving like any other. Members says so on the way past and the id is
+    # held just long enough for the remove event to catch up. A window rather than a flag
+    # because the event may never arrive at all, and this must not grow forever.
+    SUPPRESS_SECONDS = 60
+
+    def suppress_goodbye(self, member_id: int):
+        """Called by Members when the age gate turned somebody away."""
+        now = time.monotonic()
+        self._turned_away = {mid: at for mid, at in self._turned_away.items()
+                             if now - at < self.SUPPRESS_SECONDS}
+        self._turned_away[int(member_id)] = now
+
+    def _was_turned_away(self, member_id: int) -> bool:
+        at = self._turned_away.pop(int(member_id), None)
+        return at is not None and time.monotonic() - at < self.SUPPRESS_SECONDS
+
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         if member.bot:
+            return
+        if member.pending:
+            # They never finished the rules screen, so they were never welcomed either. A
+            # goodbye would be the only trace they ever left.
+            return
+        if self._was_turned_away(member.id):
             return
         cfg = await GuildConfig.get(self.bot, member.guild.id)
         if not cfg.get("goodbye_enabled"):
