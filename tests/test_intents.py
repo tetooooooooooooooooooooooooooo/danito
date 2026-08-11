@@ -24,10 +24,14 @@ SRC = open(str(ROOT / "src" / "main.py"), encoding="utf-8").read()
 SRC = SRC.replace("bot = Bot()", "").replace('bot.run(os.environ.get("BOT_TOKEN"))', "")
 
 
-def load_bot_class():
+def load_module():
     mod = types.ModuleType("botmain")
     exec(compile(SRC, "main.py", "exec"), mod.__dict__)
-    return mod.Bot
+    return mod
+
+
+def load_bot_class():
+    return load_module().Bot
 
 
 async def main():
@@ -158,6 +162,51 @@ async def main():
         assert await trip(by_name[name]) is None, f"/{name} should not be rate limited"
         assert await trip(by_name[name]) is None, f"/{name} should not be rate limited"
     print("  ban/kick/timeout/untimeout/warn deliberately uncapped OK")
+
+    print("\n=== every command run gets a line in the log ===")
+    M = load_module()
+
+    # Discord nests a subcommand's arguments one level down, so reading data["options"] gives
+    # the subcommand rather than the arguments. This is the shape /logging media #chan arrives
+    # in, and getting it wrong logs "media=None" instead of the channel.
+    nested = {"name": "logging", "options": [
+        {"name": "media", "type": 1, "options": [
+            {"name": "channel", "type": 7, "value": "222"}]}]}
+    flat = list(M._flatten_options(nested["options"]))
+    assert [o["name"] for o in flat] == ["channel"], flat
+    grouped = {"options": [
+        {"name": "grp", "type": 2, "options": [
+            {"name": "sub", "type": 1, "options": [
+                {"name": "days", "type": 4, "value": 7}]}]}]}
+    assert [o["name"] for o in M._flatten_options(grouped["options"])] == ["days"]
+    assert list(M._flatten_options(None)) == [], "a command with no options logs no options"
+    print("  subcommands and subcommand groups flattened to their real arguments OK")
+
+    # Free text is reported as a length. A warn reason or the message behind /say is content,
+    # the privacy policy says content is not written down, and a log is writing it down.
+    for opt, want in (
+        ({"name": "days", "value": 7}, "days=7"),
+        ({"name": "on", "value": True}, "on=True"),
+        ({"name": "rule", "value": "banned_words"}, "rule=banned_words"),
+        ({"name": "when", "value": "1h30m"}, "when=1h30m"),
+        ({"name": "channel", "value": "222"}, "channel=222"),
+        ({"name": "reason", "value": "being rude in general"}, "reason=<21 chars>"),
+        ({"name": "message", "value": "a" * 40}, "message=<40 chars>"),
+        # Twenty one characters with no spaces is still too long to be a choice or an id.
+        ({"name": "what", "value": "b" * 21}, "what=<21 chars>"),
+    ):
+        got = M._option_text(opt)
+        assert got == want, (opt, got, want)
+    print("  choices, durations and ids logged; anything typed logged as a length OK")
+
+    print("\n=== and stdout is unbuffered, or none of it arrives ===")
+    # Heroku pipes stdout, and a piped python block-buffers it: prints sit in a 4KB buffer and
+    # whatever is in there when the dyno restarts is lost. This is the difference between a log
+    # that lags and one that lies.
+    procfile = (ROOT / "Procfile").read_text(encoding="utf-8")
+    bot_line = next(l for l in procfile.splitlines() if l.startswith("node:"))
+    assert " -u " in bot_line, f"the bot process needs python -u: {bot_line}"
+    print(f"  {bot_line.strip()} OK")
 
     print("\nALL CHECKS PASSED")
 

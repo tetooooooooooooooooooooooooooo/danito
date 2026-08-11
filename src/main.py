@@ -27,6 +27,35 @@ def _as_id(raw):
         return None
 
 
+def _flatten_options(options):
+    """The leaf options of a command, whatever it is nested under.
+
+    Discord sends `/logging media #chan` as an option named "media" of type 1 containing the
+    real options, so reading `data["options"]` straight off gives the subcommand name rather
+    than the arguments. Types 1 and 2 are SUB_COMMAND and SUB_COMMAND_GROUP.
+    """
+    for opt in options or []:
+        if opt.get("type") in (1, 2):
+            yield from _flatten_options(opt.get("options"))
+        else:
+            yield opt
+
+
+def _option_text(opt) -> str:
+    """One `name=value` for the log line, with free text kept out of it.
+
+    A slash command carries whatever somebody typed: a warn reason, a reminder, the message
+    behind /say. The privacy policy says message content is not written down, and a log is
+    somewhere it is written down, so a string is reported as its length instead. Short values
+    with no spaces survive intact, because those are nearly always a choice, a duration or an
+    id, and they are what makes the line worth reading at all.
+    """
+    name, value = opt.get("name"), opt.get("value")
+    if isinstance(value, str) and (len(value) > 20 or " " in value):
+        return f"{name}=<{len(value)} chars>"
+    return f"{name}={value}"
+
+
 async def loop(bot):
     t = 10 * 60
 
@@ -142,6 +171,35 @@ class Bot(commands.Bot):
     async def _db(self, fn, *args, **kwargs):
         """pymongo is synchronous, so keep it off the event loop."""
         return await asyncio.to_thread(lambda: fn(*args, **kwargs))
+
+    async def on_interaction(self, interaction: discord.Interaction):
+        """One line per command run, so the Heroku log says what the bot is being asked to do.
+
+        Logged as it starts rather than when it finishes, so a command that then errors, times
+        out or never replies is still on the record. Failures already print their own line from
+        on_tree_error below, and this is what tells you the two belong together.
+
+        Defining this here does not intercept anything: discord.py hands the interaction to the
+        command tree from the connection state, separately from dispatching this event, and
+        cogs that listen for `on_interaction` to handle their buttons still get it too.
+        """
+        try:
+            if interaction.type is not discord.InteractionType.application_command:
+                return          # component clicks and autocomplete would drown the log
+            data = interaction.data or {}
+            name = (interaction.command.qualified_name if interaction.command
+                    else data.get("name", "?"))
+            opts = " ".join(_option_text(o) for o in _flatten_options(data.get("options")))
+            user = interaction.user
+            where = (f"{interaction.guild.name} ({interaction.guild.id})"
+                     if interaction.guild else "a direct message")
+            channel = getattr(interaction.channel, "name", None)
+            print(f"[cmd] /{name}{' ' + opts if opts else ''} · "
+                  f"{user} ({user.id}) · {where}{' #' + channel if channel else ''}",
+                  flush=True)
+        except Exception as e:
+            # Logging a command must never be the reason one fails.
+            print(f"[cmd] couldn't log an interaction: {type(e).__name__}: {e}", flush=True)
 
     async def on_tree_error(self, interaction: discord.Interaction, error):
         """Assigned to tree.on_error, which is where discord.py actually dispatches app
