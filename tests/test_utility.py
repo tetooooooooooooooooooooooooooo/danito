@@ -27,11 +27,16 @@ for n in ("pymongo", "certifi", "dotenv"):
     if n == "dotenv": m.load_dotenv = lambda *a, **k: None
     sys.modules[n] = m
 
+import inspect
+
 import discord
 from discord.ext import commands
 
 CHAN, OTHER = 222, 333
 MSG = 1534014704060596456          # a real-shaped snowflake, past 2^53
+
+# What discord.py's own send() will accept. Anything else is a TypeError at runtime.
+SEND_PARAMS = set(inspect.signature(discord.abc.Messageable.send).parameters)
 
 
 class FakeChannel:
@@ -47,9 +52,18 @@ class FakeChannel:
         if mid not in self.holds:
             raise discord.NotFound(types.SimpleNamespace(status=404, reason=""), "gone")
         return types.SimpleNamespace(
-            id=mid, author=types.SimpleNamespace(display_name="someone"))
+            id=mid, author=types.SimpleNamespace(display_name="someone"),
+            # Real Messages carry this, and the tolerance for a since-deleted target lives on
+            # the reference rather than on send().
+            to_reference=lambda **kw: {"message_id": mid, **kw})
 
     async def send(self, content=None, **kw):
+        # Checked against the real signature rather than a list written here, so this keeps
+        # working across discord.py upgrades. A fake that took **kw and asked no questions is
+        # how `fail_if_not_exists=False` reached production as a TypeError: every test passed
+        # and the first real reply crashed.
+        unknown = sorted(set(kw) - SEND_PARAMS)
+        assert not unknown, f"Messageable.send() takes no {unknown}"
         self.sent.append({"content": content, **kw})
         return types.SimpleNamespace(id=1)
 
@@ -112,9 +126,13 @@ async def main():
     await cog.say.callback(cog, i, "over here", reply=str(MSG))
     assert len(chan.sent) == 1, chan.sent
     assert chan.sent[0]["content"] == "over here"
-    assert chan.sent[0]["reference"].id == MSG
-    # A reply to a message deleted between the lookup and the send must still go out.
-    assert chan.sent[0]["fail_if_not_exists"] is False
+    ref = chan.sent[0]["reference"]
+    assert ref["message_id"] == MSG, ref
+    # A reply to a message deleted between the lookup and the send must still go out, and that
+    # tolerance belongs to the reference. Passing it to send() is a TypeError that only fires
+    # when somebody actually replies, which is exactly how it reached production.
+    assert ref["fail_if_not_exists"] is False, ref
+    assert "fail_if_not_exists" not in chan.sent[0], "send() has no such argument"
     assert "reply" in i.response.sent[0]["content"].lower()
     assert i.response.sent[0]["ephemeral"] is True
     print(f"  {i.response.sent[0]['content']} OK")
@@ -200,7 +218,10 @@ async def main():
         await cog.say.callback(cog, i, "answered", reply=str(MSG), ping=wanted)
         allowed = chan.sent[0]["allowed_mentions"]
         assert allowed.replied_user is wanted, (wanted, allowed.replied_user)
-        assert chan.sent[0]["reference"] is not None, "and it is still a real reply"
+        ref = chan.sent[0]["reference"]
+        assert ref is not None, "and it is still a real reply"
+        # The reply must survive its target being deleted between lookup and send.
+        assert ref["fail_if_not_exists"] is False, ref
         said = i.response.sent[0]["content"].lower()
         # Both confirmations mention pinging, because the useful thing to say is which of the
         # two happened. So check for the one that did.

@@ -149,13 +149,15 @@ class Utility(commands.Cog):
                     f"❌ Couldn't look that message up: {exc}", ephemeral=True)
                 return
 
+        # A reply to a message deleted between the lookup above and this send would otherwise
+        # fail the whole thing, and saying it without the reply beats saying nothing. That
+        # tolerance belongs to the reference, not to send(): passing fail_if_not_exists to
+        # send() is a TypeError, and one that only shows up when somebody actually replies.
+        reference = target.to_reference(fail_if_not_exists=False) if target else None
         try:
             await interaction.channel.send(
                 message,
-                reference=target,
-                # A reply to a message that has since been deleted would otherwise fail the
-                # whole send. Saying it without the reply is better than saying nothing.
-                fail_if_not_exists=False,
+                reference=reference,
                 allowed_mentions=say_mentions(interaction.user, ping))
         except discord.HTTPException as exc:
             await interaction.response.send_message(f"❌ Failed to send: {exc}", ephemeral=True)
