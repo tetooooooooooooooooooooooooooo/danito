@@ -506,6 +506,16 @@ SECTIONS = [
             "If a command looks missing or out of date in Discord's picker, run "
             "<code>/sync</code>. If it still looks wrong, fully close and reopen Discord: the "
             "app caches the command list and does not always refresh on its own.",
+            "<code>/say</code> can answer a specific message. Right-click it, Copy Message "
+            "Link, and paste that into <code>reply</code>. The message id on its own works too "
+            "if you have developer mode on. It has to be in the same channel you are running "
+            "the command in, because Discord will not let a message reply across channels.",
+            "<code>ping</code> decides whether that reply notifies the person you are "
+            "answering, and is off unless you set it. A reply from staff arriving as a "
+            "notification is a choice worth making on purpose. It does nothing without "
+            "<code>reply</code>, and says so rather than being ignored.",
+            "<code>/say</code> will not lend the bot's permissions to whoever runs it. Typing "
+            "@everyone into it pings the server only if you could have done that yourself.",
             "<code>/emoji</code> takes an emoji pasted from any server you are in and adds a "
             "copy here. Animated and still emoji have separate allowances, and it says which "
             "one is full rather than letting Discord refuse it with no explanation. Pass "
@@ -517,7 +527,9 @@ SECTIONS = [
             ("/sync", "", "Force this server's command list to refresh.", MANAGE_SERVER),
             ("/emoji", "<emoji> [name]", "Copy an emoji from another server into this one.",
              "Manage Expressions"),
-            ("/say", "<message>", "Make the bot post a message.", "Manage Messages"),
+            ("/say", "<message> [reply] [ping]",
+             "Make the bot post a message, on its own or as a reply to another one.",
+             "Manage Messages"),
             ("/help", "", "A browsable list of everything.", EVERYONE),
         ],
     },

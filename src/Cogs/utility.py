@@ -12,6 +12,48 @@ from Brand import MINT
 CUSTOM_EMOJI = re.compile(r"<(a?):([A-Za-z0-9_]{2,32}):(\d+)>")
 EMOJI_TIMEOUT = 10
 
+# Right-click a message and Discord offers Copy Message Link, which is what most people have.
+# Copy Message ID only appears with developer mode on, so accepting both is the difference
+# between the option working first time and it working once somebody has read the docs.
+MESSAGE_LINK = re.compile(
+    r"(?:https?://)?(?:\w+\.)?discord(?:app)?\.com/channels/(?:\d+|@me)/(\d+)/(\d+)/?$")
+
+
+def parse_message_ref(raw: str):
+    """(channel_id, message_id) from a link, or (None, message_id) from a bare id.
+
+    Returns (None, None) for anything else. A snowflake is taken as a string throughout: the
+    option has to be a string parameter, because Discord sends integer options as JSON numbers
+    and an id over 2^53 comes back from that having quietly lost its last digits.
+    """
+    text = (raw or "").strip()
+    found = MESSAGE_LINK.search(text)
+    if found:
+        return int(found.group(1)), int(found.group(2))
+    if text.isdigit() and 15 <= len(text) <= 20:
+        return None, int(text)
+    return None, None
+
+
+def say_mentions(user, ping: bool = False) -> discord.AllowedMentions:
+    """What the bot may ping on somebody's behalf.
+
+    /say needs Manage Messages, which plenty of moderators hold and which does not include
+    Mention Everyone. The bot has Mention Everyone, so without this a moderator could ping the
+    whole server through the bot without holding the permission themselves. Mirrored off the
+    person running the command rather than off the bot.
+
+    replied_user is off unless it is asked for. A reply that pings is a decision, and the
+    person being replied to did not ask to be pulled back into a thread by staff, so it is
+    something you opt into per message rather than the default. Unlike everyone and roles it
+    needs no permission of its own: it pings one person, in a thread they are already in, and
+    anybody who can reply to them by hand can do the same thing without the bot.
+    """
+    perms = getattr(user, "guild_permissions", None)
+    loud = bool(perms is not None and perms.mention_everyone)
+    return discord.AllowedMentions(everyone=loud, roles=loud, users=True,
+                                   replied_user=bool(ping))
+
 
 class Utility(commands.Cog):
     """Utility commands: say, sync, emoji"""
@@ -55,17 +97,78 @@ class Utility(commands.Cog):
 
     # ── Say ────────────────────────────────────────────────────────
     @app_commands.command(name="say", description="Make the bot send a message")
-    @app_commands.describe(message="The message to send")
+    @app_commands.describe(
+        message="The message to send",
+        reply="Optional. Reply to a message: paste its link, or its id if you have developer "
+              "mode on.",
+        ping="Whether the reply notifies the person you're replying to. Off unless you say so.")
     @app_commands.checks.cooldown(3, 30.0)
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.checks.has_permissions(manage_messages=True)
     @app_commands.guild_only()
-    async def say(self, interaction: discord.Interaction, message: str):
+    async def say(self, interaction: discord.Interaction, message: str,
+                  reply: str = None, ping: bool = False):
+        # Nothing to ping without something to reply to, and silently ignoring it would leave
+        # somebody believing they had sent a notification.
+        if ping and not reply:
+            await interaction.response.send_message(
+                "`ping` only does anything alongside `reply`, since it decides whether the "
+                "reply notifies the person you're answering. Add the message, or leave `ping` "
+                "out.", ephemeral=True)
+            return
+
+        target = None
+        if reply:
+            channel_id, message_id = parse_message_ref(reply)
+            if message_id is None:
+                await interaction.response.send_message(
+                    "I couldn't read that as a message. Right-click the message, Copy Message "
+                    "Link, and paste that in. An id on its own works too.", ephemeral=True)
+                return
+            # Discord will only let a message reply to another one in the same channel, so a
+            # link from elsewhere is refused here rather than by the API a moment later.
+            if channel_id is not None and channel_id != interaction.channel.id:
+                await interaction.response.send_message(
+                    f"That message is in <#{channel_id}>. A reply has to be in the same "
+                    f"channel as the message it answers, so run this there.", ephemeral=True)
+                return
+            try:
+                target = await interaction.channel.fetch_message(message_id)
+            except discord.NotFound:
+                await interaction.response.send_message(
+                    "There's no message with that id in this channel. It may have been "
+                    "deleted, or the link may point somewhere else.", ephemeral=True)
+                return
+            except discord.Forbidden:
+                await interaction.response.send_message(
+                    "I need **Read Message History** here to find that message.",
+                    ephemeral=True)
+                return
+            except discord.HTTPException as exc:
+                await interaction.response.send_message(
+                    f"❌ Couldn't look that message up: {exc}", ephemeral=True)
+                return
+
         try:
-            await interaction.channel.send(message)
-            await interaction.response.send_message("✅ Message sent.", ephemeral=True)
+            await interaction.channel.send(
+                message,
+                reference=target,
+                # A reply to a message that has since been deleted would otherwise fail the
+                # whole send. Saying it without the reply is better than saying nothing.
+                fail_if_not_exists=False,
+                allowed_mentions=say_mentions(interaction.user, ping))
         except discord.HTTPException as exc:
             await interaction.response.send_message(f"❌ Failed to send: {exc}", ephemeral=True)
+            return
+
+        if target:
+            # Which of the two it did matters to whoever ran it, because one of them put a
+            # notification on somebody's phone and the other did not.
+            done = (f"✅ Sent as a reply to {target.author.display_name}, and they were pinged."
+                    if ping else "✅ Sent as a reply. Nobody was pinged.")
+        else:
+            done = "✅ Message sent."
+        await interaction.response.send_message(done, ephemeral=True)
 
 
     # ── Steal an emoji ─────────────────────────────────────────────
