@@ -98,16 +98,35 @@ class Utility(commands.Cog):
     # ── Say ────────────────────────────────────────────────────────
     @app_commands.command(name="say", description="Make the bot send a message")
     @app_commands.describe(
-        message="The message to send",
+        message="The message to send. Optional if you're attaching a file.",
         reply="Optional. Reply to a message: paste its link, or its id if you have developer "
               "mode on.",
-        ping="Whether the reply notifies the person you're replying to. Off unless you say so.")
+        ping="Whether the reply notifies the person you're replying to. Off unless you say so.",
+        file="A file to post with it.",
+        file2="A second file.",
+        file3="A third file.")
     @app_commands.checks.cooldown(3, 30.0)
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.checks.has_permissions(manage_messages=True)
     @app_commands.guild_only()
-    async def say(self, interaction: discord.Interaction, message: str,
-                  reply: str = None, ping: bool = False):
+    async def say(self, interaction: discord.Interaction, message: str = None,
+                  reply: str = None, ping: bool = False,
+                  file: discord.Attachment = None,
+                  file2: discord.Attachment = None,
+                  file3: discord.Attachment = None):
+        # Three slots rather than one option taking many, because Discord has no such option:
+        # an attachment option holds exactly one file, so more than one means more than one
+        # option. Three is where the picker starts looking cluttered for a command that is
+        # usually just text.
+        attached = [a for a in (file, file2, file3) if a is not None]
+
+        # `message` had to become optional to allow posting a file on its own, which means it
+        # is now possible to ask for nothing at all.
+        if not message and not attached:
+            await interaction.response.send_message(
+                "Give me something to say, a file to post, or both.", ephemeral=True)
+            return
+
         # Nothing to ping without something to reply to, and silently ignoring it would leave
         # somebody believing they had sent a notification.
         if ping and not reply:
@@ -115,6 +134,14 @@ class Utility(commands.Cog):
                 "`ping` only does anything alongside `reply`, since it decides whether the "
                 "reply notifies the person you're answering. Add the message, or leave `ping` "
                 "out.", ephemeral=True)
+            return
+
+        limit = getattr(interaction.guild, "filesize_limit", None)
+        if limit and sum(a.size for a in attached) > limit:
+            await interaction.response.send_message(
+                f"That's more than this server's {limit // (1024 * 1024)}MB upload limit. "
+                f"Discord let you attach it to the command, but I have to upload it again to "
+                f"post it, and that upload is what the limit applies to.", ephemeral=True)
             return
 
         target = None
@@ -154,13 +181,33 @@ class Utility(commands.Cog):
         # tolerance belongs to the reference, not to send(): passing fail_if_not_exists to
         # send() is a TypeError, and one that only shows up when somebody actually replies.
         reference = target.to_reference(fail_if_not_exists=False) if target else None
+
+        # Every reply so far has been immediate, but downloading three files from the CDN is
+        # not, and an interaction that says nothing for three seconds is dead. Everything past
+        # this point answers through followup rather than response.
+        files = []
+        if attached:
+            await interaction.response.defer(ephemeral=True)
+            for a in attached:
+                try:
+                    # A spoilered attachment stays spoilered: it was marked that way on the way
+                    # in and unwrapping it here would put it on screen unasked.
+                    files.append(await a.to_file(spoiler=a.is_spoiler()))
+                except discord.HTTPException as exc:
+                    await interaction.followup.send(
+                        f"❌ Couldn't fetch `{a.filename}`: {exc}", ephemeral=True)
+                    return
+        reply_to = (interaction.followup.send if attached
+                    else interaction.response.send_message)
+
         try:
             await interaction.channel.send(
                 message,
+                files=files,
                 reference=reference,
                 allowed_mentions=say_mentions(interaction.user, ping))
         except discord.HTTPException as exc:
-            await interaction.response.send_message(f"❌ Failed to send: {exc}", ephemeral=True)
+            await reply_to(f"❌ Failed to send: {exc}", ephemeral=True)
             return
 
         if target:
@@ -170,7 +217,9 @@ class Utility(commands.Cog):
                     if ping else "✅ Sent as a reply. Nobody was pinged.")
         else:
             done = "✅ Message sent."
-        await interaction.response.send_message(done, ephemeral=True)
+        if files:
+            done += f" {len(files)} file{'' if len(files) == 1 else 's'} attached."
+        await reply_to(done, ephemeral=True)
 
 
     # ── Steal an emoji ─────────────────────────────────────────────

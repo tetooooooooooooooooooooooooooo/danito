@@ -4,7 +4,8 @@ import pathlib as _pathlib
 ROOT = _pathlib.Path(__file__).resolve().parents[1]
 SRC_DIR = str(ROOT / "src")
 WEB_DIR = str(ROOT / "web")
-import asyncio, sys, types
+import asyncio
+import time, sys, types
 sys.path.insert(0, SRC_DIR)
 
 READS = []
@@ -113,7 +114,11 @@ async def main():
     print("\n=== pruning ===")
     GuildConfig._cache.clear()
     await GuildConfig.get(bot, GUILD)
-    GuildConfig._cache[GUILD] = (cfg_before, 0)      # ancient
+    # Measured back from now, not 0. time.monotonic() counts from boot on Windows, so a
+    # literal 0 is only "ancient" once the machine has been up longer than TTL * 4. This
+    # passed for weeks and then failed the first time the suite ran on a freshly booted
+    # machine, which is the worst way for a test to be wrong.
+    GuildConfig._cache[GUILD] = (cfg_before, time.monotonic() - GuildConfig.TTL * 10)
     GuildConfig.prune()
     assert GUILD not in GuildConfig._cache, "stale entry should have been pruned"
     print("  prune() drops entries nobody has touched OK")

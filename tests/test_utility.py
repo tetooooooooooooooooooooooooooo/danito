@@ -68,17 +68,53 @@ class FakeChannel:
         return types.SimpleNamespace(id=1)
 
 
+class FakeAttachment:
+    """What an attachment option hands the callback. to_file() is a CDN download in real life,
+    which is why /say defers before touching one."""
+
+    def __init__(self, filename, size=1024, spoiler=False):
+        self.filename = filename
+        self.size = size
+        self._spoiler = spoiler
+
+    def is_spoiler(self):
+        return self._spoiler
+
+    async def to_file(self, **kw):
+        return types.SimpleNamespace(filename=self.filename,
+                                     spoiler=kw.get("spoiler", False))
+
+
 class Resp:
-    def __init__(self): self.sent = []
+    """Stands in for both interaction.response and interaction.followup.
+
+    They are different objects with differently named methods on a real Interaction, and /say
+    answers through whichever it has to: response when it can reply straight away, followup
+    once it has deferred to go and fetch attachments.
+    """
+
+    def __init__(self): self.sent = []; self.deferred = False
+
     async def send_message(self, content=None, **kw):
         self.sent.append({"content": content, **kw})
 
+    async def send(self, content=None, **kw):
+        self.sent.append({"content": content, **kw})
 
-def interaction(channel, mention_everyone=False):
+    async def defer(self, **kw):
+        # Downloading attachments takes longer than the three seconds an interaction gets.
+        self.deferred = True
+
+
+def interaction(channel, mention_everyone=False, filesize_limit=25 * 1024 * 1024):
+    resp = Resp()
     return types.SimpleNamespace(
         channel=channel,
-        response=Resp(),
-        guild=types.SimpleNamespace(id=17),
+        response=resp,
+        # Attachments make /say defer, so the answer arrives by followup instead. Both land in
+        # the same list here, because which one carried it is not what these checks are about.
+        followup=resp,
+        guild=types.SimpleNamespace(id=17, filesize_limit=filesize_limit),
         user=types.SimpleNamespace(
             id=99, guild_permissions=types.SimpleNamespace(
                 mention_everyone=mention_everyone)))
@@ -201,13 +237,61 @@ async def main():
 
     print("\n=== the option has to be a string on the command itself ===")
     params = {p.name: p for p in cog.say.parameters}
-    assert set(params) == {"message", "reply", "ping"}, list(params)
+    assert set(params) == {"message", "reply", "ping", "file", "file2", "file3"}, list(params)
     assert params["reply"].required is False, "replying is optional"
     assert params["reply"].type is discord.AppCommandOptionType.string, params["reply"].type
     assert params["ping"].required is False, "pinging is optional and off by default"
     assert params["ping"].type is discord.AppCommandOptionType.boolean, params["ping"].type
-    print(f"  reply is an optional {params['reply'].type.name}, "
-          f"ping an optional {params['ping'].type.name} OK")
+    # Every option is optional now, message included, so a file can be posted on its own.
+    assert not any(p.required for p in params.values()),         [n for n, p in params.items() if p.required]
+    for slot in ("file", "file2", "file3"):
+        assert params[slot].type is discord.AppCommandOptionType.attachment, params[slot].type
+    print(f"  reply {params['reply'].type.name}, ping {params['ping'].type.name}, "
+          f"three {params['file'].type.name} slots, none required OK")
+
+    print("\n=== a file can be posted with or without words ===")
+    for text, note in ((None, "on its own"), ("look at this", "with a message")):
+        chan = FakeChannel()
+        i = interaction(chan)
+        await cog.say.callback(cog, i, text, file=FakeAttachment("shot.png"))
+        assert len(chan.sent) == 1, chan.sent
+        assert chan.sent[0]["content"] == text
+        assert [f.filename for f in chan.sent[0]["files"]] == ["shot.png"], chan.sent[0]
+        assert "1 file attached" in i.response.sent[0]["content"], i.response.sent[0]
+        print(f"  {note}: {i.response.sent[0]['content']}")
+
+    print("\n=== three slots, and a spoiler stays a spoiler ===")
+    chan = FakeChannel()
+    i = interaction(chan)
+    await cog.say.callback(cog, i, "batch",
+                           file=FakeAttachment("a.png"),
+                           file2=FakeAttachment("b.png", spoiler=True),
+                           file3=FakeAttachment("c.png"))
+    names = [f.filename for f in chan.sent[0]["files"]]
+    assert names == ["a.png", "b.png", "c.png"], names
+    spoilers = [f.spoiler for f in chan.sent[0]["files"]]
+    assert spoilers == [False, True, False], spoilers
+    assert "3 files attached" in i.response.sent[0]["content"]
+    print(f"  {names}, spoiler flags {spoilers} OK")
+
+    print("\n=== nothing at all is refused ===")
+    # message stopped being required so a file could go on its own, which made it possible to
+    # ask for neither.
+    chan = FakeChannel()
+    i = interaction(chan)
+    await cog.say.callback(cog, i, None)
+    assert not chan.sent
+    assert "something to say" in i.response.sent[0]["content"]
+    print("  told to give a message, a file, or both OK")
+
+    print("\n=== a file bigger than the server allows is refused before the upload ===")
+    chan = FakeChannel()
+    i = interaction(chan, filesize_limit=10 * 1024 * 1024)
+    await cog.say.callback(cog, i, "big one",
+                           file=FakeAttachment("huge.mp4", size=11 * 1024 * 1024))
+    assert not chan.sent
+    assert "upload limit" in i.response.sent[0]["content"]
+    print("  named the limit rather than letting Discord refuse it OK")
 
     print("\n=== ping decides whether the reply notifies anybody ===")
     # The whole point of the option: same command, same reply, one of them lands on somebody's

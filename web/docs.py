@@ -514,6 +514,11 @@ SECTIONS = [
             "answering, and is off unless you set it. A reply from staff arriving as a "
             "notification is a choice worth making on purpose. It does nothing without "
             "<code>reply</code>, and says so rather than being ignored.",
+            "Up to three files can go with it, and the message becomes optional once one "
+            "does, so the bot can post a picture with nothing written above it. A file marked "
+            "as a spoiler stays one. The limit is your server's own upload limit rather than "
+            "Discord's limit on you: the bot has to upload the file a second time to post it, "
+            "and that upload is what gets measured.",
             "<code>/say</code> will not lend the bot's permissions to whoever runs it. Typing "
             "@everyone into it pings the server only if you could have done that yourself.",
             "<code>/emoji</code> takes an emoji pasted from any server you are in and adds a "
@@ -527,9 +532,9 @@ SECTIONS = [
             ("/sync", "", "Force this server's command list to refresh.", MANAGE_SERVER),
             ("/emoji", "<emoji> [name]", "Copy an emoji from another server into this one.",
              "Manage Expressions"),
-            ("/say", "<message> [reply] [ping]",
-             "Make the bot post a message, on its own or as a reply to another one.",
-             "Manage Messages"),
+            ("/say", "[message] [reply] [ping] [file] [file2] [file3]",
+             "Make the bot post a message or a file, on its own or as a reply to another "
+             "message.", "Manage Messages"),
             ("/help", "", "A browsable list of everything.", EVERYONE),
         ],
     },
