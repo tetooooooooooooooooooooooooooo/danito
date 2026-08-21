@@ -3,7 +3,7 @@
 {% block title %}Soundboard · {{ guild.name }} · {{ brand }}{% endblock %}
 
 {% block content %}
-<header class="page-head">
+<header class="page-head split">
   <div>
     <h1>Soundboard</h1>
     <p class="fine">{{ guild.name }} ·
@@ -31,29 +31,35 @@
 </div>
 
 <h2 class="section-head">Add a sound</h2>
-<form class="card" method="post" enctype="multipart/form-data"
+<form class="card sound-add" method="post" enctype="multipart/form-data"
       action="{{ url_for('upload_sound', guild_id=guild.id) }}">
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-  <div class="row">
-    <label>Name
-      <input type="text" name="name" minlength="{{ name_min }}" maxlength="{{ name_max }}"
-             required placeholder="airhorn">
-    </label>
-    <label>Emoji
-      <input type="text" name="emoji" maxlength="40" placeholder="📢">
-    </label>
-    <label>Volume
-      <input type="range" name="volume" min="0" max="1" step="0.05" value="1">
-    </label>
-  </div>
-  <label>File
+  <label>Name
+    <input type="text" name="name" minlength="{{ name_min }}" maxlength="{{ name_max }}"
+           required placeholder="airhorn">
+  </label>
+  <label>Emoji
+    <input type="text" name="emoji" maxlength="40" placeholder="📢">
+  </label>
+  <label class="vol-cell">Volume
+    <input type="range" name="volume" min="0" max="1" step="0.05" value="1">
+  </label>
+
+  {#- The label is the control. A file input renders as browser furniture nothing can style,
+      and clicking a label opens its picker for free, so the real one is hidden. -#}
+  <label class="drop">
+    <span class="drop-icon" aria-hidden="true">♪</span>
+    <span class="drop-text">
+      <b>Choose a file</b>
+      <span data-file-note>mp3 or ogg, up to {{ (max_bytes / 1024) | int }}KB and
+        {{ max_seconds }} seconds</span>
+    </span>
     <input type="file" name="sound" accept="audio/mpeg,audio/ogg,.mp3,.ogg" required
            data-sound-file
            data-max-bytes="{{ max_bytes }}" data-max-seconds="{{ max_seconds }}">
   </label>
-  <p class="fine" data-file-note>mp3 or ogg, up to {{ (max_bytes / 1024) | int }}KB and
-     {{ max_seconds }} seconds. Discord refuses anything longer, so trim it first.</p>
-  <button class="button" type="submit">Upload</button>
+
+  <button class="button go" type="submit">Upload</button>
 </form>
 
 <h2 class="section-head">{{ sounds | length }} sound{{ '' if sounds | length == 1 else 's' }}</h2>

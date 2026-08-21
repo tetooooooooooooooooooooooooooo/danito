@@ -1025,6 +1025,7 @@
     if (playing) {
       playing.audio.pause();
       playing.button.textContent = "▶";
+      playing.button.classList.remove("on");
       var wasSame = playing.button === button;
       playing = null;
       if (wasSame) return;          /* a second click on the same one stops it */
@@ -1032,12 +1033,18 @@
     var audio = new Audio(button.getAttribute("data-play"));
     audio.volume = 0.8;
     audio.play().catch(function () {
-      button.textContent = "✕";     /* autoplay refused, or the file has gone */
+      /* Autoplay refused, or the file has gone. Reset rather than leaving a dead ✕ sitting
+         in the row forever. */
+      button.textContent = "▶";
+      button.classList.remove("on");
+      playing = null;
     });
     button.textContent = "■";
+    button.classList.add("on");
     playing = { audio: audio, button: button };
     audio.addEventListener("ended", function () {
       button.textContent = "▶";
+      button.classList.remove("on");
       playing = null;
     });
   });
@@ -1045,12 +1052,19 @@
   /* ── refusing a file Discord would refuse ───────────────────────── */
   var picker = document.querySelector("[data-sound-file]");
   var note = document.querySelector("[data-file-note]");
+  var chosen = document.querySelector(".drop-text b");
   if (picker && note) {
     var original = note.textContent;
+    var originalTitle = chosen ? chosen.textContent : "";
     picker.addEventListener("change", function () {
       var file = picker.files && picker.files[0];
-      note.classList.remove("bad");
-      if (!file) { note.textContent = original; return; }
+      note.classList.remove("bad", "good");
+      if (!file) {
+        note.textContent = original;
+        if (chosen) chosen.textContent = originalTitle;
+        return;
+      }
+      if (chosen) chosen.textContent = file.name;
 
       var maxBytes = parseInt(picker.getAttribute("data-max-bytes"), 10);
       var maxSeconds = parseFloat(picker.getAttribute("data-max-seconds"));
@@ -1075,6 +1089,7 @@
         } else if (seconds) {
           note.textContent = seconds.toFixed(1) + " seconds, "
             + Math.round(file.size / 1024) + "KB. That will go through.";
+          note.classList.add("good");
         }
       });
       probe.src = URL.createObjectURL(file);

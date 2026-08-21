@@ -2521,87 +2521,242 @@ footer p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
-
 /* ── the soundboard page ─────────────────────────────────────────── */
-/* One row per sound, and the row is the edit form. A separate "edit" screen for three fields
-   would be a click and a page load to change a name. */
-.note-card p { margin: 0 0 8px; }
+/* The rows are a list you edit in place, not a stack of forms. That distinction is the whole
+   look: the global input rule here is `display:block; width:100%; margin-top:7px`, which is
+   right for a settings pane and turns a row of five controls into five stacked boxes, so
+   everything inside .sound opts out of it deliberately. */
+
+/* The warning is the first thing on the page and was competing with the page. Quieter: a rule
+   down the mint side, no card chrome, and the detail at reading size rather than heading size. */
+.note-card {
+  border: 0;
+  border-left: 2px solid var(--mint);
+  border-radius: 0;
+  background: rgba(61, 220, 151, .045);
+  padding: 14px 18px;
+}
+.note-card p { margin: 0 0 6px; font-size: 14px; }
 .note-card p:last-child { margin: 0; }
 
-.sounds {
-  list-style: none;
-  margin: 0 0 16px;
-  padding: 0;
+/* ── adding one ──────────────────────────────────────────────────── */
+/* Four controls of wildly different natural widths. A grid gives them honest ones: a name is
+   long, an emoji is one character, and a slider needs no more than a thumb's travel. */
+.sound-add {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 84px 150px;
+  gap: 14px 16px;
+  align-items: end;
 }
+.sound-add label { margin: 0; }
+.sound-add .drop { grid-column: 1 / -1; }
+.sound-add .go { grid-column: 1 / -1; justify-self: start; }
 
-.sound {
+/* A file input renders as unstyleable browser furniture, so the real one is hidden and its
+   label is the control. Clicking a label for a file input opens the picker for free. */
+.drop {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--line);
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-bright);
   border-radius: var(--r-sm);
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color .15s var(--ease), background .15s var(--ease);
+}
+.drop:hover, .drop:focus-within { border-color: var(--mint); background: rgba(61, 220, 151, .05); }
+.drop input[type="file"] {
+  position: absolute;
+  width: 1px; height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.drop-icon {
+  width: 38px; height: 38px;
+  flex: none;
+  display: grid; place-items: center;
+  border-radius: 10px;
+  background: rgba(61, 220, 151, .1);
+  border: 1px solid rgba(61, 220, 151, .22);
+  font-size: 16px;
+}
+.drop-text { min-width: 0; }
+.drop-text b { display: block; font-size: 14px; font-weight: 600; }
+.drop-text span { display: block; margin-top: 2px; color: var(--faint); font-size: 12.4px; }
+.drop-text span.bad { color: var(--warn); }
+.drop-text span.good { color: var(--mint-bright); }
+
+/* ── the list ────────────────────────────────────────────────────── */
+.sounds {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
   background: var(--surface);
 }
-.sound.held { opacity: .45; border-style: dashed; }
 
+/* One grid, and the two forms inside each row use display:contents so their fields sit in it
+   directly. Without that each row lays itself out independently and no column lines up with
+   the one above it, which was most of what made this look unfinished. */
+.sound {
+  display: grid;
+  grid-template-columns: 18px 34px minmax(0, 1fr) 52px 110px auto auto 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--line);
+}
+.sound:first-child { border-top: 0; }
+.sound:hover { background: var(--surface-2); }
+.sound.held { opacity: .4; }
+.sound-edit, .sound-delete { display: contents; }
+
+/* Only where the grip is, so the row still selects and the inputs still take a caret. */
 .grip {
   cursor: grab;
   color: var(--faint);
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1;
+  text-align: center;
   user-select: none;
 }
-.sound:active .grip { cursor: grabbing; }
+.grip:active { cursor: grabbing; }
+.sound:hover .grip { color: var(--dim); }
 
 .play {
-  width: 32px; height: 32px;
-  flex: none;
+  width: 34px; height: 34px;
   display: grid; place-items: center;
   border: 1px solid var(--line-bright);
   border-radius: 50%;
-  background: var(--surface-2);
+  background: var(--surface-3);
   color: var(--text);
-  font-size: 11px;
+  font-size: 10px;
   cursor: pointer;
+  /* `.button, button` further up gives every button a mint glow. Right for a call to action,
+     wrong for thirty of them stacked down a list. */
+  box-shadow: none;
+  transition: border-color .15s var(--ease), color .15s var(--ease),
+              background .15s var(--ease);
 }
 .play:hover { border-color: var(--mint); color: var(--mint); }
+.play.on { border-color: var(--mint); background: var(--mint); color: #06251c; }
 
-.sound-edit {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  min-width: 0;
+/* Borderless until you go near them. A field that looks like a field on every row makes forty
+   sounds look like forty forms; a field that looks like text until hovered looks like a list
+   you can edit, which is what it is. */
+.sound input[type="text"],
+.sound input[type="range"] {
+  display: block;
+  width: 100%;
   margin: 0;
 }
-.s-name { flex: 1 1 140px; min-width: 0; }
-.s-emoji { flex: 0 0 76px; text-align: center; }
-.s-vol { flex: 0 0 90px; }
+.sound input[type="text"] {
+  padding: 7px 9px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  font-size: 14px;
+}
+.sound:hover input[type="text"] { border-color: var(--line); background: var(--bg); }
+.sound input[type="text"]:hover { border-color: var(--line-bright); }
+.sound input[type="text"]:focus {
+  border-color: var(--mint);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px var(--mint-glow);
+}
+.s-name { font-weight: 550; }
+.s-emoji { text-align: center; }
+/* Repeated down every row that has no emoji yet, so it whispers rather than reads as content. */
+.sound input::placeholder { color: var(--faint); opacity: .5; }
 
-/* Small, dim and last. Wanted about once a month, when something has gone wrong. */
+/* The browser's own slider is grey with a white thumb and looks like nothing else here.
+
+   Two heights, one look. In a row the input is the track, 4px tall, because that is all the
+   vertical space there is. In the add form it has to occupy the same box as a text input or
+   `align-items: end` lines the label up against nothing, so there the element is 40px and the
+   track is drawn by the pseudo element inside it. */
+.sound input[type="range"], .sound-add input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  box-shadow: none;
+}
+.sound input[type="range"] {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+.sound-add input[type="range"] {
+  height: 42px;
+  margin-top: 7px;
+  background: none;
+}
+.sound-add input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+.sound-add input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-3);
+}
+.sound-add input[type="range"]::-webkit-slider-thumb { margin-top: -4.5px; }
+.sound input[type="range"]::-webkit-slider-thumb,
+.sound-add input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px; height: 13px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mint);
+  cursor: grab;
+}
+.sound input[type="range"]::-moz-range-thumb,
+.sound-add input[type="range"]::-moz-range-thumb {
+  width: 13px; height: 13px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mint);
+  cursor: grab;
+}
+.sound input[type="range"]:focus, .sound-add input[type="range"]:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--mint-glow);
+}
+
+/* Both row buttons are quiet until the row is hovered. Delete only turns red when you reach
+   for it, so a list of forty does not read as forty warnings. */
+.sound .button.tiny {
+  padding: 6px 11px;
+  font-size: 12.5px;
+  border-radius: var(--r-sm);
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  box-shadow: none;
+  opacity: .55;
+  transition: opacity .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
+}
+.sound:hover .button.tiny { opacity: 1; }
+.sound .sound-edit .button:hover { border-color: var(--mint); color: var(--mint); }
+.sound .button.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+/* Wanted about once a month, when something has gone wrong, so it is present and quiet. */
 .s-id {
-  flex: none;
   color: var(--faint);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  opacity: .6;
 }
+.sound:hover .s-id { opacity: 1; }
 
-.sound-delete { margin: 0; flex: none; }
-
-.button.tiny { padding: 5px 10px; font-size: 12.5px; }
-.button.danger {
-  background: none;
-  border: 1px solid rgba(242, 114, 114, .4);
-  color: #f27272;
-  box-shadow: none;
-}
-.button.danger:hover { border-color: #f27272; background: rgba(242, 114, 114, .08); }
-
-/* Follows you down the page: the list can be long, and a save button at the bottom of forty
-   sounds is a save button nobody finds. */
+/* ── the reorder bar ─────────────────────────────────────────────── */
+/* Follows you down: the list can be long, and a save at the bottom of forty rows is a save
+   nobody finds. */
 .reorder-bar {
   position: sticky;
   bottom: 16px;
@@ -2616,8 +2771,7 @@ footer p { margin: 0; }
 }
 .reorder-bar span { flex: 1; font-size: 13.5px; }
 
-.docs-search input.bad, [data-file-note].bad { color: var(--warn); }
-
+/* ── the confirmation ────────────────────────────────────────────── */
 .modal {
   position: fixed;
   inset: 0;
@@ -2625,25 +2779,49 @@ footer p { margin: 0; }
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(4, 8, 7, .72);
+  background: rgba(4, 8, 7, .74);
 }
 .modal[hidden] { display: none; }
 
 .modal-card {
   width: min(520px, 100%);
-  padding: 24px;
+  padding: 26px;
   border: 1px solid var(--line-bright);
   border-radius: var(--r);
   background: var(--surface);
+  box-shadow: 0 40px 80px -40px #000;
 }
-.modal-card h2 { margin: 0 0 10px; font-size: 19px; }
+.modal-card h2 { margin: 0 0 10px; font-size: 19px; letter-spacing: -.3px; }
 .modal-card p { margin: 0 0 14px; color: var(--dim); font-size: 14px; }
 .modal-card .notes { margin: 0 0 20px; }
+.modal-card .notes li { font-size: 13.6px; }
 
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-actions .button.danger {
+  background: none;
+  border: 1px solid rgba(242, 114, 114, .45);
+  color: var(--danger);
+  box-shadow: none;
+}
+.modal-actions .button.danger:hover {
+  border-color: var(--danger);
+  background: rgba(242, 114, 114, .1);
+}
 
-@media (max-width: 640px) {
-  .sound { flex-wrap: wrap; }
-  .sound-edit { flex-wrap: wrap; }
-  .s-name { flex: 1 1 100%; }
+@media (max-width: 720px) {
+  /* Two rows rather than eight cramped columns: the controls that matter on top, the rest
+     under them. */
+  .sound {
+    grid-template-columns: 18px 34px minmax(0, 1fr) 52px;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .sound .s-vol { grid-column: 3 / -1; }
+  .sound .sound-edit .button { grid-column: 3; justify-self: start; }
+  .sound .button.danger { grid-column: 4; justify-self: end; }
+  .sound .s-id { display: none; }
+  .sound .button.tiny { opacity: 1; }
+  .sound input[type="text"] { border-color: var(--line); background: var(--bg); }
+  .sound-add { grid-template-columns: minmax(0, 1fr) 84px; }
+  .sound-add .vol-cell { grid-column: 1 / -1; }
 }
