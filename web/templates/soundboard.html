@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block bodyclass %}soundboard-page{% endblock %}
+{% block title %}Soundboard · {{ guild.name }} · {{ brand }}{% endblock %}
+
+{% block content %}
+<header class="page-head">
+  <div>
+    <h1>Soundboard</h1>
+    <p class="fine">{{ guild.name }} ·
+      <a href="{{ url_for('guild_settings', guild_id=guild.id) }}">back to settings</a></p>
+  </div>
+  <a class="button ghost" href="{{ url_for('guild_settings', guild_id=guild.id) }}">Done</a>
+</header>
+
+{% if not discord_ok %}
+  <div class="card warn">
+    <h2>Can't read this server's sounds</h2>
+    <p class="fine">{{ why }}</p>
+  </div>
+{% else %}
+
+{#- The whole point of this page in one card. Renaming is safe and reordering is not, and a
+    reader who does not know that will assume both are cosmetic. -#}
+<div class="card note-card">
+  <p><strong>Names, emoji and volume can be changed freely.</strong> The sound keeps its id, so
+     it stays in everybody's favourites.</p>
+  <p class="fine">Reordering cannot work that way. Discord has no way to move a sound, so the
+     order comes from when each one was uploaded. Changing it means deleting and re-uploading,
+     which gives those sounds new ids and drops them out of every member's favourites. You get
+     told how many before anything happens.</p>
+</div>
+
+<h2 class="section-head">Add a sound</h2>
+<form class="card" method="post" enctype="multipart/form-data"
+      action="{{ url_for('upload_sound', guild_id=guild.id) }}">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <div class="row">
+    <label>Name
+      <input type="text" name="name" minlength="{{ name_min }}" maxlength="{{ name_max }}"
+             required placeholder="airhorn">
+    </label>
+    <label>Emoji
+      <input type="text" name="emoji" maxlength="40" placeholder="📢">
+    </label>
+    <label>Volume
+      <input type="range" name="volume" min="0" max="1" step="0.05" value="1">
+    </label>
+  </div>
+  <label>File
+    <input type="file" name="sound" accept="audio/mpeg,audio/ogg,.mp3,.ogg" required
+           data-sound-file
+           data-max-bytes="{{ max_bytes }}" data-max-seconds="{{ max_seconds }}">
+  </label>
+  <p class="fine" data-file-note>mp3 or ogg, up to {{ (max_bytes / 1024) | int }}KB and
+     {{ max_seconds }} seconds. Discord refuses anything longer, so trim it first.</p>
+  <button class="button" type="submit">Upload</button>
+</form>
+
+<h2 class="section-head">{{ sounds | length }} sound{{ '' if sounds | length == 1 else 's' }}</h2>
+
+{% if not sounds %}
+  <div class="card"><p class="fine">Nothing here yet.</p></div>
+{% else %}
+
+{#- The list is deliberately outside every form. A form cannot contain another form: the
+    parser drops the inner one and closes the outer at the first </form>, which quietly turns
+    each row's Save button into a submit for whatever form did survive. Each row carries its
+    own two forms as siblings, and the reorder form below holds nothing but its own fields. -#}
+<ol class="sounds" data-sounds>
+  {% for s in sounds %}
+    {% set sid = sound_id_of(s) %}
+    <li class="sound" data-id="{{ sid }}" draggable="true">
+      <span class="grip" aria-hidden="true" title="Drag to reorder">⠿</span>
+      <button class="play" type="button" data-play="{{ cdn }}/{{ sid }}"
+              aria-label="Play {{ s.name }}">▶</button>
+
+      <form class="sound-edit" method="post"
+            action="{{ url_for('edit_sound_route', guild_id=guild.id, sound_id=sid) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <input class="s-name" type="text" name="name" value="{{ s.name }}"
+               minlength="{{ name_min }}" maxlength="{{ name_max }}" required
+               aria-label="Name">
+        <input class="s-emoji" type="text" name="emoji" maxlength="40"
+               value="{{ s.emoji_name or '' }}" placeholder="emoji" aria-label="Emoji">
+        <input class="s-vol" type="range" name="volume" min="0" max="1" step="0.05"
+               value="{{ s.volume if s.volume is not none else 1 }}" aria-label="Volume">
+        <button class="button tiny" type="submit">Save</button>
+      </form>
+
+      <form class="sound-delete" method="post" data-delete="{{ s.name }}"
+            action="{{ url_for('delete_sound_route', guild_id=guild.id, sound_id=sid) }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="button danger tiny" type="submit"
+                aria-label="Delete {{ s.name }}">Delete</button>
+      </form>
+
+      <span class="s-id" title="Sound id">{{ sid }}</span>
+    </li>
+  {% endfor %}
+</ol>
+
+<form method="post" action="{{ url_for('reorder_sounds', guild_id=guild.id) }}" data-reorder>
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <input type="hidden" name="order" data-order value="">
+  <div class="reorder-bar" data-reorder-bar hidden>
+    <span data-reorder-note></span>
+    <button class="button ghost tiny" type="button" data-reorder-cancel>Undo</button>
+    <button class="button" type="button" data-reorder-open>Save new order</button>
+  </div>
+</form>
+{% endif %}
+
+{#- Server rendered rather than built in script, so its wording lives in the template with
+    everything else. Without javascript the reorder controls never appear at all, which is the
+    right way round for the one destructive thing on this page. -#}
+<div class="modal" data-modal hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="reorder-title">
+    <h2 id="reorder-title">This re-uploads sounds</h2>
+    <p data-modal-count>Reordering re-uploads sounds.</p>
+    <ul class="notes">
+      <li>Each re-uploaded sound gets a <strong>new id</strong>, so Discord treats it as a
+        different sound.</li>
+      <li>It <strong>disappears from every member's favourites</strong> on this server, and
+        there is no way to put it back for them.</li>
+      <li>The audio, name, emoji and volume are all kept.</li>
+      <li>This cannot be undone.</li>
+    </ul>
+    <div class="modal-actions">
+      <button class="button ghost" type="button" data-modal-cancel>Cancel</button>
+      <button class="button danger" type="button" data-modal-go>Reorder anyway</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

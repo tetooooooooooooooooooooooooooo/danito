@@ -16,6 +16,7 @@ is deliberately re-checked per request rather than trusted from the session:
 import json
 import math
 import os
+import re
 import secrets
 from functools import wraps
 
@@ -86,7 +87,10 @@ app.config.update(
     SESSION_COOKIE_SAMESITE="Lax",
     # Heroku terminates TLS in front of the dyno, so cookies can be secure-only in production.
     SESSION_COOKIE_SECURE=os.environ.get("DASHBOARD_INSECURE_COOKIES") != "1",
-    MAX_CONTENT_LENGTH=64 * 1024,
+    # 64KB covered every form here until the soundboard, whose body carries an audio
+    # file. Discord's own ceiling for one sound is 512KB, so this leaves room for that
+    # plus multipart overhead and nothing else worth having.
+    MAX_CONTENT_LENGTH=1024 * 1024,
 )
 
 if not os.environ.get("DASHBOARD_SECRET_KEY"):
@@ -839,6 +843,207 @@ def send_embed(guild_id: int):
     # form is submitted, because every route back here is the same redirect and a refused
     # message would take somebody's work with it.
     return redirect(url_for("embed_builder", guild_id=guild_id, sent=1))
+
+
+# ── soundboard ───────────────────────────────────────────────────────
+# Nothing here is stored by us. A guild's sounds live on Discord, so this page is a view onto
+# their API rather than onto our database, and every action is a REST call made with the bot's
+# token after the logged in user has been re-checked as an administrator of that guild.
+#
+# The one thing to understand before reading on: a sound has no position field. The order
+# Discord returns them in is the order members see, and the only way to change it is to delete
+# and recreate them, which mints new ids. A new id is a different sound as far as Discord is
+# concerned, so it drops out of every member's favourites. Renaming does not do that, which is
+# why the two are kept firmly apart in the interface.
+
+
+def _sound_id_of(sound: dict) -> str:
+    return str(sound.get("sound_id") or sound.get("id") or "")
+
+
+def _sound_emoji_of(sound: dict):
+    """The emoji on an existing sound, in the form create_sound wants it given back."""
+    if sound.get("emoji_id"):
+        return f"<:{sound.get('emoji_name') or 'e'}:{sound['emoji_id']}>"
+    return sound.get("emoji_name") or None
+
+
+def _sound_name(raw) -> str:
+    return (raw or "").strip()
+
+
+def _sound_volume(raw) -> float:
+    try:
+        return max(0.0, min(1.0, float(raw)))
+    except (TypeError, ValueError):
+        return 1.0
+
+
+@app.route("/servers/<int:guild_id>/soundboard")
+@login_required
+def soundboard(guild_id: int):
+    guild = require_guild(guild_id)
+    try:
+        sounds = api.guild_sounds(guild_id)
+        discord_ok, why = True, ""
+    except api.DiscordError as e:
+        sounds, discord_ok, why = [], False, str(e)
+    return render_template(
+        "soundboard.html", guild=guild, sounds=sounds,
+        sound_id_of=_sound_id_of, discord_ok=discord_ok, why=why,
+        max_bytes=api.SOUND_MAX_BYTES, max_seconds=api.SOUND_MAX_SECONDS,
+        name_min=api.SOUND_NAME_MIN, name_max=api.SOUND_NAME_MAX,
+        cdn=api.SOUND_CDN)
+
+
+@app.route("/servers/<int:guild_id>/soundboard/upload", methods=["POST"])
+@login_required
+def upload_sound(guild_id: int):
+    check_csrf()
+    require_guild(guild_id)
+    back = redirect(url_for("soundboard", guild_id=guild_id))
+
+    upload = request.files.get("sound")
+    if upload is None or not upload.filename:
+        flash("Pick a file to upload.")
+        return back
+
+    name = _sound_name(request.form.get("name"))
+    if not api.SOUND_NAME_MIN <= len(name) <= api.SOUND_NAME_MAX:
+        flash(f"A name has to be {api.SOUND_NAME_MIN} to {api.SOUND_NAME_MAX} characters.")
+        return back
+
+    raw = upload.read()
+    if not raw:
+        flash("That file was empty.")
+        return back
+
+    try:
+        api.create_sound(guild_id, name, raw, upload.mimetype,
+                         _sound_volume(request.form.get("volume")),
+                         (request.form.get("emoji") or "").strip() or None)
+    except api.DiscordError as e:
+        flash(str(e))
+        return back
+    flash(f"Uploaded {name}.")
+    return back
+
+
+@app.route("/servers/<int:guild_id>/soundboard/<int:sound_id>", methods=["POST"])
+@login_required
+def edit_sound_route(guild_id: int, sound_id: int):
+    """Name, emoji and volume. None of these re-upload anything, so nothing is lost and the
+    page says so rather than warning about favourites for a rename."""
+    check_csrf()
+    require_guild(guild_id)
+    back = redirect(url_for("soundboard", guild_id=guild_id))
+
+    name = _sound_name(request.form.get("name"))
+    if not api.SOUND_NAME_MIN <= len(name) <= api.SOUND_NAME_MAX:
+        flash(f"A name has to be {api.SOUND_NAME_MIN} to {api.SOUND_NAME_MAX} characters.")
+        return back
+
+    fields = {"name": name, "volume": _sound_volume(request.form.get("volume"))}
+    emoji = (request.form.get("emoji") or "").strip()
+    custom = re.fullmatch(r"<a?:([A-Za-z0-9_]{2,32}):(\d+)>", emoji) if emoji else None
+    if custom:
+        fields["emoji_id"] = custom.group(2)
+    elif emoji:
+        fields["emoji_name"] = emoji[:32]
+
+    try:
+        api.edit_sound(guild_id, sound_id, **fields)
+    except api.DiscordError as e:
+        flash(str(e))
+        return back
+    flash(f"Saved {name}. Nothing was re-uploaded, so favourites are untouched.")
+    return back
+
+
+@app.route("/servers/<int:guild_id>/soundboard/<int:sound_id>/delete", methods=["POST"])
+@login_required
+def delete_sound_route(guild_id: int, sound_id: int):
+    check_csrf()
+    require_guild(guild_id)
+    try:
+        api.delete_sound(guild_id, sound_id)
+        flash("Deleted.")
+    except api.DiscordError as e:
+        flash(str(e))
+    return redirect(url_for("soundboard", guild_id=guild_id))
+
+
+def plan_reorder(current: list, wanted: list):
+    """(sounds to rebuild, error) for a requested order.
+
+    Split out because it is the only part of reordering worth testing without Discord, and the
+    only part that is easy to get wrong. Everything from the first position that changed
+    onwards has to be recreated, because order comes from creation: moving the last sound up
+    by one touches two, and moving the first to the bottom touches all of them.
+    """
+    by_id = {_sound_id_of(s): s for s in current}
+    if not wanted:
+        return [], "Nothing to reorder."
+    if set(wanted) != set(by_id) or len(wanted) != len(current):
+        return [], "The board changed while you were arranging it. Reload and try again."
+    now = [_sound_id_of(s) for s in current]
+    first = next((i for i, (a, b) in enumerate(zip(now, wanted)) if a != b), None)
+    if first is None:
+        return [], "That is already the order."
+    return [by_id[sid] for sid in wanted[first:]], ""
+
+
+@app.route("/servers/<int:guild_id>/soundboard/reorder", methods=["POST"])
+@login_required
+def reorder_sounds(guild_id: int):
+    check_csrf()
+    require_guild(guild_id)
+    back = redirect(url_for("soundboard", guild_id=guild_id))
+
+    wanted = [i for i in (request.form.get("order") or "").split(",") if i.strip().isdigit()]
+    try:
+        current = api.guild_sounds(guild_id)
+    except api.DiscordError as e:
+        flash(str(e))
+        return back
+
+    moving, problem = plan_reorder(current, wanted)
+    if problem:
+        flash(problem)
+        return back
+
+    # Every file is fetched before anything is deleted. A sound whose bytes cannot be got back
+    # stops the whole thing with the board untouched, rather than leaving it half rebuilt.
+    try:
+        files = [(s, api.sound_bytes(int(_sound_id_of(s)))) for s in moving]
+    except api.DiscordError as e:
+        flash(f"{e} Nothing was changed.")
+        return back
+
+    rebuilt, lost = 0, []
+    for old, raw in files:
+        try:
+            api.delete_sound(guild_id, int(_sound_id_of(old)))
+        except api.DiscordError as e:
+            flash(f"Stopped part way: {e}")
+            break
+        try:
+            api.create_sound(guild_id, old.get("name") or "sound", raw, "audio/mpeg",
+                             float(old.get("volume") or 1), _sound_emoji_of(old))
+            rebuilt += 1
+        except api.DiscordError as e:
+            # The delete already went through, so this one is gone and cannot be put back.
+            lost.append(old.get("name") or _sound_id_of(old))
+            flash(f"{old.get('name')} could not be put back: {e}")
+            break
+
+    if rebuilt:
+        flash(f"Reordered. {rebuilt} sound{'' if rebuilt == 1 else 's'} re-uploaded, and "
+              f"{'it has' if rebuilt == 1 else 'they have'} dropped out of every member's "
+              f"favourites.")
+    if lost:
+        flash(f"Lost in the process: {', '.join(lost)}. Upload again from a local copy.")
+    return back
 
 
 @app.route("/servers/<int:guild_id>", methods=["POST"])

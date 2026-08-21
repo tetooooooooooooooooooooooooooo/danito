@@ -2521,3 +2521,129 @@ footer p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ── the soundboard page ─────────────────────────────────────────── */
+/* One row per sound, and the row is the edit form. A separate "edit" screen for three fields
+   would be a click and a page load to change a name. */
+.note-card p { margin: 0 0 8px; }
+.note-card p:last-child { margin: 0; }
+
+.sounds {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.sound {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.sound.held { opacity: .45; border-style: dashed; }
+
+.grip {
+  cursor: grab;
+  color: var(--faint);
+  font-size: 15px;
+  line-height: 1;
+  user-select: none;
+}
+.sound:active .grip { cursor: grabbing; }
+
+.play {
+  width: 32px; height: 32px;
+  flex: none;
+  display: grid; place-items: center;
+  border: 1px solid var(--line-bright);
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+  cursor: pointer;
+}
+.play:hover { border-color: var(--mint); color: var(--mint); }
+
+.sound-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+.s-name { flex: 1 1 140px; min-width: 0; }
+.s-emoji { flex: 0 0 76px; text-align: center; }
+.s-vol { flex: 0 0 90px; }
+
+/* Small, dim and last. Wanted about once a month, when something has gone wrong. */
+.s-id {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-delete { margin: 0; flex: none; }
+
+.button.tiny { padding: 5px 10px; font-size: 12.5px; }
+.button.danger {
+  background: none;
+  border: 1px solid rgba(242, 114, 114, .4);
+  color: #f27272;
+  box-shadow: none;
+}
+.button.danger:hover { border-color: #f27272; background: rgba(242, 114, 114, .08); }
+
+/* Follows you down the page: the list can be long, and a save button at the bottom of forty
+   sounds is a save button nobody finds. */
+.reorder-bar {
+  position: sticky;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--mint);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  box-shadow: 0 18px 40px -24px #000;
+}
+.reorder-bar span { flex: 1; font-size: 13.5px; }
+
+.docs-search input.bad, [data-file-note].bad { color: var(--warn); }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 8, 7, .72);
+}
+.modal[hidden] { display: none; }
+
+.modal-card {
+  width: min(520px, 100%);
+  padding: 24px;
+  border: 1px solid var(--line-bright);
+  border-radius: var(--r);
+  background: var(--surface);
+}
+.modal-card h2 { margin: 0 0 10px; font-size: 19px; }
+.modal-card p { margin: 0 0 14px; color: var(--dim); font-size: 14px; }
+.modal-card .notes { margin: 0 0 20px; }
+
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+@media (max-width: 640px) {
+  .sound { flex-wrap: wrap; }
+  .sound-edit { flex-wrap: wrap; }
+  .s-name { flex: 1 1 100%; }
+}

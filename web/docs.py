@@ -614,6 +614,39 @@ SECTIONS = [
         ],
     },
     {
+        "id": "soundboard",
+        "icon": "🔊",
+        "title": "Soundboard",
+        "blurb": "Manage your server's soundboard from the dashboard.",
+        "setup": [
+            "Open your server on the dashboard and pick <strong>Soundboard</strong>. Everything "
+            "is done from that page; there are no commands for it.",
+            "The bot needs <strong>Create Expressions</strong> and <strong>Manage "
+            "Expressions</strong>. If uploads are refused, add the bot again to grant them: "
+            "Discord does not widen a permission on a server that already has it.",
+        ],
+        "notes": [
+            "Upload mp3 or ogg, up to 512KB and 5.2 seconds. Those are Discord's limits, not "
+            "ours. The page checks the length in your browser and tells you before uploading "
+            "rather than letting Discord refuse it.",
+            "A name, an emoji and a volume can be changed as often as you like. The sound "
+            "keeps its id, which means it stays in every member's favourites.",
+            "Reordering is the one thing that costs something. Discord gives a sound no "
+            "position, so the order members see comes from when each was uploaded, and the "
+            "only way to change it is to delete and re-upload. Those sounds get new ids and "
+            "drop out of everybody's favourites.",
+            "Because of that, dragging a sound near the top is expensive and dragging one near "
+            "the bottom is cheap: everything from the first sound that moved onwards has to be "
+            "recreated. The confirmation says how many before you commit, and nothing happens "
+            "until you accept it.",
+            "Every file is downloaded before any deletion happens, so a sound whose audio "
+            "cannot be fetched stops the whole reorder with your board untouched.",
+            "Editing the audio itself is not possible. Discord has no way to replace a sound's "
+            "file, so trim it before uploading.",
+        ],
+        "commands": [],
+    },
+    {
         "id": "support",
         "icon": "🎟️",
         "title": "Support tickets",

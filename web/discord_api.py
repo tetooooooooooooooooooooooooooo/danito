@@ -6,7 +6,9 @@ says who is logged in and which servers they belong to. The *bot's* token is wha
 guild's channels. Never use the bot token to decide what a user is allowed to see.
 """
 
+import base64
 import os
+import re
 import time
 
 import requests
@@ -287,3 +289,109 @@ def avatar_url(user: dict) -> str:
         return f"https://cdn.discordapp.com/avatars/{user['id']}/{user['avatar']}.png?size=64"
     index = (int(user.get("id", 0)) >> 22) % 6
     return f"https://cdn.discordapp.com/embed/avatars/{index}.png"
+
+
+# ── soundboard ───────────────────────────────────────────────────────
+# Discord's limits, mirrored here so the dashboard can refuse a file before spending a round
+# trip on it. A sound is mp3 or ogg, at most 512KB and 5.2 seconds.
+SOUND_MAX_BYTES = 512 * 1024
+SOUND_MAX_SECONDS = 5.2
+SOUND_TYPES = {"audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/ogg": "ogg"}
+SOUND_NAME_MIN, SOUND_NAME_MAX = 2, 32
+SOUND_CDN = "https://cdn.discordapp.com/soundboard-sounds"
+
+
+def _sound_error(resp) -> str:
+    try:
+        detail = _explain(resp.json())
+    except ValueError:
+        detail = ""
+    if resp.status_code == 403:
+        # Manage Expressions is not enough. Discord wants Create Expressions to add one, and
+        # it is not in the invite by default, so this is the failure a server hits first.
+        raise DiscordError(
+            "Discord refused that. I need both Create Expressions and Manage Expressions in "
+            "this server, and adding the bot again is what grants them.")
+    if resp.status_code == 404:
+        raise DiscordError("That sound doesn't exist any more.")
+    if resp.status_code == 429:
+        raise DiscordError("Discord is rate limiting soundboard changes. Wait a moment.")
+    raise DiscordError(detail or f"Discord returned {resp.status_code}")
+
+
+def guild_sounds(guild_id: int) -> list:
+    """Every soundboard sound in the guild, in the order Discord returns them.
+
+    That order is the only ordering there is: a sound carries no position field, so what comes
+    back here is what members see. Reordering therefore means recreating them, which is why
+    the dashboard makes such a noise about it.
+    """
+    data = _as_bot(f"/guilds/{guild_id}/soundboard-sounds")
+    items = data.get("items", []) if isinstance(data, dict) else data
+    return items or []
+
+
+def create_sound(guild_id: int, name: str, raw: bytes, content_type: str,
+                 volume: float = 1.0, emoji: str = None) -> dict:
+    """Upload a sound. Returns the created sound, which has a new id.
+
+    The file travels as a data URI inside JSON, the same way icons and emoji do, rather than
+    as multipart.
+    """
+    kind = SOUND_TYPES.get((content_type or "").lower().split(";")[0].strip())
+    if kind is None:
+        raise DiscordError("Discord only takes mp3 and ogg files.")
+    if len(raw) > SOUND_MAX_BYTES:
+        raise DiscordError(f"That file is {len(raw) // 1024}KB. The limit is 512KB.")
+
+    mime = "audio/mpeg" if kind == "mp3" else "audio/ogg"
+    body = {
+        "name": name,
+        "sound": f"data:{mime};base64,{base64.b64encode(raw).decode()}",
+        "volume": max(0.0, min(1.0, float(volume))),
+    }
+    if emoji:
+        # A custom emoji arrives as <:name:id>; anything else is taken as a unicode one.
+        found = re.fullmatch(r"<a?:([A-Za-z0-9_]{2,32}):(\d+)>", emoji.strip())
+        if found:
+            body["emoji_id"] = found.group(2)
+        else:
+            body["emoji_name"] = emoji.strip()[:32]
+
+    resp = requests.post(f"{API}/guilds/{guild_id}/soundboard-sounds",
+                         headers={"Authorization": f"Bot {BOT_TOKEN}",
+                                  "Content-Type": "application/json"},
+                         json=body, timeout=TIMEOUT * 3)
+    if resp.status_code in (200, 201):
+        return resp.json()
+    _sound_error(resp)
+
+
+def edit_sound(guild_id: int, sound_id: int, **fields) -> dict:
+    """Change a sound's name, volume or emoji. The id survives, so favourites survive."""
+    body = {k: v for k, v in fields.items() if v is not None}
+    if not body:
+        return {}
+    resp = requests.patch(f"{API}/guilds/{guild_id}/soundboard-sounds/{sound_id}",
+                          headers={"Authorization": f"Bot {BOT_TOKEN}",
+                                   "Content-Type": "application/json"},
+                          json=body, timeout=TIMEOUT)
+    if resp.status_code == 200:
+        return resp.json()
+    _sound_error(resp)
+
+
+def delete_sound(guild_id: int, sound_id: int):
+    resp = requests.delete(f"{API}/guilds/{guild_id}/soundboard-sounds/{sound_id}",
+                           headers={"Authorization": f"Bot {BOT_TOKEN}"}, timeout=TIMEOUT)
+    if resp.status_code in (200, 204):
+        return
+    _sound_error(resp)
+
+
+def sound_bytes(sound_id: int) -> bytes:
+    """The original file, off the CDN. Needed to put a sound back after deleting it."""
+    resp = requests.get(f"{SOUND_CDN}/{sound_id}", timeout=TIMEOUT * 3)
+    if resp.status_code != 200:
+        raise DiscordError(f"Couldn't download sound {sound_id} to move it.")
+    return resp.content

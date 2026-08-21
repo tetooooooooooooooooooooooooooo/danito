@@ -998,3 +998,190 @@
     }
   }
 })();
+
+/* ── the soundboard page ───────────────────────────────────────────────
+   Its own IIFE rather than more code in the one above, because that one is full of names like
+   `chart` and `count` that have already collided across features in this file. Nothing in here
+   escapes.
+
+   Everything is progressive. Without script the page still lists every sound, still plays them
+   through the browser's own controls, still renames and still deletes: only dragging to
+   reorder disappears, which is exactly the feature that should be hardest to trigger by
+   accident. */
+(function () {
+  "use strict";
+
+  var list = document.querySelector("[data-sounds]");
+  var bar = document.querySelector("[data-reorder-bar]");
+  var modal = document.querySelector("[data-modal]");
+  var form = document.querySelector("[data-reorder]");
+
+  /* ── playing one at a time ──────────────────────────────────────── */
+  var playing = null;
+  document.addEventListener("click", function (e) {
+    var button = e.target.closest("[data-play]");
+    if (!button) return;
+    e.preventDefault();
+    if (playing) {
+      playing.audio.pause();
+      playing.button.textContent = "▶";
+      var wasSame = playing.button === button;
+      playing = null;
+      if (wasSame) return;          /* a second click on the same one stops it */
+    }
+    var audio = new Audio(button.getAttribute("data-play"));
+    audio.volume = 0.8;
+    audio.play().catch(function () {
+      button.textContent = "✕";     /* autoplay refused, or the file has gone */
+    });
+    button.textContent = "■";
+    playing = { audio: audio, button: button };
+    audio.addEventListener("ended", function () {
+      button.textContent = "▶";
+      playing = null;
+    });
+  });
+
+  /* ── refusing a file Discord would refuse ───────────────────────── */
+  var picker = document.querySelector("[data-sound-file]");
+  var note = document.querySelector("[data-file-note]");
+  if (picker && note) {
+    var original = note.textContent;
+    picker.addEventListener("change", function () {
+      var file = picker.files && picker.files[0];
+      note.classList.remove("bad");
+      if (!file) { note.textContent = original; return; }
+
+      var maxBytes = parseInt(picker.getAttribute("data-max-bytes"), 10);
+      var maxSeconds = parseFloat(picker.getAttribute("data-max-seconds"));
+      if (file.size > maxBytes) {
+        note.textContent = "That file is " + Math.round(file.size / 1024) + "KB. Discord's "
+          + "limit is " + Math.round(maxBytes / 1024) + "KB.";
+        note.classList.add("bad");
+        return;
+      }
+      /* Length is the limit people trip over, and the browser knows it without uploading
+         anything. Reported rather than blocked: metadata can be wrong, and being told no by
+         a page that guessed is worse than being told no by Discord. */
+      var probe = new Audio();
+      probe.preload = "metadata";
+      probe.addEventListener("loadedmetadata", function () {
+        URL.revokeObjectURL(probe.src);
+        var seconds = probe.duration;
+        if (seconds && seconds > maxSeconds) {
+          note.textContent = "That is " + seconds.toFixed(1) + " seconds. Discord's limit is "
+            + maxSeconds + ", so this will be refused. Trim it first.";
+          note.classList.add("bad");
+        } else if (seconds) {
+          note.textContent = seconds.toFixed(1) + " seconds, "
+            + Math.round(file.size / 1024) + "KB. That will go through.";
+        }
+      });
+      probe.src = URL.createObjectURL(file);
+    });
+  }
+
+  /* ── deleting says what it is deleting ──────────────────────────── */
+  document.addEventListener("submit", function (e) {
+    var name = e.target.getAttribute && e.target.getAttribute("data-delete");
+    if (name === null || name === undefined) return;
+    if (!confirm("Delete " + name + "? This cannot be undone, and it goes from everyone's "
+                 + "favourites too.")) {
+      e.preventDefault();
+    }
+  });
+
+  if (!list || !bar || !modal || !form) return;
+
+  /* ── dragging ───────────────────────────────────────────────────── */
+  var startOrder = ids();
+  var held = null;
+
+  function ids() {
+    return Array.prototype.map.call(list.children, function (li) {
+      return li.getAttribute("data-id");
+    });
+  }
+
+  list.addEventListener("dragstart", function (e) {
+    held = e.target.closest(".sound");
+    if (!held) return;
+    held.classList.add("held");
+    /* Firefox will not start a drag at all without something in the transfer. */
+    e.dataTransfer.effectAllowed = "move";
+    try { e.dataTransfer.setData("text/plain", held.getAttribute("data-id")); } catch (err) {}
+  });
+
+  list.addEventListener("dragend", function () {
+    if (held) held.classList.remove("held");
+    held = null;
+    review();
+  });
+
+  list.addEventListener("dragover", function (e) {
+    if (!held) return;
+    e.preventDefault();
+    var over = e.target.closest(".sound");
+    if (!over || over === held) return;
+    /* Past the halfway line the held item belongs after this one, which is what stops a drag
+       flickering between two positions while the pointer sits on a boundary. */
+    var box = over.getBoundingClientRect();
+    var after = (e.clientY - box.top) / box.height > 0.5;
+    list.insertBefore(held, after ? over.nextSibling : over);
+  });
+
+  /* ── how much a given order actually costs ──────────────────────── */
+  function firstChanged(now) {
+    for (var i = 0; i < now.length; i++) {
+      if (now[i] !== startOrder[i]) return i;
+    }
+    return -1;
+  }
+
+  function review() {
+    var now = ids();
+    var from = firstChanged(now);
+    if (from < 0) {
+      bar.hidden = true;
+      return;
+    }
+    var affected = now.length - from;
+    bar.hidden = false;
+    bar.querySelector("[data-reorder-note]").textContent =
+      affected + (affected === 1 ? " sound moves" : " sounds move")
+      + " and will be re-uploaded.";
+    form.querySelector("[data-order]").value = now.join(",");
+    modal.querySelector("[data-modal-count]").textContent =
+      "Reordering re-uploads " + affected + " of " + now.length
+      + (now.length === 1 ? " sound." : " sounds.")
+      + " Everything from the first one that moved onwards has to be recreated, because"
+      + " Discord orders a soundboard by when each sound was uploaded.";
+  }
+
+  bar.querySelector("[data-reorder-cancel]").addEventListener("click", function () {
+    /* Put them back in the order the page loaded with, rather than reloading and losing any
+       half-typed rename in the row next to it. */
+    startOrder.forEach(function (id) {
+      var li = list.querySelector('[data-id="' + id + '"]');
+      if (li) list.appendChild(li);
+    });
+    review();
+  });
+
+  bar.querySelector("[data-reorder-open]").addEventListener("click", function () {
+    modal.hidden = false;
+    modal.querySelector("[data-modal-cancel]").focus();
+  });
+
+  function shut() { modal.hidden = true; }
+  modal.querySelector("[data-modal-cancel]").addEventListener("click", shut);
+  modal.addEventListener("click", function (e) { if (e.target === modal) shut(); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !modal.hidden) shut();
+  });
+
+  modal.querySelector("[data-modal-go]").addEventListener("click", function () {
+    modal.querySelector("[data-modal-go]").disabled = true;
+    form.submit();
+  });
+})();
