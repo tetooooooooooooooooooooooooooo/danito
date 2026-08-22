@@ -370,14 +370,15 @@
           {% endfor %}
         </div>
 
-        <h3 class="sub-head">Never touched</h3>
-        <p class="fine">A rule that catches your own moderators costs more than the spam it
-          stopped, so these are checked before anything runs.</p>
+        <h3 class="sub-head">Automod ignores these</h3>
+        <p class="fine">Nothing they post is checked by any rule. The server owner, and anyone
+          whose top role is above mine, are always ignored whether or not they're listed
+          here.</p>
 
         <label class="check">
           <input type="checkbox" name="automod_exempt_staff"
             {% if am.get('exempt_staff', True) %}checked{% endif %}>
-          Anyone who can manage messages
+          Your moderators, meaning anyone who can manage messages
         </label>
 
         {% set chosen_roles = (am.exempt_roles or [])|map('int')|list %}
