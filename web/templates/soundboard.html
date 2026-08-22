@@ -72,38 +72,60 @@
     parser drops the inner one and closes the outer at the first </form>, which quietly turns
     each row's Save button into a submit for whatever form did survive. Each row carries its
     own two forms as siblings, and the reorder form below holds nothing but its own fields. -#}
-<ol class="sounds" data-sounds>
-  {% for s in sounds %}
-    {% set sid = sound_id_of(s) %}
-    <li class="sound" data-id="{{ sid }}" draggable="true">
-      <span class="grip" aria-hidden="true" title="Drag to reorder">⠿</span>
-      <button class="play" type="button" data-play="{{ cdn }}/{{ sid }}"
-              aria-label="Play {{ s.name }}">▶</button>
+{#- Laid out like Discord's own soundboard panel: a header row, then one row per sound with
+    the emoji in its own column at a readable size. The columns come from one custom property
+    so the header and the rows cannot drift apart. -#}
+<div class="sounds-wrap">
+  <div class="sounds-head" aria-hidden="true">
+    <span></span><span></span>
+    <span>Emoji</span>
+    <span>Name</span>
+    <span>Volume</span>
+    <span>Uploaded by</span>
+    <span></span>
+  </div>
 
-      <form class="sound-edit" method="post"
-            action="{{ url_for('edit_sound_route', guild_id=guild.id, sound_id=sid) }}">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <input class="s-name" type="text" name="name" value="{{ s.name }}"
-               minlength="{{ name_min }}" maxlength="{{ name_max }}" required
-               aria-label="Name">
-        <input class="s-emoji" type="text" name="emoji" maxlength="40"
-               value="{{ s.emoji_name or '' }}" placeholder="emoji" aria-label="Emoji">
-        <input class="s-vol" type="range" name="volume" min="0" max="1" step="0.05"
-               value="{{ s.volume if s.volume is not none else 1 }}" aria-label="Volume">
-        <button class="button tiny" type="submit">Save</button>
-      </form>
+  <ol class="sounds" data-sounds>
+    {% for s in sounds %}
+      {% set sid = sound_id_of(s) %}
+      <li class="sound" data-id="{{ sid }}" draggable="true" title="Sound id {{ sid }}">
+        <span class="grip" aria-hidden="true" title="Drag to reorder">⠿</span>
+        <button class="play" type="button" data-play="{{ cdn }}/{{ sid }}"
+                aria-label="Play {{ s.name }}">▶</button>
 
-      <form class="sound-delete" method="post" data-delete="{{ s.name }}"
-            action="{{ url_for('delete_sound_route', guild_id=guild.id, sound_id=sid) }}">
-        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <button class="button danger tiny" type="submit"
-                aria-label="Delete {{ s.name }}">Delete</button>
-      </form>
+        <form class="sound-edit" method="post"
+              action="{{ url_for('edit_sound_route', guild_id=guild.id, sound_id=sid) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <input class="s-emoji" type="text" name="emoji" maxlength="40"
+                 value="{{ s.emoji_name or '' }}" placeholder="+" aria-label="Emoji">
+          <input class="s-name" type="text" name="name" value="{{ s.name }}"
+                 minlength="{{ name_min }}" maxlength="{{ name_max }}" required
+                 aria-label="Name">
+          <input class="s-vol" type="range" name="volume" min="0" max="1" step="0.05"
+                 value="{{ s.volume if s.volume is not none else 1 }}" aria-label="Volume">
+          <span class="s-by">
+            {% if s.user %}
+              <img class="s-avatar" src="{{ avatar_url(s.user) }}" alt="" width="20" height="20">
+              <span>{{ s.user.global_name or s.user.username }}</span>
+            {% else %}
+              {#- Discord only sends the uploader when the bot holds the expression
+                  permissions, so this is blank rather than wrong. -#}
+              <span class="unknown">&mdash;</span>
+            {% endif %}
+          </span>
+          <button class="button tiny" type="submit">Save</button>
+        </form>
 
-      <span class="s-id" title="Sound id">{{ sid }}</span>
-    </li>
-  {% endfor %}
-</ol>
+        <form class="sound-delete" method="post" data-delete="{{ s.name }}"
+              action="{{ url_for('delete_sound_route', guild_id=guild.id, sound_id=sid) }}">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="button danger tiny" type="submit"
+                  aria-label="Delete {{ s.name }}">Delete</button>
+        </form>
+      </li>
+    {% endfor %}
+  </ol>
+</div>
 
 <form method="post" action="{{ url_for('reorder_sounds', guild_id=guild.id) }}" data-reorder>
   <input type="hidden" name="csrf" value="{{ csrf_token() }}">

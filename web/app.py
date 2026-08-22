@@ -890,7 +890,8 @@ def soundboard(guild_id: int):
         sounds, discord_ok, why = [], False, str(e)
     return render_template(
         "soundboard.html", guild=guild, sounds=sounds,
-        sound_id_of=_sound_id_of, discord_ok=discord_ok, why=why,
+        sound_id_of=_sound_id_of, avatar_url=api.avatar_url,
+        discord_ok=discord_ok, why=why,
         max_bytes=api.SOUND_MAX_BYTES, max_seconds=api.SOUND_MAX_SECONDS,
         name_min=api.SOUND_NAME_MIN, name_max=api.SOUND_NAME_MAX,
         cdn=api.SOUND_CDN)

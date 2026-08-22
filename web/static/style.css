@@ -2673,43 +2673,60 @@ footer p { margin: 0; }
 .drop-text span.good { color: var(--mint-bright); }
 
 /* ── the list ────────────────────────────────────────────────────── */
-.sounds {
-  list-style: none;
-  margin: 0 0 14px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: var(--r);
-  overflow: hidden;
-  background: var(--surface);
+/* Laid out the way Discord's own soundboard panel is: column headers, the emoji in its own
+   column at a size you can actually read, and hairlines between rows rather than a bordered
+   box around each one. The columns live in one custom property so the header and the rows
+   cannot drift apart. */
+.sounds-wrap {
+  --sound-cols: 16px 34px 40px minmax(0, 1fr) 108px minmax(0, 150px) 62px 68px;
+  margin-bottom: 16px;
 }
 
-/* One grid, and the two forms inside each row use display:contents so their fields sit in it
-   directly. Without that each row lays itself out independently and no column lines up with
-   the one above it, which was most of what made this look unfinished. */
+.sounds-head,
 .sound {
   display: grid;
-  grid-template-columns: 18px 34px minmax(0, 1fr) 52px 110px auto auto 64px;
+  grid-template-columns: var(--sound-cols);
   align-items: center;
-  gap: 12px;
-  padding: 9px 14px;
-  border-top: 1px solid var(--line);
+  gap: 14px;
 }
-.sound:first-child { border-top: 0; }
-.sound:hover { background: var(--surface-2); }
+
+.sounds-head {
+  padding: 0 6px 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.sounds {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sound {
+  padding: 7px 6px;
+  border-bottom: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.sound:hover { background: var(--surface); }
 .sound.held { opacity: .4; }
 .sound-edit, .sound-delete { display: contents; }
 
 /* Only where the grip is, so the row still selects and the inputs still take a caret. */
 .grip {
   cursor: grab;
-  color: var(--faint);
-  font-size: 14px;
+  color: transparent;
+  font-size: 13px;
   line-height: 1;
   text-align: center;
   user-select: none;
+  transition: color .15s var(--ease);
 }
 .grip:active { cursor: grabbing; }
-.sound:hover .grip { color: var(--dim); }
+.sound:hover .grip { color: var(--faint); }
 
 .play {
   width: 34px; height: 34px;
@@ -2739,7 +2756,7 @@ footer p { margin: 0; }
   margin: 0;
 }
 .sound input[type="text"] {
-  padding: 7px 9px;
+  padding: 6px 8px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: transparent;
@@ -2753,9 +2770,36 @@ footer p { margin: 0; }
   box-shadow: 0 0 0 3px var(--mint-glow);
 }
 .s-name { font-weight: 550; }
-.s-emoji { text-align: center; }
+
+/* Its own column, the size Discord draws it. A single character in a 14px box next to a name
+   was the thing that made this look like a form and not a soundboard. */
+/* `input.s-emoji` rather than `.s-emoji`: the borderless rule above is
+   `.sound input[type="text"]`, which outranks a bare class and was holding this at 14px. */
+.sound input.s-emoji {
+  text-align: center;
+  font-size: 19px;
+  line-height: 1.15;
+  padding: 4px 0;
+}
 /* Repeated down every row that has no emoji yet, so it whispers rather than reads as content. */
-.sound input::placeholder { color: var(--faint); opacity: .5; }
+.sound input::placeholder { color: var(--faint); opacity: .45; }
+
+/* Who uploaded it, avatar first, the way Discord shows it. */
+.s-by {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13.2px;
+  color: var(--dim);
+}
+.s-by > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.s-avatar { border-radius: 50%; flex: none; background: var(--surface-3); }
+.s-by .unknown { color: var(--faint); }
 
 /* The browser's own slider is grey with a white thumb and looks like nothing else here.
 
@@ -2812,8 +2856,8 @@ footer p { margin: 0; }
   box-shadow: 0 0 0 3px var(--mint-glow);
 }
 
-/* Both row buttons are quiet until the row is hovered. Delete only turns red when you reach
-   for it, so a list of forty does not read as forty warnings. */
+/* Both row buttons stay out of the way until the row is hovered. Delete only turns red when
+   you reach for it, so a list of forty does not read as forty warnings. */
 .sound .button.tiny {
   padding: 6px 11px;
   font-size: 12.5px;
@@ -2822,22 +2866,36 @@ footer p { margin: 0; }
   border: 1px solid var(--line);
   color: var(--dim);
   box-shadow: none;
-  opacity: .55;
+  opacity: 0;
   transition: opacity .15s var(--ease), border-color .15s var(--ease), color .15s var(--ease);
 }
-.sound:hover .button.tiny { opacity: 1; }
+.sound:hover .button.tiny,
+.sound:focus-within .button.tiny { opacity: 1; }
 .sound .sound-edit .button:hover { border-color: var(--mint); color: var(--mint); }
 .sound .button.danger:hover { border-color: var(--danger); color: var(--danger); }
 
-/* Wanted about once a month, when something has gone wrong, so it is present and quiet. */
-.s-id {
-  color: var(--faint);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  opacity: .6;
+@media (max-width: 780px) {
+  /* The volume and the uploader go first: one is a fiddly target on a touch screen and the
+     other is context rather than something you act on. Even without them six columns left the
+     name 45px wide, so the buttons drop to a second line and the name gets the whole first
+     one. */
+  .sounds-wrap { --sound-cols: 16px 34px 36px minmax(0, 1fr); }
+  .sound { row-gap: 8px; padding: 10px 6px; }
+  .sounds-head span:nth-child(5),
+  .sounds-head span:nth-child(6),
+  .sound input.s-vol,
+  .sound .s-by { display: none; }
+  /* Columns 3 and 4 are taken on the first row by the emoji and the name, so both buttons
+     land on the second one under them. */
+  .sound .sound-edit .button { grid-column: 3; }
+  .sound .button.danger { grid-column: 4; }
+  /* No hover on a touch screen, so nothing can be hidden behind one. */
+  .sound .button.tiny { opacity: 1; }
+  .sound .grip { color: var(--faint); }
+  .sound input[type="text"] { border-color: var(--line); background: var(--bg); }
+  .sound-add { grid-template-columns: minmax(0, 1fr) 84px; }
+  .sound-add .vol-cell { grid-column: 1 / -1; }
 }
-.sound:hover .s-id { opacity: 1; }
 
 /* ── the reorder bar ─────────────────────────────────────────────── */
 /* Follows you down: the list can be long, and a save at the bottom of forty rows is a save
@@ -2893,20 +2951,3 @@ footer p { margin: 0; }
   background: rgba(242, 114, 114, .1);
 }
 
-@media (max-width: 720px) {
-  /* Two rows rather than eight cramped columns: the controls that matter on top, the rest
-     under them. */
-  .sound {
-    grid-template-columns: 18px 34px minmax(0, 1fr) 52px;
-    gap: 10px;
-    padding: 12px 14px;
-  }
-  .sound .s-vol { grid-column: 3 / -1; }
-  .sound .sound-edit .button { grid-column: 3; justify-self: start; }
-  .sound .button.danger { grid-column: 4; justify-self: end; }
-  .sound .s-id { display: none; }
-  .sound .button.tiny { opacity: 1; }
-  .sound input[type="text"] { border-color: var(--line); background: var(--bg); }
-  .sound-add { grid-template-columns: minmax(0, 1fr) 84px; }
-  .sound-add .vol-cell { grid-column: 1 / -1; }
-}
