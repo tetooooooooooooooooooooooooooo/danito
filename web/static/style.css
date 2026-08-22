@@ -30,6 +30,34 @@
 
 * { box-sizing: border-box; }
 
+/* ── scrollbars ──────────────────────────────────────────────────── */
+/* Left alone, Windows draws a wide light grey bar with arrow buttons at each end, which on a
+   near-black page is the brightest thing on screen. It showed up worst inside the role list,
+   where a 10px column of Windows chrome sat against the dark rows.
+ 
+   Applied to everything rather than to that one list: the page itself, the docs tables, the
+   insights charts and the settings sidebar all scroll too, and one styled scrollbar beside
+   four default ones is worse than none. Firefox takes the two standard properties, Chromium
+   and Edge take the pseudo elements, and both are given the same thing. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-bright) transparent;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--line-bright);
+  border-radius: 6px;
+  /* Transparent border plus padding-box keeps the thumb clear of the track edges, which is
+     what stops a 10px bar reading as a 10px slab. */
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: #3d5a4c; background-clip: padding-box; }
+/* The little arrows at each end, which nothing else on this site has. */
+::-webkit-scrollbar-button { display: none; }
+::-webkit-scrollbar-corner { background: transparent; }
+
 html { -webkit-text-size-adjust: 100%; }
 
 body {
@@ -362,6 +390,16 @@ ul.notes strong { color: var(--text); }
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--surface);
+  /* On a phone the "who can use it" column sits off the right edge with nothing to say so.
+     Same fade as the role lists, turned on its side, and taken off by app.js once there is
+     nothing further right to reach. */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+}
+/* Nothing to hint at when the table fits, and a mask on a table that fits would fade a column
+   for no reason. app.js adds at-end immediately in that case. */
+@media (min-width: 861px) {
+  .table-wrap { -webkit-mask-image: none; mask-image: none; }
 }
 
 table.commands { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -1194,6 +1232,18 @@ body.settings-page main { max-width: 1060px; }
   background: var(--bg);
   max-height: 320px;
   overflow-y: auto;
+  /* The list cuts off mid row, which is the right affordance and looked like a clipping bug.
+     Fading the last few pixels turns it into "there is more below". The mask is on the scroll
+     box, not the content, so it stays at the bottom edge rather than scrolling away. */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 22px), transparent);
+}
+/* Once you are at the bottom there is nothing more to hint at, and fading the final row would
+   be a lie. Added by app.js; without script the shallow fade simply stays. */
+.rolelist.at-end,
+.table-wrap.at-end {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 .rolerow {

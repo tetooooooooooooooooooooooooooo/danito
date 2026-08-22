@@ -1200,3 +1200,49 @@
     form.submit();
   });
 })();
+
+/* ── scrollable areas say when there is more ───────────────────────────
+   A role list cut off mid row, or a table with a column past the right edge, both read as a
+   clipping bug rather than as something you can scroll. Each fades its far edge, and the fade
+   comes off once you reach the end, because fading the last row when there is no last row is
+   a lie. Pure decoration: without this the fade simply stays on. */
+(function () {
+  "use strict";
+
+  /* [selector, axis]. Vertical for the role lists, horizontal for the docs tables. */
+  var kinds = [[".rolelist", "y"], [".table-wrap", "x"]];
+  var watched = [];
+
+  kinds.forEach(function (kind) {
+    Array.prototype.forEach.call(document.querySelectorAll(kind[0]), function (el) {
+      watched.push({ el: el, axis: kind[1] });
+    });
+  });
+  if (!watched.length) return;
+
+  var mark = function (item) {
+    var el = item.axis === "x"
+      ? { pos: item.el.scrollLeft, view: item.el.clientWidth, total: item.el.scrollWidth }
+      : { pos: item.el.scrollTop, view: item.el.clientHeight, total: item.el.scrollHeight };
+    /* A couple of pixels of slack: fractional scroll positions and browser zoom mean the
+       position rarely lands exactly on the maximum. */
+    var atEnd = el.pos + el.view >= el.total - 2;
+    /* Something short enough not to scroll has nothing to hint at either. */
+    item.el.classList.toggle("at-end", atEnd || el.total <= el.view);
+  };
+
+  var markAll = function () { watched.forEach(mark); };
+
+  watched.forEach(function (item) {
+    mark(item);
+    item.el.addEventListener("scroll", function () { mark(item); }, { passive: true });
+  });
+
+  /* Settings panes start hidden, so a list inside one measures as zero high until its tab is
+     opened, and a table's width changes with the window. */
+  addEventListener("resize", markAll, { passive: true });
+  document.addEventListener("click", function (e) {
+    if (!e.target.closest("[data-tab]")) return;
+    setTimeout(markAll, 0);
+  });
+})();
