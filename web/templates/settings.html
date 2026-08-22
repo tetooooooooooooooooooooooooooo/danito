@@ -309,7 +309,7 @@
 
         <label class="check">
           <input type="checkbox" name="automod_enabled" {% if am.enabled %}checked{% endif %}>
-          Run automod
+          Enable automod
         </label>
 
         <div class="logtools">
@@ -394,7 +394,7 @@
         </div>
 
         {%- set age = am.get('minage') or {} %}
-        <h3 class="sub-head">Who gets in</h3>
+        <h3 class="sub-head">New account protection</h3>
         <div class="logrow amrow" data-reveals>
           <label class="check">
             <input type="checkbox" name="minage_on" {% if age.get('on') %}checked{% endif %}>
