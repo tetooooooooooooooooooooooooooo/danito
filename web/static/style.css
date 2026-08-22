@@ -2678,7 +2678,7 @@ footer p { margin: 0; }
    box around each one. The columns live in one custom property so the header and the rows
    cannot drift apart. */
 .sounds-wrap {
-  --sound-cols: 16px 34px 40px minmax(0, 1fr) 108px minmax(0, 150px) 62px 68px;
+  --sound-cols: 16px 34px 54px minmax(0, 1fr) 108px minmax(0, 150px) 62px 68px;
   margin-bottom: 16px;
 }
 
@@ -2691,13 +2691,15 @@ footer p { margin: 0; }
 }
 
 .sounds-head {
-  padding: 0 6px 9px;
+  padding: 0 6px 11px;
   border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: .7px;
+  letter-spacing: .6px;
   text-transform: uppercase;
-  color: var(--faint);
+  /* Brighter than the usual small print. On Discord's panel these read as column headings
+     rather than as a footnote, and at --faint they disappeared into the background. */
+  color: var(--dim);
 }
 
 .sounds {
@@ -2707,7 +2709,7 @@ footer p { margin: 0; }
 }
 
 .sound {
-  padding: 7px 6px;
+  padding: 12px 6px;
   border-bottom: 1px solid var(--line);
   border-radius: var(--r-sm);
 }
@@ -2756,11 +2758,11 @@ footer p { margin: 0; }
   margin: 0;
 }
 .sound input[type="text"] {
-  padding: 6px 8px;
+  padding: 5px 8px;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: transparent;
-  font-size: 14px;
+  font-size: 15px;
 }
 .sound:hover input[type="text"] { border-color: var(--line); background: var(--bg); }
 .sound input[type="text"]:hover { border-color: var(--line-bright); }
@@ -2769,7 +2771,7 @@ footer p { margin: 0; }
   background: var(--bg);
   box-shadow: 0 0 0 3px var(--mint-glow);
 }
-.s-name { font-weight: 550; }
+.s-name { font-weight: 500; color: var(--text); }
 
 /* Its own column, the size Discord draws it. A single character in a 14px box next to a name
    was the thing that made this look like a form and not a soundboard. */
@@ -2777,9 +2779,9 @@ footer p { margin: 0; }
    `.sound input[type="text"]`, which outranks a bare class and was holding this at 14px. */
 .sound input.s-emoji {
   text-align: center;
-  font-size: 19px;
-  line-height: 1.15;
-  padding: 4px 0;
+  font-size: 22px;
+  line-height: 1.1;
+  padding: 2px 0;
 }
 /* Repeated down every row that has no emoji yet, so it whispers rather than reads as content. */
 .sound input::placeholder { color: var(--faint); opacity: .45; }
@@ -2788,9 +2790,9 @@ footer p { margin: 0; }
 .s-by {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   min-width: 0;
-  font-size: 13.2px;
+  font-size: 14px;
   color: var(--dim);
 }
 .s-by > span {
