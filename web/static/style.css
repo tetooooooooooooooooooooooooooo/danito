@@ -1321,9 +1321,8 @@ label.pick input:focus-visible { outline: 2px solid var(--mint-bright); outline-
 }
 
 /* ── the server log ──────────────────────────────────────────────── */
-.logtools { display: flex; align-items: center; gap: 10px; margin: 22px 0 8px; }
+.logtools { display: flex; align-items: center; gap: 10px; }
 .logtools .spacer { flex: 1; }
-.logtools .fine { margin: 0; font-weight: 600; color: var(--text); }
 
 button.tiny {
   padding: 5px 11px;
@@ -2326,7 +2325,12 @@ form.dirty .unsaved { display: flex; }
 }
 
 /* Short, because these lists sit side by side and neither should push the card long. */
-.rolelist.short { max-height: 188px; margin-top: 0; }
+/* The exemption lists sit side by side, and a server with thirty roles and three channels
+   gave one box 200px and the other 76, which read as a mistake rather than as two lists.
+   Grid rows stretch by default, so making each column a column and letting the list fill it
+   squares them off against whichever is taller. */
+.row > div { display: flex; flex-direction: column; min-width: 0; }
+.rolelist.short { max-height: 200px; margin-top: 0; flex: 1; }
 
 /* The thresholds and the action sit together on the right, so the left column stays a
    readable list of rule names rather than a row of scattered controls. */
@@ -2366,8 +2370,39 @@ label.num input:focus {
   box-shadow: 0 0 0 3px var(--mint-glow);
 }
 
-.sub-head { margin: 26px 0 0; font-size: 14.5px; }
-.sub-head + .fine { margin: 6px 0 14px; }
+/* ── sub-sections inside one card ────────────────────────────────── */
+/* The automod pane is four of these stacked: the rules, the exemptions, the age gate and the
+   punishments. They used to run together with nothing but a slightly bolder line of text
+   between, so the pane read as one long unbroken form and it was never obvious which controls
+   belonged to which idea. A rule and a small capitalised label separate them, which is what
+   the logging pane's own headers wanted too, so both share this. */
+.sub-head,
+.logtools {
+  margin: 30px 0 14px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .7px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.logtools .fine {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+/* The sentence under a heading is the explanation for the whole sub-section, so it sits with
+   the heading rather than floating above the first control. */
+.sub-head + .fine { margin: -6px 0 14px; max-width: 68ch; }
+
+/* Two numbers, not two full width boxes. They were stretching to half the card each, which
+   made a 10 and a 5 look like the most important things on the page. */
+.amlimits { display: flex; flex-wrap: wrap; gap: 10px 22px; }
+.amlimits label { flex: 0 1 210px; margin: 0; }
 
 @media (max-width: 620px) {
   .amrow { flex-wrap: wrap; }

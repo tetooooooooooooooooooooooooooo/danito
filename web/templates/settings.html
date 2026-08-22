@@ -438,9 +438,9 @@
             {% if am.get('notify', True) %}checked{% endif %}>
           Send a message when a rule is triggered
         </label>
-        <p class="fine">A short note that deletes itself after a few seconds. Without it people
-          repost the same thing three times wondering where it went.</p>
-        <div class="row">
+        <p class="fine">A short note that deletes itself, so nobody reposts the same thing
+          three times wondering where it went.</p>
+        <div class="row amlimits">
           <label>Timeout duration (minutes)
             <input type="number" name="automod_timeout" min="1" max="10080"
               value="{{ am.get('timeout_minutes', 10) }}">
@@ -450,11 +450,8 @@
               value="{{ am.get('max_removals', 5) }}">
           </label>
         </div>
-        <p class="fine">Kicking and banning can't be undone by clicking something, so there's a
-          ceiling on how many can happen automatically in an hour. Past it they become timeouts
-          instead, and the case says why. One wrong word on the banned list would otherwise
-          empty the server before anybody noticed. Raise it if you'd rather it never got in the
-          way.</p>
+        <p class="fine">Past the limit, kicks and bans become timeouts instead and the case
+          says why. It stops one wrong word on the banned list emptying your server.</p>
 
         <button type="submit">Save</button>
       </form>
