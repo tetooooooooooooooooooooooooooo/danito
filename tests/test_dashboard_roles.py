@@ -149,6 +149,36 @@ def main():
     assert p["needs_publish"] is False, "an empty panel has nothing to post"
     print(f"  created {p['title']!r} in #roles, not yet queued OK")
 
+    print("\n=== and creating one with its buttons already on it ===")
+    # Roles used to only be pickable after the panel existed, so making one always produced an
+    # empty panel that did nothing until you came back to it. Now it can be born complete, and
+    # a complete one is queued for the bot immediately.
+    r = c.post("/servers/111/panels", data={
+        "csrf": token, "title": "Pronouns", "description": "", "channel_id": "901",
+        "mode": "toggle", "role_ids": ["10", "11"],
+        "label_10": "They", "emoji_10": "", "label_11": "", "emoji_11": "✨"})
+    assert r.status_code == 302, r.status_code
+    assert len(PANELS) == 2, PANELS
+    made = PANELS[1]
+    assert made["title"] == "Pronouns"
+    assert made["roles"] == [
+        {"role_id": 10, "label": "They", "emoji": None},
+        # A blank label falls back to the role's own name, same as on the edit form.
+        {"role_id": 11, "label": "Blue", "emoji": "✨"},
+    ], made["roles"]
+    assert made["needs_publish"] is True, "one with buttons is ready to post at once"
+    print(f"  created with {len(made['roles'])} buttons and queued straight away OK")
+
+    print("\n=== a role you can't hand out never becomes a button ===")
+    r = c.post("/servers/111/panels", data={
+        "csrf": token, "title": "Nope", "channel_id": "901", "mode": "toggle",
+        "role_ids": ["12", "999"]})
+    assert r.status_code == 302
+    assert PANELS[2]["roles"] == [], PANELS[2]["roles"]
+    assert PANELS[2]["needs_publish"] is False
+    print("  an unassignable role and an unknown id both dropped OK")
+    del PANELS[1:]
+
     print("\n=== a channel from somewhere else is refused ===")
     r = c.post("/servers/111/panels", data={
         "csrf": token, "title": "Bad", "channel_id": "999999", "mode": "toggle"})
@@ -236,8 +266,14 @@ def main():
     assert r.status_code == 200, r.status_code
     body = r.data.decode()
     for expected in ("Autorole", "Role buttons", "Red", "Blue", "Admin",
-                     "sits above my highest role", "#ff0000", "Add a panel"):
+                     "sits above my highest role", "#ff0000", "Add another panel"):
         assert expected in body, expected
+    # Roles are pickable before the panel exists, so the create form carries the same role
+    # list the edit forms do. It used to say "You pick the roles once it exists", which meant
+    # creating one always produced an empty panel that did nothing.
+    new_form = body.split('class="panel new"')[1]
+    assert 'name="role_ids"' in new_form, "the create form has to offer the roles"
+    assert "once it exists" not in body
     # The unusable ones are shown but not selectable, so nobody hunts for a missing role.
     assert body.count("disabled") >= 2, "unassignable roles should be disabled, not hidden"
     print("  both cards, every role, the colour swatch and the reasons are present OK")

@@ -549,9 +549,17 @@ def panel(guild_id: int, panel_id) -> dict:
     return _panels().find_one({"_id": oid, "guild_id": guild_id}) or {}
 
 
-def create_panel(guild_id: int, channel_id: int, title: str, description, mode: str) -> bool:
+def create_panel(guild_id: int, channel_id: int, title: str, description, mode: str,
+                 roles: list = None) -> bool:
+    """A panel, with its buttons already on it if any were picked.
+
+    Roles used to come afterwards, which meant creating a panel always produced an empty one
+    that did nothing until you came back and filled it in. A panel with no buttons is not a
+    thing anybody wants, so it may as well be made complete in one go.
+    """
     if _panels().count_documents({"guild_id": guild_id}) >= MAX_PANELS:
         return False
+    roles = roles or []
     _panels().insert_one({
         "guild_id": guild_id,
         "channel_id": channel_id,
@@ -560,9 +568,10 @@ def create_panel(guild_id: int, channel_id: int, title: str, description, mode: 
         "description": (description or "").strip()[:MAX_TEXT] or None,
         "color": 0x3DDC97,
         "mode": mode if mode in PANEL_MODES else "toggle",
-        "roles": [],
-        # Nothing to post until it has a button on it.
-        "needs_publish": False,
+        "roles": roles,
+        # Nothing to post until it has a button on it, so an empty one waits quietly instead
+        # of asking the bot to publish a message with nothing in it.
+        "needs_publish": bool(roles),
         "publish_error": None,
         "created_at": datetime.datetime.now(datetime.timezone.utc),
     })

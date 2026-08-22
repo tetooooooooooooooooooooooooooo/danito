@@ -222,7 +222,7 @@
       </form>
 
       <div class="card">
-        {{ head("Role buttons", "A message people click to give themselves roles. Pick the roles, and the bot posts it and keeps it up to date.") }}
+        {{ head("Role buttons", "A message with a button for each role, which members click to give themselves that role. Fill this in and the bot posts it for you, then keeps it in step with any changes you make here.") }}
 
         {% for p in panels %}
           {% set pid = p._id|string %}
@@ -234,7 +234,7 @@
             {% if p.publish_error %}
               <div class="warn">{{ p.publish_error }}</div>
             {% elif p.needs_publish %}
-              <div class="note">Posting the update now.</div>
+              <div class="note">Posting your changes to Discord now.</div>
             {% elif p.message_id %}
               <div class="note ok">Posted in
                 #{{ channel_names.get(p.channel_id|string, {}).get('name', 'a channel') }}.</div>
@@ -244,28 +244,28 @@
               <input type="text" name="title" maxlength="200" required
                 value="{{ p.title or '' }}">
             </label>
-            <label>Text underneath
+            <label>Text under the heading
               <textarea name="description" rows="2" maxlength="1500">{{ p.description or '' }}</textarea>
             </label>
             <div class="row">
               <label>Channel {{ channel_select("channel_id", p.channel_id) }}</label>
-              <label>People can have
+              <label>How many can somebody take
                 <select name="mode">
-                  <option value="toggle" {% if p.mode != 'single' %}selected{% endif %}>Any number of these roles</option>
-                  <option value="single" {% if p.mode == 'single' %}selected{% endif %}>Only one of these roles</option>
+                  <option value="toggle" {% if p.mode != 'single' %}selected{% endif %}>As many as they like</option>
+                  <option value="single" {% if p.mode == 'single' %}selected{% endif %}>One at a time, picking a new one swaps it</option>
                 </select>
               </label>
             </div>
 
-            <p class="fine">Tick a role to put a button on the message. Leave the button text
-              blank to use the role name.</p>
+            <p class="fine">Tick the roles you want buttons for. Leave the button text blank
+              and it uses the role's own name.</p>
             {{ role_list("role_ids", chosen, buttons=true, limit=max_panel_roles,
                          by_role=p.by_role) }}
 
             <div class="row end">
               <button type="submit">Save panel</button>
               <button type="submit" name="delete" value="1" class="danger"
-                onclick="return confirm('Delete this panel? The message in Discord goes too.')">Delete</button>
+                onclick="return confirm('Delete this panel? The message in Discord is deleted with it.')">Delete</button>
             </div>
           </form>
         {% endfor %}
@@ -273,24 +273,26 @@
         <form class="panel new" method="post"
               action="{{ url_for('create_panel', guild_id=guild.id) }}">
           <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-          <h3>Add a panel</h3>
+          <h3>Add another panel</h3>
           <label>Heading
             <input type="text" name="title" maxlength="200" required placeholder="Pick your roles">
           </label>
-          <label>Text underneath
+          <label>Text under the heading
             <textarea name="description" rows="2" maxlength="1500"
-              placeholder="Optional. Explain what the roles are for."></textarea>
+              placeholder="Optional. Say what the roles are for."></textarea>
           </label>
           <div class="row">
             <label>Channel {{ channel_select("channel_id", none) }}</label>
-            <label>People can have
+            <label>How many can somebody take
               <select name="mode">
-                <option value="toggle">Any number of these roles</option>
-                <option value="single">Only one of these roles</option>
+                <option value="toggle">As many as they like</option>
+                <option value="single">One at a time, picking a new one swaps it</option>
               </select>
             </label>
           </div>
-          <p class="fine">You pick the roles once it exists.</p>
+          <p class="fine">Tick the roles you want buttons for. Leave the button text blank
+            and it uses the role's own name.</p>
+          {{ role_list("role_ids", [], buttons=true, limit=max_panel_roles) }}
           <button type="submit">Create panel</button>
         </form>
       </div>
@@ -303,7 +305,7 @@
             action="{{ url_for('save_guild_settings', guild_id=guild.id) }}">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
         <input type="hidden" name="section" value="automod">
-        {{ head("Automod", "Rules that act on messages without waiting for a moderator. Everything is off until you switch it on, and nothing here ever kicks or bans on its own.") }}
+        {{ head("Automod", "Rules that act on messages without waiting for a moderator. Every rule is off until you switch it on, and each one decides for itself what to do, from deleting the message to banning whoever sent it.") }}
 
         <label class="check">
           <input type="checkbox" name="automod_enabled" {% if am.enabled %}checked{% endif %}>

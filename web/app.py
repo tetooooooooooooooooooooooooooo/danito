@@ -330,7 +330,7 @@ def new_ticket():
     subject = (request.form.get("subject") or "").strip()
     body = (request.form.get("body") or "").strip()
     if not subject or not body:
-        flash("A ticket needs a subject and a description.")
+        flash("A ticket needs a subject and a description of what is happening.")
         return redirect(url_for("support"))
 
     # A server can only be attached if they really administer it, so a ticket can't be filed
@@ -359,11 +359,11 @@ def reply_ticket(number: int):
     check_csrf()
     body = (request.form.get("body") or "").strip()
     if not body:
-        flash("Nothing to send.")
+        flash("Write something first.")
     elif store.reply_to_ticket(int(current_user()["id"]), number, body):
         flash(f"Added to ticket #{number}.")
     else:
-        flash("That ticket is closed, or isn't yours.")
+        flash("That ticket is closed, or it belongs to somebody else.")
     return redirect(url_for("support") + f"#ticket-{number}")
 
 
@@ -374,7 +374,7 @@ def close_ticket_route(number: int):
     if store.close_ticket(int(current_user()["id"]), number):
         flash(f"Ticket #{number} is closed. Thanks.")
     else:
-        flash("That ticket is already closed, or isn't yours.")
+        flash("That ticket is already closed, or it belongs to somebody else.")
     return redirect(url_for("support"))
 
 
@@ -821,7 +821,7 @@ def send_embed(guild_id: int):
     except ValueError:
         channel_id = 0
     if channel_id not in valid:
-        flash("Pick a channel in this server.")
+        flash("Pick a channel in this server to send it to.")
         return redirect(url_for("embed_builder", guild_id=guild_id))
 
     payload, problems = store.clean_embed(request.form)
@@ -905,7 +905,7 @@ def upload_sound(guild_id: int):
 
     upload = request.files.get("sound")
     if upload is None or not upload.filename:
-        flash("Pick a file to upload.")
+        flash("Choose a sound file to upload.")
         return back
 
     name = _sound_name(request.form.get("name"))
@@ -915,7 +915,7 @@ def upload_sound(guild_id: int):
 
     raw = upload.read()
     if not raw:
-        flash("That file was empty.")
+        flash("That file had nothing in it.")
         return back
 
     try:
@@ -967,7 +967,7 @@ def delete_sound_route(guild_id: int, sound_id: int):
     require_guild(guild_id)
     try:
         api.delete_sound(guild_id, sound_id)
-        flash("Deleted.")
+        flash("Deleted. It goes from the soundboard straight away.")
     except api.DiscordError as e:
         flash(str(e))
     return redirect(url_for("soundboard", guild_id=guild_id))
@@ -1066,7 +1066,7 @@ def save_guild_settings(guild_id: int):
         existing = (store.settings(guild_id) or {}).get("automod") or {}
         store.save(guild_id, {"automod": store.clean_automod(
             request.form, valid_channels, every_role, existing)})
-        flash("Saved. The bot picks this up within a few seconds.")
+        flash("Saved. It takes effect in your server within a few seconds.")
         return redirect(url_for("guild_settings", guild_id=guild_id) + "#automod")
 
     # Logging is handled apart from the table below: it writes one nested map of twelve events
@@ -1084,7 +1084,7 @@ def save_guild_settings(guild_id: int):
         if not values["log_channel"] and not any(e["channel"] for e in events.values() if e["on"]):
             values["logging_enabled"] = False
         store.save(guild_id, values)
-        flash("Saved. The bot picks this up within a few seconds.")
+        flash("Saved. It takes effect in your server within a few seconds.")
         return redirect(url_for("guild_settings", guild_id=guild_id) + "#logging")
 
     # Only the fields belonging to the submitted section are touched, so saving one card
@@ -1124,7 +1124,7 @@ def save_guild_settings(guild_id: int):
         values["autorole_enabled"] = False
 
     store.save(guild_id, values)
-    flash("Saved. The bot picks this up within a few seconds.")
+    flash("Saved. It takes effect in your server within a few seconds.")
     # Several sections share a tab, so they have no pane of their own to come back to.
     # Without this a save would land on whatever tab happens to be first.
     anchor = SECTION_TABS.get(section, section)
@@ -1155,42 +1155,15 @@ def _panel_form(guild_id: int):
     return channel_id, title, description, mode
 
 
-@app.route("/servers/<int:guild_id>/panels", methods=["POST"])
-@login_required
-@needs_discord
-def create_panel(guild_id: int):
-    check_csrf()
-    require_guild(guild_id)
-    channel_id, title, description, mode = _panel_form(guild_id)
+def _panel_roles(guild_id: int) -> list:
+    """The ticked roles, as buttons, shared by creating a panel and saving one.
 
-    if not store.create_panel(guild_id, channel_id, title, description, mode):
-        flash(f"That's the limit of {store.MAX_PANELS} panels. Delete one first.")
-    else:
-        flash("Panel created. Add some roles to it and it gets posted.")
-    return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
-
-
-@app.route("/servers/<int:guild_id>/panels/<panel_id>", methods=["POST"])
-@login_required
-@needs_discord
-def save_panel(guild_id: int, panel_id: str):
-    check_csrf()
-    require_guild(guild_id)
-
-    if request.form.get("delete"):
-        if store.delete_panel(guild_id, panel_id):
-            flash("Panel deleted. The message disappears within a few seconds.")
-        else:
-            flash("That panel is already gone.")
-        return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
-
-    channel_id, title, description, mode = _panel_form(guild_id)
-    # Names as well as ids: a button left without a label should read as the role it grants,
-    # not as a placeholder.
+    Each button is one ticked role plus its optional label and emoji, keyed by role id so a
+    missing tick drops the whole button rather than leaving an orphaned label behind. Names as
+    well as ids: a button left without a label should read as the role it grants, not as a
+    placeholder.
+    """
     usable = {int(r["id"]): r["name"] for r in api.guild_roles(guild_id) if not r["problem"]}
-
-    # Each button is one ticked role plus its optional label and emoji, keyed by role id so a
-    # missing tick drops the whole button rather than leaving an orphaned label behind.
     roles, seen = [], set()
     for raw in request.form.getlist("role_ids"):
         try:
@@ -1206,11 +1179,50 @@ def save_panel(guild_id: int, panel_id: str):
             "label": (label or usable[role_id])[:store.MAX_LABEL],
             "emoji": (request.form.get(f"emoji_{role_id}", "") or "").strip()[:64] or None,
         })
+    return roles
+
+
+@app.route("/servers/<int:guild_id>/panels", methods=["POST"])
+@login_required
+@needs_discord
+def create_panel(guild_id: int):
+    check_csrf()
+    require_guild(guild_id)
+    channel_id, title, description, mode = _panel_form(guild_id)
+    roles = _panel_roles(guild_id)
+
+    if not store.create_panel(guild_id, channel_id, title, description, mode, roles):
+        flash(f"You already have {store.MAX_PANELS} panels, which is the most Discord lets us "
+              f"keep track of. Delete one to make room.")
+    elif roles:
+        flash(f"Panel created with {len(roles)} button{'' if len(roles) == 1 else 's'}. "
+              f"It appears in Discord within a few seconds.")
+    else:
+        flash("Panel created. Tick the roles you want on it and save, and it gets posted.")
+    return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
+
+
+@app.route("/servers/<int:guild_id>/panels/<panel_id>", methods=["POST"])
+@login_required
+@needs_discord
+def save_panel(guild_id: int, panel_id: str):
+    check_csrf()
+    require_guild(guild_id)
+
+    if request.form.get("delete"):
+        if store.delete_panel(guild_id, panel_id):
+            flash("Panel deleted. The message in Discord goes within a few seconds.")
+        else:
+            flash("That panel has already been deleted.")
+        return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
+
+    channel_id, title, description, mode = _panel_form(guild_id)
+    roles = _panel_roles(guild_id)
 
     if not store.save_panel(guild_id, panel_id, channel_id, title, description, mode, roles):
         abort(404)
-    flash("Saved. The panel updates itself within a few seconds."
-          if roles else "Saved. Tick at least one role and it gets posted.")
+    flash("Saved. The message in Discord updates itself within a few seconds." if roles else
+          "Saved, but no roles are ticked, so there is nothing to post yet.")
     return redirect(url_for("guild_settings", guild_id=guild_id) + "#roles")
 
 
